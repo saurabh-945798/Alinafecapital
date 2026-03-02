@@ -1,11 +1,11 @@
 import { Router } from "express";
-import { adminKeyAuth } from "../middlewares/adminKeyAuth.js"; // your existing
+import { requireAdmin } from "../middlewares/requireAdmin.js";
 import { listKyc, verifyKyc, rejectKyc } from "../controllers/kyc.controller.js";
 
 const r = Router();
 
-r.get("/kyc", adminKeyAuth, listKyc);
-r.post("/kyc/:userId/verify", adminKeyAuth, verifyKyc);
-r.post("/kyc/:userId/reject", adminKeyAuth, rejectKyc);
+r.get("/kyc", requireAdmin, listKyc);
+r.post("/kyc/:userId/verify", requireAdmin, verifyKyc);
+r.post("/kyc/:userId/reject", requireAdmin, rejectKyc);
 
 export default r;

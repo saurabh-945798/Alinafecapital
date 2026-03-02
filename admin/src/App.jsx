@@ -12,8 +12,9 @@ import AdminLayout from "./layout/AdminLayout.jsx";
 export default function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/admin/access" replace />} />
-      <Route path="/admin/access" element={<AdminAccessPage />} />
+      <Route path="/" element={<Navigate to="/admin/login" replace />} />
+      <Route path="/admin/login" element={<AdminAccessPage />} />
+      <Route path="/admin/access" element={<Navigate to="/admin/login" replace />} />
 
       <Route element={<AdminProtectedRoute />}>
         <Route path="/admin" element={<AdminLayout />}>
@@ -26,7 +27,7 @@ export default function AppRoutes() {
         </Route>
       </Route>
 
-      <Route path="*" element={<Navigate to="/admin/access" replace />} />
+      <Route path="*" element={<Navigate to="/admin/login" replace />} />
     </Routes>
   );
 }

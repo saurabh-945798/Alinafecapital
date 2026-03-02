@@ -1,11 +1,11 @@
 import { Router } from "express";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
-import { adminKeyAuth } from "../middlewares/adminKeyAuth.js";
+import { requireAdmin } from "../middlewares/requireAdmin.js";
 import { adminApplicationController } from "../controllers/adminApplication.controller.js";
 
 const router = Router();
 
-router.use(adminKeyAuth);
+router.use(requireAdmin);
 
 // GET all
 router.get("/applications", asyncHandler(adminApplicationController.listAll));

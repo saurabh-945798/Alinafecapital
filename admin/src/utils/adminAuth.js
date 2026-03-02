@@ -1,27 +1,55 @@
-export const getEnvAdminKey = () => (import.meta.env.VITE_ADMIN_KEY || "").trim();
+const TOKEN_KEY = "adminToken";
+const USER_KEY = "adminUser";
 
-export const getLocalAdminKey = () => {
+export const getAdminToken = () => {
   if (typeof window === "undefined") return "";
-  return (window.localStorage.getItem("admin_api_key") || "").trim();
+  return (window.localStorage.getItem(TOKEN_KEY) || "").trim();
 };
 
-export const getActiveAdminKey = () => {
-  const envKey = getEnvAdminKey();
-  const localKey = getLocalAdminKey();
-  return envKey || localKey;
-};
-
-export const setLocalAdminKey = (key) => {
+export const setAdminToken = (token) => {
   if (typeof window === "undefined") return;
-  const trimmed = String(key || "").trim();
-  if (!trimmed) {
-    window.localStorage.removeItem("admin_api_key");
+  const value = String(token || "").trim();
+  if (!value) {
+    window.localStorage.removeItem(TOKEN_KEY);
     return;
   }
-  window.localStorage.setItem("admin_api_key", trimmed);
+  window.localStorage.setItem(TOKEN_KEY, value);
 };
 
-export const clearLocalAdminKey = () => {
+export const clearAdminToken = () => {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem("admin_api_key");
+  window.localStorage.removeItem(TOKEN_KEY);
 };
+
+export const getAdminUser = () => {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem(USER_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
+export const setAdminUser = (user) => {
+  if (typeof window === "undefined") return;
+  if (!user) {
+    window.localStorage.removeItem(USER_KEY);
+    return;
+  }
+  window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+};
+
+export const clearAdminUser = () => {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(USER_KEY);
+};
+
+export const clearAdminSession = () => {
+  clearAdminToken();
+  clearAdminUser();
+};
+
+export const isAdminLoggedIn = () => Boolean(getAdminToken());
+

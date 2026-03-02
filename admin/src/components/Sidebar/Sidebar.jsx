@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { ChevronsLeft, ChevronsRight, LogOut, Menu, X } from "lucide-react";
 import { sidebarNav } from "./sidebarNav";
-import { clearLocalAdminKey, getEnvAdminKey, getLocalAdminKey } from "../../utils/adminAuth";
+import { clearAdminSession, getAdminUser } from "../../utils/adminAuth";
 
 const cx = (...a) => a.filter(Boolean).join(" ");
 
@@ -57,14 +57,14 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const adminUser = useMemo(() => getAdminUser(), []);
 
   const width = collapsed ? "w-20" : "w-72";
-  const keySource = getEnvAdminKey() ? "env" : getLocalAdminKey() ? "local" : "none";
 
   const handleLogout = () => {
-    clearLocalAdminKey();
+    clearAdminSession();
     setMobileOpen(false);
-    navigate("/admin/access", { replace: true });
+    navigate("/admin/login", { replace: true });
   };
 
   const shell = (
@@ -100,8 +100,10 @@ export default function Sidebar() {
           </div>
           {!collapsed && (
             <div className="flex-1">
-              <p className="text-sm font-semibold text-slate-900">Admin</p>
-              <p className="text-xs text-slate-500">key: {keySource}</p>
+              <p className="text-sm font-semibold text-slate-900">
+                {adminUser?.fullName || "Admin"}
+              </p>
+              <p className="text-xs text-slate-500">{adminUser?.email || "Admin Session"}</p>
             </div>
           )}
           <button

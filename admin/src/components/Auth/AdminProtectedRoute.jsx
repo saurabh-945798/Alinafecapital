@@ -1,15 +1,14 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { getActiveAdminKey } from "../../utils/adminAuth";
+import { isAdminLoggedIn } from "../../utils/adminAuth";
 
 export default function AdminProtectedRoute() {
   const location = useLocation();
-  const hasKey = Boolean(getActiveAdminKey());
+  const hasSession = isAdminLoggedIn();
 
-  if (!hasKey) {
+  if (!hasSession) {
     const next = encodeURIComponent(location.pathname + location.search);
-    return <Navigate to={`/admin/access?next=${next}`} replace />;
+    return <Navigate to={`/admin/login?next=${next}`} replace />;
   }
 
   return <Outlet />;
 }
-

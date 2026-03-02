@@ -167,11 +167,11 @@ export const adminApplicationController = {
 
     doc.status = status;
 
-    const explicitAdminActor =
-      (req.headers["x-admin-user"] || "").toString().trim() || "";
-    const key = (req.headers["x-admin-key"] || "").toString();
-    const maskedKey = key ? `key:${key.slice(-4)}` : "admin";
-    const adminActor = explicitAdminActor || maskedKey;
+    const adminActor =
+      req.user?.email ||
+      req.user?.phone ||
+      req.user?._id?.toString() ||
+      "admin";
 
     doc.statusHistory.push({
       status,

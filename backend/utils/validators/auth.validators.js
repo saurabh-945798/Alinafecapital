@@ -1,6 +1,11 @@
 import { z } from "zod";
 
-const malawiPhoneInputRegex = /^(\+?265|0)?\d{9}$/;
+// Accept Malawi input variants:
+// - 88XXXXXXX
+// - 088XXXXXXX
+// - +26588XXXXXXX
+// - +265088XXXXXXX
+const malawiPhoneInputRegex = /^(?:\+?2650?\d{9}|0?\d{9})$/;
 const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
 
 export const registerSchema = z.object({
@@ -23,12 +28,6 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  phone: z
-    .string()
-    .trim()
-    .regex(
-      malawiPhoneInputRegex,
-      "Phone must be Malawi number format (e.g. 88XXXXXXX or +26588XXXXXXX)"
-    ),
+  phone: z.string().trim().min(1, "Phone is required"),
   password: z.string().min(1, "Password is required"),
 });

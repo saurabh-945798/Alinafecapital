@@ -42,7 +42,10 @@ const sendAuthSuccess = (res, data, status = 200) => res.status(status).json({ s
 
 export const registerUser = async (req, res, next) => {
   try {
-    const parsed = registerSchema.safeParse(req.body);
+    const parsed = registerSchema.safeParse({
+      ...req.body,
+      phone: normalizePhone(req.body?.phone),
+    });
     if (!parsed.success) throw parsed.error;
 
     const fullName = parsed.data.fullName.trim();
@@ -111,7 +114,10 @@ export const registerUser = async (req, res, next) => {
 
 export const loginUser = async (req, res, next) => {
   try {
-    const parsed = loginSchema.safeParse(req.body);
+    const parsed = loginSchema.safeParse({
+      ...req.body,
+      phone: normalizePhone(req.body?.phone),
+    });
     if (!parsed.success) throw parsed.error;
 
     const phone = normalizePhone(parsed.data.phone);
@@ -130,7 +136,7 @@ export const loginUser = async (req, res, next) => {
     if (user.lockUntil && user.lockUntil <= new Date()) {
       user.loginAttempts = 0;
       user.lockUntil = null;
-      await user.save();
+      await user.save({ validateBeforeSave: false });
     }
 
     if (user.lockUntil && user.lockUntil > new Date()) {
@@ -148,7 +154,7 @@ export const loginUser = async (req, res, next) => {
       if (user.loginAttempts >= MAX_LOGIN_ATTEMPTS) {
         user.lockUntil = new Date(Date.now() + LOCK_MINUTES * 60 * 1000);
       }
-      await user.save();
+      await user.save({ validateBeforeSave: false });
       return authError(res, "Invalid credentials", "INVALID_CREDENTIALS", 401);
     }
 
@@ -162,7 +168,7 @@ export const loginUser = async (req, res, next) => {
     const accessToken = issueAccessToken(user._id);
     const refreshToken = issueRefreshToken(user._id);
     user.refreshTokenHash = hashRefreshToken(refreshToken);
-    await user.save();
+    await user.save({ validateBeforeSave: false });
 
     res.cookie("refreshToken", refreshToken, getCookieOptions());
 
@@ -214,7 +220,7 @@ export const refreshAccessToken = async (req, res, next) => {
     const newAccessToken = issueAccessToken(user._id);
     const newRefreshToken = issueRefreshToken(user._id);
     user.refreshTokenHash = hashRefreshToken(newRefreshToken);
-    await user.save();
+    await user.save({ validateBeforeSave: false });
 
     res.cookie("refreshToken", newRefreshToken, getCookieOptions());
 
