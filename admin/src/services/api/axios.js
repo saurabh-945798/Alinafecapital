@@ -1,14 +1,28 @@
 ﻿import axios from "axios";
-import { getActiveAdminKey } from "../../utils/adminAuth";
-import { ADMIN_API_BASE_URL } from "../../config/api";
 
-export const api = axios.create({
-  baseURL: ADMIN_API_BASE_URL,
-  timeout: 20000,
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL,
+  withCredentials: true,
 });
 
-api.interceptors.request.use((config) => {
-  const adminKey = getActiveAdminKey();
-  if (adminKey) config.headers["x-admin-key"] = adminKey;
-  return config;
-});
+// Request interceptor
+api.interceptors.request.use(
+  (config) => {
+    // Attach admin key
+    const adminKey = import.meta.env.VITE_ADMIN_API_KEY;
+    if (adminKey) {
+      config.headers["x-admin-key"] = adminKey;
+    }
+
+    // Attach JWT token if exists
+    const token = localStorage.getItem("adminToken");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+export default api;
