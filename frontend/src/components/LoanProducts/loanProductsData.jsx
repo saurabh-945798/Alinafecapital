@@ -1,0 +1,193 @@
+﻿import {
+  ShieldCheck,
+  Clock,
+  BadgeCheck,
+  BriefcaseBusiness,
+  Sparkles,
+} from "lucide-react";
+
+export const FILTER_TABS = ["All", "Personal", "Business", "Agriculture", "Group"];
+
+export const loanProducts = [
+  {
+    id: 1,
+    slug: "payday-emergency-loan",
+    loanName: "Payday / Emergency Loan",
+    category: "Personal",
+    badge: "Most Popular",
+    isFeatured: true,
+    description:
+      "Short-term emergency cash for urgent medical expenses, school fees, or household bills.",
+    amountRange: "MWK 30,000 – 1,000,000",
+    repaymentPeriod: "7 – 30 days",
+    interestRate: "0% Interest (plus flat fee)",
+    keyBenefits: [
+      "Fast disbursement within 24 hours",
+      "Simple documentation",
+      "Short repayment cycle",
+    ],
+    icon: Sparkles,
+  },
+  {
+    id: 2,
+    slug: "individual-business-loan",
+    loanName: "Individual Business Loan",
+    category: "Business",
+    badge: "Growth",
+    description:
+      "Growth capital designed for Malawi's 'missing middle' SMEs and traders.",
+    amountRange: "MWK 1,000,000 – 10,000,000",
+    repaymentPeriod: "6 – 12 months",
+    interestRate: "4% – 6% monthly (declining balance)",
+    keyBenefits: [
+      "Declining balance model",
+      "Flexible repayment plans",
+      "Supports SME expansion",
+    ],
+    icon: BriefcaseBusiness,
+  },
+  {
+    id: 6,
+    slug: "rain-fed-dzinja-seasonal-loan",
+    loanName: "Rain-fed (Dzinja) Seasonal Loan",
+    category: "Agriculture",
+    badge: "Seasonal",
+    description:
+      "Supports seeds, fertilizer (Urea/NPK), and labor for the main maize/tobacco season.",
+    amountRange: "MWK 150,000 – 1,000,000 per hectare",
+    repaymentPeriod: "7 – 9 months",
+    interestRate: "Approx. 5.5% – 6% per month",
+    keyBenefits: [
+      "Bullet repayment structure",
+      "No monthly repayment for first 6 months",
+      "Repay after crop sale in May/June",
+    ],
+    icon: Sparkles,
+  },
+  {
+    id: 7,
+    slug: "irrigation-mthilira-loan",
+    loanName: "Irrigation (Mthilira) Loan",
+    category: "Agriculture",
+    badge: "Dry Season",
+    description:
+      "Dry-season financing for Irish potatoes, beans, and vegetables using irrigation and water pumps.",
+    amountRange: "Variable (based on equipment and farm needs)",
+    repaymentPeriod: "4 – 6 months",
+    interestRate: "Seasonal market-aligned rates",
+    keyBenefits: [
+      "Short tenor aligned to fast crop cycles",
+      "Supports irrigation equipment usage",
+      "Improves off-season farm income",
+    ],
+    icon: ShieldCheck,
+  },
+  {
+    id: 8,
+    slug: "agricultural-asset-financing",
+    loanName: "Agricultural Asset Financing (Tractors/Pumps)",
+    category: "Agriculture",
+    badge: "Asset Finance",
+    description:
+      "Medium-term financing for tractors, pumps, and productive farm equipment.",
+    amountRange: "Variable (based on asset cost)",
+    repaymentPeriod: "12 – 36 months",
+    interestRate: "Asset-finance pricing (profile dependent)",
+    keyBenefits: [
+      "Enables mechanization and productivity growth",
+      "Longer repayment period for high-value assets",
+      "Equipment commonly used as collateral",
+    ],
+    icon: BriefcaseBusiness,
+  },
+  {
+    id: 9,
+    slug: "education-school-fees-loan",
+    loanName: "Education / School Fees Loan",
+    category: "Personal",
+    badge: "Seasonal",
+    description:
+      "Short-term financing for tuition, books, uniforms and term-based school expenses.",
+    amountRange: "Based on school invoice",
+    repaymentPeriod: "3 – 10 months",
+    interestRate: "Standard short-term rates",
+    keyBenefits: [
+      "Disbursed at term start",
+      "Invoice-based lending",
+      "Fast approval cycle",
+    ],
+    icon: BadgeCheck,
+  },
+  {
+    id: 10,
+    slug: "revolving-term-loan",
+    loanName: "Revolving Term Loan",
+    category: "Business",
+    badge: "Loyalty Product",
+    description:
+      "Digital redraw facility for repeat borrowers with strong repayment history.",
+    amountRange: "Top-up based on repayment history",
+    repaymentPeriod: "Flexible",
+    interestRate: "Standard personal loan rates",
+    keyBenefits: [
+      "Redraw paid portion anytime",
+      "No new paperwork",
+      "Rewards good repayment behavior",
+    ],
+    icon: Clock,
+  },
+  {
+    id: 11,
+    slug: "payroll-deduction-loan",
+    loanName: "Payroll Deduction Loan",
+    category: "Personal",
+    badge: "Low Risk",
+    description:
+      "Salary-deduction based loan for formally employed individuals.",
+    amountRange: "Based on salary multiple",
+    repaymentPeriod: "12 – 60 months",
+    interestRate: "Lower than unsecured loans",
+    keyBenefits: [
+      "Automatic salary deduction",
+      "Lowest risk structure",
+      "Long repayment tenure",
+    ],
+    icon: BriefcaseBusiness,
+  },
+  {
+    id: 12,
+    slug: "solidarity-group-loan",
+    loanName: "Solidarity Group Loan (Village Bank Model)",
+    category: "Group",
+    badge: "Most Used",
+    description:
+      "Digitized solidarity lending for groups of 5 to 20 members where shared accountability reduces default risk.",
+    amountRange: "MWK 20,000 – 500,000 per member",
+    repaymentPeriod: "4 – 6 months",
+    interestRate: "~6% flat monthly",
+    keyBenefits: [
+      "Designed for women groups and small traders",
+      "Supports fish, tomato, and second-hand clothes businesses",
+      "Weekly/bi-weekly repayments via meetings or digital check-ins",
+    ],
+    icon: Clock,
+  },
+  {
+    id: 13,
+    slug: "micro-health-emergency-loan",
+    loanName: "Micro-Health Emergency Loan",
+    category: "Personal",
+    badge: "Protected",
+    description:
+      "Medical emergency financing bundled with micro-insurance protection.",
+    amountRange: "Case-based approval",
+    repaymentPeriod: "Flexible",
+    interestRate: "Standard short-term rates",
+    keyBenefits: [
+      "Paired with health insurance",
+      "Covers illness or disability",
+      "Reduces default risk",
+    ],
+    icon: ShieldCheck,
+  },
+];
