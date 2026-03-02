@@ -39,6 +39,7 @@ const authError = (res, message, code = "AUTH_ERROR", status = 401) =>
   res.status(status).json({ success: false, message, code });
 
 const sendAuthSuccess = (res, data, status = 200) => res.status(status).json({ success: true, data });
+const isAdminRole = (role) => String(role || "").toLowerCase() === "admin";
 
 export const registerUser = async (req, res, next) => {
   try {
@@ -112,7 +113,7 @@ export const registerUser = async (req, res, next) => {
   }
 };
 
-export const loginUser = async (req, res, next) => {
+const loginCore = async (req, res, next, { adminOnly = false } = {}) => {
   try {
     const parsed = loginSchema.safeParse({
       ...req.body,
@@ -162,6 +163,15 @@ export const loginUser = async (req, res, next) => {
       return authError(res, "Account disabled", "ACCOUNT_DISABLED", 403);
     }
 
+    if (adminOnly && !isAdminRole(user.role)) {
+      return authError(
+        res,
+        "Forbidden: admin access required",
+        "ADMIN_ACCESS_REQUIRED",
+        403
+      );
+    }
+
     user.loginAttempts = 0;
     user.lockUntil = null;
 
@@ -187,6 +197,11 @@ export const loginUser = async (req, res, next) => {
     return next(error);
   }
 };
+
+export const loginUser = async (req, res, next) => loginCore(req, res, next, { adminOnly: false });
+
+export const adminLoginUser = async (req, res, next) =>
+  loginCore(req, res, next, { adminOnly: true });
 
 export const refreshAccessToken = async (req, res, next) => {
   try {

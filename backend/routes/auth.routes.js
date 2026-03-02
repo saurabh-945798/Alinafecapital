@@ -2,6 +2,7 @@ import express from "express";
 import {
   registerUser,
   loginUser,
+  adminLoginUser,
   refreshAccessToken,
   logoutUser,
 } from "../controllers/auth.controller.js";
@@ -57,6 +58,7 @@ const loginLimiter = rateLimitFactory({
 
 router.post("/register", registerLimiter, registerUser);
 router.post("/login", loginLimiter, loginUser);
+router.post("/admin/login", loginLimiter, adminLoginUser);
 router.post("/refresh", refreshAccessToken);
 router.post("/logout", logoutUser);
 
