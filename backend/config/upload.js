@@ -1,8 +1,12 @@
 ﻿import fs from "fs";
 import path from "path";
 import multer from "multer";
+import { fileURLToPath } from "url";
 
-const UPLOAD_ROOT = process.env.UPLOAD_DIR || "uploads";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.resolve(__dirname, "..");
+export const UPLOAD_ROOT = path.resolve(PROJECT_ROOT, process.env.UPLOAD_DIR || "uploads");
 const MAX_SIZE_MB = Number(process.env.MAX_UPLOAD_MB || 6);
 
 const ensureDir = (dirPath) => {
@@ -91,6 +95,6 @@ export const uploadAvatar = multer({
   storage: avatarStorage,
   fileFilter: avatarFilter,
   limits: {
-    fileSize: 2 * 1024 * 1024,
+    fileSize: 5 * 1024 * 1024,
   },
 });

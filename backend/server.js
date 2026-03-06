@@ -15,6 +15,9 @@ import authRoutes from "./routes/auth.routes.js";
 import profileRoutes from "./routes/profile.routes.js";
 import adminKycRoutes from "./routes/admin.kyc.routes.js";
 import adminCustomerRoutes from "./routes/admin.customer.routes.js";
+import inquiryRoutes from "./routes/inquiry.routes.js";
+import adminInquiryRoutes from "./routes/admin.inquiry.routes.js";
+import { UPLOAD_ROOT } from "./config/upload.js";
 import { notFound } from "./middlewares/notFound.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 
@@ -50,7 +53,7 @@ app.use(
     res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
     next();
   },
-  express.static("uploads")
+  express.static(UPLOAD_ROOT)
 );
 
 connectDB();
@@ -63,11 +66,13 @@ app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/loan-products", loanProductRoutes);
 app.use("/api/v1/calc", emiCalculatorRoutes);
 app.use("/api/v1/applications", loanApplicationRoutes);
+app.use("/api/v1/inquiries", inquiryRoutes);
 
 app.use("/api/v1/admin", adminLoanProductRoutes);
 app.use("/api/v1/admin", adminApplicationRoutes);
 app.use("/api/v1/admin", adminKycRoutes);
 app.use("/api/v1/admin", adminCustomerRoutes);
+app.use("/api/v1/admin", adminInquiryRoutes);
 
 app.use("/api/v1/profile", profileRoutes);
 

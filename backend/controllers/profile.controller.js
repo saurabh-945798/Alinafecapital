@@ -39,10 +39,19 @@ export async function getMyProfile(req, res, next) {
     const profile = await UserProfile.findOne({ userId });
 
     if (profile) {
+      // Auto-heal stale avatar references so frontend does not keep requesting 404 files.
+      if (profile.avatarPath && !fs.existsSync(profile.avatarPath)) {
+        profile.avatarPath = "";
+        profile.avatarUrl = "";
+      }
+
       const recomputed = calculateProfileCompletion(profile);
       if (profile.profileCompletion !== recomputed) {
         profile.profileCompletion = recomputed;
-        await profile.save();
+      }
+
+      if (profile.isModified("avatarPath") || profile.isModified("avatarUrl") || profile.isModified("profileCompletion")) {
+        await profile.save({ validateBeforeSave: false });
       }
     }
 

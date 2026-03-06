@@ -9,10 +9,11 @@ export default function Login() {
   const [searchParams] = useSearchParams();
   const { isAuthenticated, setSession } = useAuth();
 
-  const [form, setForm] = useState({ phone: "", password: "" });
+  const [form, setForm] = useState({ loginId: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const isEmailLike = /[A-Za-z@._-]/.test(String(form.loginId || ""));
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -23,10 +24,19 @@ export default function Login() {
 
   const onChange = (e) => {
     const { name, value } = e.target;
+    if (name === "loginId") {
+      // If input looks like email/username text, keep full value.
+      if (/[A-Za-z@._-]/.test(value)) {
+        setForm((prev) => ({ ...prev, loginId: value.trim() }));
+        return;
+      }
 
-    if (name === "phone") {
-      const digits = value.replace(/\D/g, "").slice(0, 9);
-      setForm((prev) => ({ ...prev, phone: digits }));
+      const digits = value.replace(/\D/g, "");
+      let local = digits;
+      if (local.startsWith("265")) local = local.slice(3);
+      if (local.startsWith("0")) local = local.slice(1);
+      local = local.slice(0, 9);
+      setForm((prev) => ({ ...prev, loginId: local }));
       return;
     }
 
@@ -39,20 +49,27 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const localPhone = form.phone.replace(/\D/g, "");
-      const phone = `+265${localPhone}`;
-      const phoneRegex = /^\+265\d{9}$/;
-
-      if (!phoneRegex.test(phone) || localPhone.length !== 9) {
-        setError("Enter a valid Malawi number (9 digits).");
+      let loginId = String(form.loginId || "").trim();
+      if (!loginId) {
+        setError("Enter your email or phone number.");
         setLoading(false);
         return;
       }
 
-      const result = await authApi.login({ ...form, phone });
+      if (!isEmailLike) {
+        const localDigits = loginId.replace(/\D/g, "");
+        if (localDigits.length !== 9) {
+          setError("Enter a valid Malawi phone number (9 digits).");
+          setLoading(false);
+          return;
+        }
+        loginId = `+265${localDigits}`;
+      }
+
+      const result = await authApi.login({ loginId, password: form.password });
 
       if (!result.token) {
-        setError("Invalid phone or password.");
+        setError("Invalid email/phone or password.");
         setLoading(false);
         return;
       }
@@ -114,33 +131,48 @@ export default function Login() {
 
             <div>
               <h1 className="text-2xl font-semibold text-[#002D5B]">Client Login</h1>
-              <p className="mt-1 text-sm text-gray-500">Enter phone and password to continue.</p>
+              <p className="mt-1 text-sm text-gray-500">Enter email or phone and password to continue.</p>
             </div>
 
             {error ? <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600">{error}</div> : null}
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-gray-700" htmlFor="phone">
-                Phone Number <span className="text-red-600">*</span>
+              <label className="text-sm font-medium text-gray-700" htmlFor="loginId">
+                Email or Phone Number <span className="text-red-600">*</span>
               </label>
-              <div className="flex overflow-hidden rounded-lg border border-slate-300 focus-within:ring-2 focus-within:ring-[#B38E46]">
-                <span className="inline-flex items-center border-r border-slate-300 bg-slate-50 px-3 text-sm font-medium text-slate-700">
-                  +265
-                </span>
+              {isEmailLike ? (
                 <input
-                  id="phone"
-                  type="tel"
-                  name="phone"
-                  value={form.phone}
+                  id="loginId"
+                  type="email"
+                  name="loginId"
+                  value={form.loginId}
                   onChange={onChange}
-                  placeholder="881234567"
+                  placeholder="you@example.com"
                   required
-                  maxLength={9}
-                  inputMode="numeric"
-                  className="w-full px-3 py-2.5 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#B38E46]"
                 />
-              </div>
-              <p className="text-xs text-gray-500">Example: 881234567 (without +265).</p>
+              ) : (
+                <div className="flex overflow-hidden rounded-lg border border-slate-300 focus-within:ring-2 focus-within:ring-[#B38E46]">
+                  <span className="inline-flex items-center border-r border-slate-300 bg-slate-50 px-3 text-sm font-medium text-slate-700">
+                    +265
+                  </span>
+                  <input
+                    id="loginId"
+                    type="tel"
+                    name="loginId"
+                    value={form.loginId}
+                    onChange={onChange}
+                    placeholder="881234567"
+                    required
+                    maxLength={9}
+                    inputMode="numeric"
+                    className="w-full px-3 py-2.5 focus:outline-none"
+                  />
+                </div>
+              )}
+              <p className="text-xs text-gray-500">
+                Use your email, or Malawi phone (e.g. 881234567 / +265881234567).
+              </p>
             </div>
 
             <div className="space-y-1.5">

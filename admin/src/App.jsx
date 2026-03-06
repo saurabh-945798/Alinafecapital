@@ -4,6 +4,7 @@ import AdminProtectedRoute from "./components/Auth/AdminProtectedRoute.jsx";
 import CompliancePage from "./components/Compliance/Compliance.jsx";
 import CustomersPage from "./components/Customers/Customers.jsx";
 import Dashboard from "./components/Dashboard/Dashboard.jsx";
+import InquiriesPage from "./components/Inquiries/Inquiries.jsx";
 import LoanApplicationsPage from "./components/LoanApplication/LoanApplication.jsx";
 import LoanProductsPage from "./components/LoanProducts/LoanProducts.jsx";
 import SettingsPage from "./components/Settings/Settings.jsx";
@@ -20,6 +21,7 @@ export default function AppRoutes() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Dashboard />} />
           <Route path="applications" element={<LoanApplicationsPage />} />
+          <Route path="inquiries" element={<InquiriesPage />} />
           <Route path="loan-products" element={<LoanProductsPage />} />
           <Route path="customers" element={<CustomersPage />} />
           <Route path="compliance" element={<CompliancePage />} />

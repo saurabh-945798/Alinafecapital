@@ -4,8 +4,8 @@ import User from "../models/User.js";
 import { registerSchema, loginSchema } from "../utils/validators/auth.validators.js";
 import { isValidE164Phone, normalizeEmail, normalizePhone } from "../utils/normalize.js";
 
-const MAX_LOGIN_ATTEMPTS = 5;
-const LOCK_MINUTES = 30;
+const MAX_LOGIN_ATTEMPTS = Number(process.env.MAX_LOGIN_ATTEMPTS || 5);
+const LOCK_MINUTES = Number(process.env.LOCK_MINUTES || 30);
 
 const issueAccessToken = (userId) =>
   jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: "15m" });
@@ -115,20 +115,31 @@ export const registerUser = async (req, res, next) => {
 
 const loginCore = async (req, res, next, { adminOnly = false } = {}) => {
   try {
-    const parsed = loginSchema.safeParse({
-      ...req.body,
-      phone: normalizePhone(req.body?.phone),
-    });
+    const parsed = loginSchema.safeParse(req.body || {});
     if (!parsed.success) throw parsed.error;
 
-    const phone = normalizePhone(parsed.data.phone);
+    const rawLoginId = String(
+      parsed.data.loginId || parsed.data.phone || parsed.data.email || ""
+    ).trim();
     const password = parsed.data.password;
+    const isEmailLogin = rawLoginId.includes("@");
 
-    if (!isValidE164Phone(phone)) {
-      return authError(res, "Invalid phone format", "VALIDATION_ERROR", 400);
+    let user = null;
+    if (isEmailLogin) {
+      const email = normalizeEmail(rawLoginId);
+      user = await User.findOne({ email });
+    } else {
+      const phone = normalizePhone(rawLoginId);
+      if (!isValidE164Phone(phone)) {
+        return authError(
+          res,
+          "Enter a valid email or Malawi phone number",
+          "VALIDATION_ERROR",
+          400
+        );
+      }
+      user = await User.findOne({ phone });
     }
-
-    const user = await User.findOne({ phone });
 
     if (!user) {
       return authError(res, "Invalid credentials", "INVALID_CREDENTIALS", 401);
@@ -141,9 +152,11 @@ const loginCore = async (req, res, next, { adminOnly = false } = {}) => {
     }
 
     if (user.lockUntil && user.lockUntil > new Date()) {
+      const remainingMs = user.lockUntil.getTime() - Date.now();
+      const retryAfterMinutes = Math.max(1, Math.ceil(remainingMs / 60000));
       return authError(
         res,
-        "Account temporarily locked due to multiple failed attempts. Try again later.",
+        `Account temporarily locked. Try again in ${retryAfterMinutes} minute(s).`,
         "ACCOUNT_LOCKED",
         423
       );

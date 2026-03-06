@@ -27,7 +27,23 @@ export const registerSchema = z.object({
     ),
 });
 
-export const loginSchema = z.object({
-  phone: z.string().trim().min(1, "Phone is required"),
-  password: z.string().min(1, "Password is required"),
-});
+export const loginSchema = z
+  .object({
+    loginId: z.string().trim().optional(),
+    phone: z.string().trim().optional(),
+    email: z.string().trim().optional(),
+    password: z.string().min(1, "Password is required"),
+  })
+  .superRefine((data, ctx) => {
+    const hasLoginId = !!String(data.loginId || "").trim();
+    const hasPhone = !!String(data.phone || "").trim();
+    const hasEmail = !!String(data.email || "").trim();
+
+    if (!hasLoginId && !hasPhone && !hasEmail) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["loginId"],
+        message: "Email or phone is required",
+      });
+    }
+  });

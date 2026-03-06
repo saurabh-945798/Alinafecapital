@@ -4,8 +4,6 @@ import { ChevronDown, Menu, X } from "lucide-react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import AlinafeLogo from "./AlinafeLogo";
 import { useAuth } from "../../context/AuthContext";
-import { guardStartApplication } from "../../utils/applyGuard";
-import { api } from "../../services/api";
 
 const BRAND_NAVY = "#002D5B";
 const BRAND_GOLD = "#B38E46";
@@ -170,7 +168,7 @@ export default function Navbar() {
   };
 
   const handleApply = () => {
-    guardStartApplication({ navigate, api });
+    navigate("/loan-inquiry");
   };
 
   const moreMenuId = "navbar-more-menu";
