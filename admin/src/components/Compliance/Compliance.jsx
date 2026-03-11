@@ -21,6 +21,13 @@ const statusTone = (status) => {
   return "gray";
 };
 
+const DOC_LABEL = {
+  national_id: "National ID (Malawi)",
+  bank_statement_3_months: "Bank Statement (3 months)",
+  payslip_or_business_proof: "Payslip / Business Proof",
+  address_proof: "Address Proof",
+};
+
 const maskAccountNumber = (value) => {
   const raw = String(value || "").replace(/\s+/g, "");
   if (!raw) return "-";
@@ -304,6 +311,29 @@ export default function CompliancePage() {
           </div>
 
           <div className="grid gap-3 md:grid-cols-3 text-sm">
+            <div className="rounded-lg border p-3 flex items-center gap-3 md:col-span-3">
+              {selected.avatarUrl ? (
+                <img
+                  src={
+                    selected.avatarUrl.startsWith("http")
+                      ? selected.avatarUrl
+                      : `${fileBase}${selected.avatarUrl}`
+                  }
+                  alt="Profile"
+                  className="h-16 w-16 rounded-full object-cover border border-slate-200"
+                />
+              ) : (
+                <div className="h-16 w-16 rounded-full border border-slate-200 bg-slate-100 flex items-center justify-center text-slate-500 text-xs">
+                  No Photo
+                </div>
+              )}
+              <div>
+                <p className="text-xs text-slate-500">Applicant</p>
+                <p className="font-semibold text-slate-900">{selected.fullName || "-"}</p>
+                <p className="text-xs text-slate-500">{selected.email || "-"}</p>
+                <p className="text-xs text-slate-500">{selected.phone || "-"}</p>
+              </div>
+            </div>
             <div className="rounded-lg border p-3">
               <p className="text-xs text-slate-500">User ID</p>
               <p className="font-semibold break-all">{String(selected.userId)}</p>
@@ -317,6 +347,31 @@ export default function CompliancePage() {
             <div className="rounded-lg border p-3">
               <p className="text-xs text-slate-500">Submitted</p>
               <p className="font-semibold">{formatDate(selected.submittedAt)}</p>
+            </div>
+          </div>
+
+          <div className="rounded-lg border p-3">
+            <p className="text-sm font-semibold">Profile Details</p>
+            <div className="mt-2 grid gap-3 text-sm md:grid-cols-3">
+              <div>
+                <p className="text-xs text-slate-500">Address</p>
+                <p className="font-medium text-slate-800">{selected.addressLine1 || "-"}</p>
+                <p className="text-slate-700">
+                  {selected.city || "-"}, {selected.district || "-"}
+                </p>
+                <p className="text-slate-700">{selected.country || "Malawi"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Employment</p>
+                <p className="font-medium text-slate-800">{selected.employmentType || "-"}</p>
+                <p className="text-slate-700">Income: {selected.monthlyIncome ? `MWK ${Number(selected.monthlyIncome).toLocaleString()}` : "-"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">KYC Timeline</p>
+                <p className="text-slate-700">Submitted: {formatDate(selected.submittedAt)}</p>
+                <p className="text-slate-700">Verified: {formatDate(selected.verifiedAt)}</p>
+                <p className="text-slate-700">Rejected: {formatDate(selected.rejectedAt)}</p>
+              </div>
             </div>
           </div>
 
@@ -379,8 +434,11 @@ export default function CompliancePage() {
                     : "";
                   return (
                     <div key={`${doc.type}-${idx}`} className="flex flex-wrap items-center gap-2 text-sm">
-                      <Badge tone="blue">{doc.type}</Badge>
-                      <span className="text-slate-600">{doc.mime || "-"}</span>
+                                <Badge tone="blue">{doc.type}</Badge>
+                                <span className="text-slate-700">
+                                  {DOC_LABEL[doc.type] || doc.type}
+                                </span>
+                                <span className="text-slate-600">{doc.mime || "-"}</span>
                       <span className="text-xs text-slate-500">{formatDate(doc.uploadedAt)}</span>
                       {href ? (
                         <a href={href} target="_blank" rel="noreferrer" className="text-slate-800 underline">
@@ -429,6 +487,5 @@ export default function CompliancePage() {
     </div>
   );
 }
-
 
 

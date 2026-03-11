@@ -47,7 +47,7 @@ export default function Dashboard() {
         oldestPendingRes,
         recentDecisionRes,
       ] = await Promise.all([
-        loanApplicationsApi.list({ status: "PENDING", page: 1, limit: 1 }),
+        loanApplicationsApi.list({ status: "PRE_APPLICATION,SUBMITTED,PENDING", page: 1, limit: 1 }),
         loanApplicationsApi.list({ status: "UNDER_REVIEW", page: 1, limit: 1 }),
         loanApplicationsApi.list({
           status: "APPROVED",
@@ -57,7 +57,7 @@ export default function Dashboard() {
         }),
         complianceApi.listKyc({ status: "pending" }),
         loanApplicationsApi.list({
-          status: "PENDING",
+          status: "PRE_APPLICATION,SUBMITTED,PENDING",
           page: 1,
           limit: 5,
           sortBy: "createdAt",
@@ -116,9 +116,9 @@ export default function Dashboard() {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Pending Applications"
+          label="Open Applications"
           value={metrics.pendingApplications}
-          to="/admin/applications?status=PENDING&page=1"
+          to="/admin/applications?status=PRE_APPLICATION,SUBMITTED,PENDING&page=1"
         />
         <MetricCard
           label="Under Review"
@@ -158,7 +158,7 @@ export default function Dashboard() {
                   className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm"
                 >
                   <span className="font-semibold">{item.fullName}</span>
-                  <Badge tone="amber">PENDING</Badge>
+                  <Badge tone={item.status === "PRE_APPLICATION" ? "gray" : item.status === "SUBMITTED" ? "blue" : "amber"}>{item.status}</Badge>
                   <span>{item.productSlug}</span>
                   <span>{money(item.requestedAmount)}</span>
                   <span className="text-xs text-slate-500">{formatDate(item.createdAt)}</span>

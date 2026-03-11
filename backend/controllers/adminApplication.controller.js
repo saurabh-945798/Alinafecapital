@@ -1,4 +1,6 @@
 import { LoanApplication } from "../models/LoanApplication.model.js";
+import UserProfile from "../models/UserProfile.js";
+import User from "../models/User.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import {
@@ -7,6 +9,8 @@ import {
 } from "../validators/adminApplication.validator.js";
 
 const STATUS_TRANSITIONS = {
+  PRE_APPLICATION: ["SUBMITTED", "CANCELLED"],
+  SUBMITTED: ["UNDER_REVIEW", "REJECTED", "CANCELLED"],
   PENDING: ["UNDER_REVIEW", "REJECTED", "CANCELLED"],
   UNDER_REVIEW: ["APPROVED", "REJECTED", "CANCELLED"],
   APPROVED: ["DISBURSED", "CANCELLED"],
@@ -36,7 +40,11 @@ const computeSla = (createdAt, status) => {
   const created = new Date(createdAt).getTime();
   const ageHours = Math.max(0, Math.floor((now - created) / (1000 * 60 * 60)));
 
-  const isOpen = status === "PENDING" || status === "UNDER_REVIEW";
+  const isOpen =
+    status === "PRE_APPLICATION" ||
+    status === "SUBMITTED" ||
+    status === "PENDING" ||
+    status === "UNDER_REVIEW";
   const slaBreached = isOpen && ageHours > SLA_HOURS;
 
   let ageBucket = "<24h";
@@ -54,16 +62,25 @@ export const adminApplicationController = {
       throw new ApiError(400, "Validation failed", "VALIDATION_ERROR");
     }
 
-    const { page, limit, sortBy, sortOrder, status, q, from, to } = parsed.data;
+    const { page, limit, sortBy, sortOrder, status, q, from, to, queue } = parsed.data;
 
     const filter = {};
+    if (queue === "precheck") {
+      filter.status = "PRE_APPLICATION";
+    } else if (queue === "applications") {
+      filter.status = {
+        $in: ["SUBMITTED", "UNDER_REVIEW", "APPROVED", "REJECTED", "DISBURSED", "CANCELLED"],
+      };
+    }
 
     if (status) {
       const statuses = status
         .split(",")
         .map((s) => s.trim().toUpperCase())
         .filter(Boolean);
-      if (statuses.length) filter.status = { $in: statuses };
+      if (statuses.length) {
+        filter.status = statuses.length === 1 ? statuses[0] : { $in: statuses };
+      }
     }
 
     if (q) {
@@ -98,10 +115,36 @@ export const adminApplicationController = {
       LoanApplication.find(filter).sort(sort).skip(skip).limit(limit).lean(),
     ]);
 
-    const items = docs.map((doc) => ({
-      ...doc,
-      sla: computeSla(doc.createdAt, doc.status),
-    }));
+    const userIds = docs
+      .map((d) => d?.userId)
+      .filter(Boolean)
+      .map((id) => String(id));
+    const uniqueUserIds = Array.from(new Set(userIds));
+
+    const profiles = uniqueUserIds.length
+      ? await UserProfile.find({ userId: { $in: uniqueUserIds } })
+          .select("userId profileCompletion kycStatus updatedAt")
+          .lean()
+      : [];
+
+    const profileMap = new Map(
+      profiles.map((p) => [String(p.userId), p])
+    );
+
+    const items = docs.map((doc) => {
+      const profile = doc.userId ? profileMap.get(String(doc.userId)) : null;
+      return {
+        ...doc,
+        profileSummary: profile
+          ? {
+              profileCompletion: Number(profile.profileCompletion || 0),
+              kycStatus: profile.kycStatus || "not_started",
+              profileUpdatedAt: profile.updatedAt || null,
+            }
+          : null,
+        sla: computeSla(doc.createdAt, doc.status),
+      };
+    });
 
     res.json(
       new ApiResponse({
@@ -123,11 +166,43 @@ export const adminApplicationController = {
     const doc = await LoanApplication.findById(req.params.id).lean();
     if (!doc) throw new ApiError(404, "Application not found", "NOT_FOUND");
 
+    let applicantProfile = null;
+    if (doc.userId) {
+      const [profile, user] = await Promise.all([
+        UserProfile.findOne({ userId: doc.userId }).lean(),
+        User.findById(doc.userId).select("fullName email phone").lean(),
+      ]);
+
+      applicantProfile = {
+        userId: String(doc.userId),
+        fullName: profile?.fullName || user?.fullName || doc.fullName || "",
+        email: profile?.email || user?.email || doc.email || "",
+        phone: profile?.phone || user?.phone || doc.phone || "",
+        addressLine1: profile?.addressLine1 || "",
+        city: profile?.city || "",
+        district: profile?.district || "",
+        country: profile?.country || "Malawi",
+        employmentType: profile?.employmentType || "",
+        monthlyIncome: Number(profile?.monthlyIncome || 0),
+        bankName: profile?.bankName || "",
+        accountNumber: profile?.accountNumber || "",
+        branchCode: profile?.branchCode || "",
+        profileCompletion: Number(profile?.profileCompletion || 0),
+        kycStatus: profile?.kycStatus || "not_started",
+        kycRemarks: profile?.kycRemarks || "",
+        submittedAt: profile?.submittedAt || null,
+        verifiedAt: profile?.verifiedAt || null,
+        rejectedAt: profile?.rejectedAt || null,
+        documents: Array.isArray(profile?.documents) ? profile.documents : [],
+      };
+    }
+
     res.json(
       new ApiResponse({
         message: "Application fetched",
         data: {
           ...doc,
+          applicantProfile,
           sla: computeSla(doc.createdAt, doc.status),
         },
       })

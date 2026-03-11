@@ -130,7 +130,7 @@ export default function Login() {
             </Link>
 
             <div>
-              <h1 className="text-2xl font-semibold text-[#002D5B]">Client Login</h1>
+              <h1 className="text-2xl font-semibold text-[#002D5B]"> Login</h1>
               <p className="mt-1 text-sm text-gray-500">Enter email or phone and password to continue.</p>
             </div>
 

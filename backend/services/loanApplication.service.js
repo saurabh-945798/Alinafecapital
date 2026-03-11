@@ -1,7 +1,9 @@
 import { LoanProduct } from "../models/LoanProduct.model.js";
 import { LoanApplication } from "../models/LoanApplication.model.js";
+import UserProfile from "../models/UserProfile.js";
 import { emiCalculatorService } from "./emiCalculator.service.js";
 import { ApiError } from "../utils/ApiError.js";
+import { calculateProfileCompletion } from "../utils/profileCompletion.js";
 
 /**
  * Create immutable snapshot of product at time of application
@@ -35,19 +37,55 @@ const pickProductSnapshot = (p) => ({
   featured: p.featured,
 });
 
-export const loanApplicationService = {
+const ACTIVE_REVIEW_STATUSES = [
+  "PRE_APPLICATION",
+  "SUBMITTED",
+  "PENDING", // legacy
+  "UNDER_REVIEW",
+];
 
+const resolvePrecheck = (profile) => {
+  const completion = Number(profile?.profileCompletion || 0);
+  const computed = calculateProfileCompletion(profile || {});
+  const effectiveCompletion = completion > 0 ? completion : computed;
+  const kycStatus = String(profile?.kycStatus || "not_started").toLowerCase();
+
+  if (effectiveCompletion < 100) {
+    return {
+      status: "PRE_APPLICATION",
+      precheckReason: "PROFILE_INCOMPLETE",
+    };
+  }
+
+  if (kycStatus === "verified") {
+    return {
+      status: "SUBMITTED",
+      precheckReason: "",
+    };
+  }
+
+  if (kycStatus === "rejected") {
+    return {
+      status: "PRE_APPLICATION",
+      precheckReason: "KYC_REJECTED",
+    };
+  }
+
+  return {
+    status: "PRE_APPLICATION",
+    precheckReason: "KYC_PENDING",
+  };
+};
+
+export const loanApplicationService = {
   /**
    * Create Loan Application
    */
   async createApplication(payload) {
-
     const now = new Date();
     const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    // ======================================================
-    // 1️⃣ Find active product
-    // ======================================================
+    // 1) Find active product
     const product = await LoanProduct.findOne({
       slug: String(payload.productSlug).toLowerCase(),
       status: "active",
@@ -57,33 +95,35 @@ export const loanApplicationService = {
       throw new ApiError(404, "Loan product not found", "NOT_FOUND");
     }
 
-    // ======================================================
-    // 2️⃣ BLOCK new apply if user already has an in-review loan
-    // ======================================================
+    // 2) Pre-check profile and KYC to decide queue
+    const profile = payload.userId
+      ? await UserProfile.findOne({ userId: payload.userId }).lean()
+      : null;
+    const { status: initialStatus, precheckReason } = resolvePrecheck(profile);
+
+    // 3) Block new application if an active application already exists
     const identityOr = [{ phone: payload.phone }];
     if (payload.userId) identityOr.push({ userId: payload.userId });
     if (payload.email) identityOr.push({ email: String(payload.email).toLowerCase() });
 
     const existingInReview = await LoanApplication.findOne({
       $or: identityOr,
-      status: { $in: ["PENDING", "UNDER_REVIEW"] },
+      status: { $in: ACTIVE_REVIEW_STATUSES },
     }).lean();
 
     if (existingInReview) {
       throw new ApiError(
         409,
-        "You already have a loan application under review. Please wait for a decision before applying again.",
+        "You already have an active loan request. Please wait for update before applying again.",
         "ACTIVE_APPLICATION_EXISTS"
       );
     }
 
-    // ======================================================
-    // 3️⃣ BLOCK if already APPROVED for same product
-    // ======================================================
+    // 4) Block if already approved/disbursed for same product
     const alreadyApproved = await LoanApplication.findOne({
       phone: payload.phone,
       productSlug: product.slug,
-      status: "APPROVED",
+      status: { $in: ["APPROVED", "DISBURSED"] },
     }).lean();
 
     if (alreadyApproved) {
@@ -94,10 +134,7 @@ export const loanApplicationService = {
       );
     }
 
-    // ======================================================
-    // 4️⃣ BLOCK duplicate within 24 hours
-    // same phone + same product + same amount + same tenure
-    // ======================================================
+    // 5) Block duplicate within 24 hours (same core values)
     const recentDuplicate = await LoanApplication.findOne({
       phone: payload.phone,
       productSlug: product.slug,
@@ -114,25 +151,21 @@ export const loanApplicationService = {
       );
     }
 
-    // ======================================================
-    // 5️⃣ Calculate EMI (Business Engine reuse)
-    // ======================================================
+    // 6) Calculate estimate snapshot
     const calc = emiCalculatorService.calculate({
       product,
       amount: Number(payload.amount),
       tenureMonths: Number(payload.tenureMonths),
     });
 
-    // ======================================================
-    // 6️⃣ Save Application with Snapshots
-    // ======================================================
+    // 7) Save application
     const productSnapshot = pickProductSnapshot(product);
 
     const appDoc = await LoanApplication.create({
       fullName: payload.fullName,
       phone: payload.phone,
       email: payload.email || "",
-      monthlyIncome: Number(payload.monthlyIncome),
+      monthlyIncome: Number(payload.monthlyIncome || profile?.monthlyIncome || 0),
       userId: payload.userId || null,
 
       productId: product._id,
@@ -144,7 +177,8 @@ export const loanApplicationService = {
       productSnapshot,
       calculationSnapshot: calc,
 
-      status: "PENDING",
+      status: initialStatus,
+      precheckReason,
     });
 
     return appDoc;

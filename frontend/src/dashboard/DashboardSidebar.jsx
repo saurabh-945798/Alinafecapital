@@ -100,7 +100,7 @@ export default function DashboardSidebar({
       return {
         label: "Fix KYC",
         intent: "danger",
-        actionKey: "kyc-status",
+        actionKey: "profile-completion",
       };
     }
     if (kycStatus === "unverified") {
@@ -114,14 +114,14 @@ export default function DashboardSidebar({
       return {
         label: "Submit KYC",
         intent: "primary",
-        actionKey: "kyc-status",
+        actionKey: "profile-completion",
       };
     }
     if (kycStatus === "pending") {
       return {
         label: "Check KYC Status",
         intent: "neutral",
-        actionKey: "kyc-status",
+        actionKey: "profile-completion",
       };
     }
     // verified
@@ -527,45 +527,9 @@ export default function DashboardSidebar({
           {isLoading ? (
             <>
               <div className="h-9 rounded-xl bg-gray-100 animate-pulse" />
-              <div className="h-9 rounded-xl bg-gray-100 animate-pulse" />
-              <div className="h-9 rounded-xl bg-gray-100 animate-pulse" />
             </>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={() => handleGo("help-center")}
-                className={[
-                  "w-full rounded-xl border px-3 py-2 text-sm font-medium",
-                  "border-[color:var(--brand-border)] hover:bg-gray-50 active:bg-gray-100",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--brand-gold)]",
-                  "flex items-center gap-2",
-                  collapsed && !inDrawer ? "justify-center" : "justify-start",
-                ].join(" ")}
-                aria-label="Help Center"
-                title={collapsed && !inDrawer ? "Help Center" : undefined}
-              >
-                <Icons.HelpCircle className="h-4 w-4 text-gray-600" />
-                {(!collapsed || inDrawer) && <span>Help Center</span>}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleGo("contact-officer")}
-                className={[
-                  "w-full rounded-xl border px-3 py-2 text-sm font-medium",
-                  "border-[color:var(--brand-border)] hover:bg-gray-50 active:bg-gray-100",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--brand-gold)]",
-                  "flex items-center gap-2",
-                  collapsed && !inDrawer ? "justify-center" : "justify-start",
-                ].join(" ")}
-                aria-label="Contact Officer"
-                title={collapsed && !inDrawer ? "Contact Officer" : undefined}
-              >
-                <Icons.Phone className="h-4 w-4 text-gray-600" />
-                {(!collapsed || inDrawer) && <span>Contact Officer</span>}
-              </button>
-
               <button
                 type="button"
                 onClick={openLogoutConfirm}
@@ -722,7 +686,5 @@ export default function DashboardSidebar({
     </Shell>
   );
 }
-
-
 
 

@@ -98,7 +98,7 @@ export default function LoanInquiryPage() {
   return (
     <section className="mx-auto max-w-3xl px-4 py-10">
       <div className="rounded-2xl border bg-white p-6 md:p-8">
-        <h1 className="text-2xl font-bold text-slate-900">Loan Inquiry</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Loan request</h1>
         <p className="mt-1 text-sm text-slate-600">
           Share your details and selected loan. Our team will review and contact you.
         </p>

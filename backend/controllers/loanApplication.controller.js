@@ -28,10 +28,14 @@ export const loanApplicationController = {
     // Return only useful fields
     res.status(201).json(
       new ApiResponse({
-        message: "Application created",
+        message:
+          created.status === "PRE_APPLICATION"
+            ? "Pre-application saved. Complete profile and KYC to continue."
+            : "Application submitted",
         data: {
           applicationId: created._id,
           status: created.status,
+          precheckReason: created.precheckReason || "",
           productSlug: created.productSlug,
           requestedAmount: created.requestedAmount,
           tenureMonths: created.tenureMonths,

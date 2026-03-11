@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, CircleHelp, PhoneCall, ShieldCheck } from "lucide-react";
 import { api } from "../services/api";
-import { getKycGate } from "../utils/kycGate";
 import { useLoanProducts } from "../hooks/useLoanProducts";
 
 const BRAND_NAVY = "#002D5B";
@@ -12,7 +11,7 @@ const ApplyLoanPage = () => {
   const [searchParams] = useSearchParams();
   const { loanProducts, loading: productsLoading, error: productsError } = useLoanProducts();
   const defaultProductSlug = loanProducts[0]?.slug || "";
-  const [gateChecking, setGateChecking] = useState(true);
+  const [gateChecking, setGateChecking] = useState(true); 
 
   const [formData, setFormData] = useState({
     loanProductSlug: "",
@@ -60,7 +59,7 @@ const ApplyLoanPage = () => {
   useEffect(() => {
     let active = true;
 
-    const enforceApplyGate = async () => {
+    const loadApplyContext = async () => {
       const token = typeof window !== "undefined" ? window.localStorage.getItem("token") : "";
       const queryString = searchParams.toString();
       const nextPath = queryString ? `/apply?${queryString}` : "/apply";
@@ -73,32 +72,34 @@ const ApplyLoanPage = () => {
       try {
         const { data } = await api.get("/profile/me");
         const profile = data?.item ?? data?.data ?? null;
-        const gate = getKycGate(profile);
+        const rawUser = typeof window !== "undefined" ? window.localStorage.getItem("user") : "";
+        let currentUser = null;
+        if (rawUser) {
+          try {
+            currentUser = JSON.parse(rawUser);
+          } catch {
+            currentUser = null;
+          }
+        }
 
         if (active) {
           setFormData((prev) => ({
             ...prev,
-            fullName: prev.fullName || profile?.fullName || "",
+            fullName: prev.fullName || profile?.fullName || currentUser?.fullName || "",
             phoneNumber: prev.phoneNumber || String(profile?.phone || "").replace(/^\+265/, ""),
-            email: prev.email || profile?.email || "",
+            email: prev.email || profile?.email || currentUser?.email || "",
+            monthlyIncome:
+              prev.monthlyIncome || String(profile?.monthlyIncome || currentUser?.monthlyIncome || ""),
           }));
         }
-
-        if (!gate.canApply) {
-          navigate(`/dashboard?kyc=required&next=${encodeURIComponent(nextPath)}`, {
-            replace: true,
-          });
-          return;
-        }
       } catch {
-        navigate("/dashboard?kyc=required", { replace: true });
-        return;
+        // ignore and let user continue with manual form entry
       } finally {
         if (active) setGateChecking(false);
       }
     };
 
-    enforceApplyGate();
+    loadApplyContext();
     return () => {
       active = false;
     };
@@ -233,8 +234,11 @@ const ApplyLoanPage = () => {
 
       const { data } = await api.post("/applications", payload);
       const createdId = data?.data?.applicationId || data?.data?._id || "";
+      const createdStatus = data?.data?.status || "";
       const next = createdId
-        ? `/dashboard/my-applications?created=${encodeURIComponent(createdId)}`
+        ? `/dashboard/my-applications?created=${encodeURIComponent(createdId)}${
+            createdStatus ? `&createdStatus=${encodeURIComponent(createdStatus)}` : ""
+          }`
         : "/dashboard/my-applications";
       navigate(next, { replace: true });
     } catch (err) {
@@ -258,7 +262,7 @@ const ApplyLoanPage = () => {
     return (
       <section className="min-h-[70vh] bg-gradient-to-br from-white to-gray-50 py-24">
         <div className="mx-auto max-w-5xl px-6">
-          <p className="text-sm text-gray-600">Checking your eligibility to apply...</p>
+          <p className="text-sm text-gray-600">Preparing your application form...</p>
         </div>
       </section>
     );
@@ -336,7 +340,7 @@ const ApplyLoanPage = () => {
             </div>
 
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-              Your profile and KYC are verified. You can submit this application securely.
+              Submit your request now. If profile or KYC is incomplete, we will save it as a pre-application.
             </div>
           </aside>
 
@@ -443,7 +447,7 @@ const ApplyLoanPage = () => {
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-white p-4 md:p-5">
-                <p className="text-sm font-semibold text-slate-800">Applicant Details (Verified)</p>
+                <p className="text-sm font-semibold text-slate-800">Applicant Details</p>
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <label className="text-sm font-medium text-slate-700">
                     Full Name
@@ -453,8 +457,7 @@ const ApplyLoanPage = () => {
                       value={formData.fullName}
                       onChange={handleChange}
                       required
-                      readOnly
-                      className="mt-1 w-full rounded-lg border border-gray-300 bg-slate-50 px-4 py-3 text-gray-700 outline-none"
+                      className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#002D5B] focus:ring-2 focus:ring-[#002D5B]/20"
                     />
                   </label>
 
@@ -465,8 +468,7 @@ const ApplyLoanPage = () => {
                       name="email"
                       value={formData.email}
                       onChange={handleChange}
-                      readOnly
-                      className="mt-1 w-full rounded-lg border border-gray-300 bg-slate-50 px-4 py-3 text-gray-700 outline-none"
+                      className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#002D5B] focus:ring-2 focus:ring-[#002D5B]/20"
                     />
                   </label>
 
@@ -485,8 +487,7 @@ const ApplyLoanPage = () => {
                         maxLength={9}
                         inputMode="numeric"
                         required
-                        readOnly
-                        className="w-full bg-slate-50 px-4 py-3 text-gray-700 outline-none"
+                        className="w-full bg-white px-4 py-3 text-slate-800 outline-none"
                       />
                     </div>
                   </label>

@@ -4,6 +4,8 @@ import { applicationsApi } from "../services/applications.api";
 
 const STATUS_FILTERS = [
   { label: "All", value: "ALL" },
+  { label: "Pre-Application", value: "PRE_APPLICATION" },
+  { label: "Submitted", value: "SUBMITTED" },
   { label: "Pending", value: "PENDING" },
   { label: "In Review", value: "UNDER_REVIEW" },
   { label: "Approved", value: "APPROVED" },
@@ -13,6 +15,8 @@ const STATUS_FILTERS = [
 ];
 
 const STATUS_LABEL = {
+  PRE_APPLICATION: "Pre-Application",
+  SUBMITTED: "Submitted",
   PENDING: "Pending",
   UNDER_REVIEW: "In Review",
   APPROVED: "Approved",
@@ -38,6 +42,9 @@ const statusBadgeClass = (status) => {
   if (status === "UNDER_REVIEW" || status === "PENDING") {
     return `${base} bg-amber-50 text-amber-700 border-amber-200`;
   }
+  if (status === "PRE_APPLICATION" || status === "SUBMITTED") {
+    return `${base} bg-blue-50 text-blue-700 border-blue-200`;
+  }
   if (status === "REJECTED" || status === "CANCELLED") {
     return `${base} bg-red-50 text-red-700 border-red-200`;
   }
@@ -47,6 +54,7 @@ const statusBadgeClass = (status) => {
 export default function DashboardMyApplicationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const createdId = searchParams.get("created") || "";
+  const createdStatus = searchParams.get("createdStatus") || "";
 
   const [filters, setFilters] = useState({
     status: searchParams.get("status") || "ALL",
@@ -92,8 +100,9 @@ export default function DashboardMyApplicationsPage() {
     if (filters.page > 1) params.set("page", String(filters.page));
     if (filters.limit !== 10) params.set("limit", String(filters.limit));
     if (createdId) params.set("created", createdId);
+    if (createdStatus) params.set("createdStatus", createdStatus);
     setSearchParams(params, { replace: true });
-  }, [filters, createdId, setSearchParams]);
+  }, [filters, createdId, createdStatus, setSearchParams]);
 
   const fetchList = async () => {
     setLoading(true);
@@ -162,7 +171,9 @@ export default function DashboardMyApplicationsPage() {
         </p>
         {createdId ? (
           <p className="text-xs rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-700">
-            Application submitted successfully. Review its status below.
+            {createdStatus === "PRE_APPLICATION"
+              ? "Pre-application saved. Complete profile and KYC, then submit again."
+              : "Application submitted successfully. Review its status below."}
           </p>
         ) : null}
       </section>
@@ -385,4 +396,3 @@ export default function DashboardMyApplicationsPage() {
     </div>
   );
 }
-

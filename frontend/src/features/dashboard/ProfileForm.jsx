@@ -1,10 +1,29 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../../services/api";
 import { FILE_BASE_URL } from "../../config/api";
+
+const BANK_OPTIONS = [
+  "CDH Investment Bank (Limited)",
+  "Centenary Bank Malawi",
+  "Ecobank Malawi Limited",
+  "FDH Bank Plc",
+  "First Capital Bank Plc (Malawi)",
+  "National Bank of Malawi Plc",
+  "NBS Bank Plc",
+  "Standard Bank Malawi Plc",
+  "Nedbank (Malawi) Limited",
+  "Opportunity International Bank Malawi (OIBM)",
+  "New Finance Bank Malawi Limited",
+  "Reserve Bank of Malawi (Central Bank)",
+  "Malawi Savings Bank",
+  "Indebank",
+];
 
 export default function ProfileForm({ profile, onSaved, setError, setSuccess }) {
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [showCongratsModal, setShowCongratsModal] = useState(false);
+  const prevCompletionRef = useRef(Number(profile?.profileCompletion || 0));
   const [form, setForm] = useState({
     addressLine1: "",
     city: "",
@@ -12,13 +31,17 @@ export default function ProfileForm({ profile, onSaved, setError, setSuccess }) 
     country: "Malawi",
     employmentType: "",
     monthlyIncome: "",
-    bankName: "",
+    bankNameOption: "",
+    bankNameOther: "",
     accountNumber: "",
     branchCode: "",
   });
 
   useEffect(() => {
     if (!profile) return;
+    const existingBankName = String(profile.bankName || "").trim();
+    const isKnownBank = BANK_OPTIONS.includes(existingBankName);
+
     setForm({
       addressLine1: profile.addressLine1 || "",
       city: profile.city || "",
@@ -26,11 +49,21 @@ export default function ProfileForm({ profile, onSaved, setError, setSuccess }) 
       country: profile.country || "Malawi",
       employmentType: profile.employmentType || "",
       monthlyIncome: profile.monthlyIncome || "",
-      bankName: profile.bankName || "",
+      bankNameOption: isKnownBank ? existingBankName : existingBankName ? "Other" : "",
+      bankNameOther: isKnownBank ? "" : existingBankName,
       accountNumber: profile.accountNumber || "",
       branchCode: profile.branchCode || "",
     });
   }, [profile]);
+
+  useEffect(() => {
+    const previous = Number(prevCompletionRef.current || 0);
+    const current = Number(profile?.profileCompletion || 0);
+    if (previous < 100 && current === 100) {
+      setShowCongratsModal(true);
+    }
+    prevCompletionRef.current = current;
+  }, [profile?.profileCompletion]);
 
   const resolveAssetUrl = (path = "") => {
     if (!path) return "";
@@ -42,14 +75,41 @@ export default function ProfileForm({ profile, onSaved, setError, setSuccess }) 
     e.preventDefault();
     setError("");
     setSuccess("");
+
+    const resolvedBankName =
+      form.bankNameOption === "Other"
+        ? String(form.bankNameOther || "").trim()
+        : form.bankNameOption;
+
+    if (!resolvedBankName) {
+      setError("Please select your bank name.");
+      return;
+    }
+
     try {
-      await api.put("/profile/me", {
-        ...form,
+      const response = await api.put("/profile/me", {
+        addressLine1: form.addressLine1,
+        city: form.city,
+        district: form.district,
+        country: form.country,
+        employmentType: form.employmentType,
         monthlyIncome: form.monthlyIncome === "" ? undefined : Number(form.monthlyIncome),
+        bankName: resolvedBankName,
+        accountNumber: form.accountNumber,
+        branchCode: form.branchCode,
       });
+
+      const previousCompletion = Number(profile?.profileCompletion || 0);
+      const nextCompletion = Number(response?.data?.data?.profileCompletion || 0);
+      if (previousCompletion < 100 && nextCompletion === 100) setShowCongratsModal(true);
+
       setSuccess("Profile updated");
       onSaved();
     } catch (err) {
+      if (err?.response?.status === 401) {
+        setError("Session expired. Please login again.");
+        return;
+      }
       setError(err?.response?.data?.message || "Failed to update profile");
     }
   };
@@ -126,7 +186,11 @@ export default function ProfileForm({ profile, onSaved, setError, setSuccess }) 
               disabled={!avatarFile || avatarUploading}
               className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
             >
-              {avatarUploading ? "Uploading..." : "Upload Photo"}
+              {avatarUploading
+                ? "Uploading..."
+                : profile?.avatarUrl
+                ? "Change Photo"
+                : "Upload Photo"}
             </button>
           </div>
         </div>
@@ -185,12 +249,17 @@ export default function ProfileForm({ profile, onSaved, setError, setSuccess }) 
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
           <label className="space-y-1.5">
             <span className="text-sm font-medium text-slate-700">Employment Type</span>
-            <input
+            <select
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-              placeholder="Example: Government employee"
               value={form.employmentType}
               onChange={(e) => setForm((p) => ({ ...p, employmentType: e.target.value }))}
-            />
+            >
+              <option value="">Select employment type</option>
+              <option>Government Employee</option>
+              <option>Private Company Employee</option>
+              <option>Self-Employed</option>
+              <option>Farmer</option>
+            </select>
           </label>
 
           <label className="space-y-1.5">
@@ -215,13 +284,32 @@ export default function ProfileForm({ profile, onSaved, setError, setSuccess }) 
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
           <label className="space-y-1.5 md:col-span-2">
             <span className="text-sm font-medium text-slate-700">Bank Name</span>
-            <input
+            <select
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-              placeholder="Example: National Bank of Malawi"
-              value={form.bankName}
-              onChange={(e) => setForm((p) => ({ ...p, bankName: e.target.value }))}
-            />
+              value={form.bankNameOption}
+              onChange={(e) => setForm((p) => ({ ...p, bankNameOption: e.target.value }))}
+            >
+              <option value="">Select bank</option>
+              {BANK_OPTIONS.map((bank) => (
+                <option key={bank} value={bank}>
+                  {bank}
+                </option>
+              ))}
+              <option value="Other">Other</option>
+            </select>
           </label>
+
+          {form.bankNameOption === "Other" ? (
+            <label className="space-y-1.5 md:col-span-2">
+              <span className="text-sm font-medium text-slate-700">Other Bank Name</span>
+              <input
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                placeholder="Enter your bank name"
+                value={form.bankNameOther}
+                onChange={(e) => setForm((p) => ({ ...p, bankNameOther: e.target.value }))}
+              />
+            </label>
+          ) : null}
 
           <label className="space-y-1.5">
             <span className="text-sm font-medium text-slate-700">Account Number</span>
@@ -234,10 +322,10 @@ export default function ProfileForm({ profile, onSaved, setError, setSuccess }) 
           </label>
 
           <label className="space-y-1.5">
-            <span className="text-sm font-medium text-slate-700">Branch Code</span>
+            <span className="text-sm font-medium text-slate-700">Branch</span>
             <input
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-              placeholder="Enter branch code"
+              placeholder="Enter branch Name"
               value={form.branchCode}
               onChange={(e) => setForm((p) => ({ ...p, branchCode: e.target.value }))}
             />
@@ -252,6 +340,37 @@ export default function ProfileForm({ profile, onSaved, setError, setSuccess }) 
       <button className="sr-only" type="submit">
         Save Profile
       </button>
+
+      {showCongratsModal ? (
+        <div className="fixed inset-0 z-[80] grid place-items-center px-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setShowCongratsModal(false)}
+            aria-label="Close congratulations modal"
+          />
+
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-emerald-200 bg-white p-6 shadow-2xl">
+            <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+              <span className="text-xl font-bold">✓</span>
+            </div>
+            <h3 className="text-xl font-bold text-slate-900">Congratulations!</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Your profile is now 100% complete. You can continue with KYC submission.
+            </p>
+
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowCongratsModal(false)}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </form>
   );
 }

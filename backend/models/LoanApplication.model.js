@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 
 const STATUS_ENUM = [
+  "PRE_APPLICATION",
+  "SUBMITTED",
   "PENDING",
   "UNDER_REVIEW",
   "APPROVED",
@@ -100,6 +102,13 @@ const LoanApplicationSchema = new mongoose.Schema(
       enum: STATUS_ENUM,
       default: "PENDING",
       index: true,
+    },
+
+    precheckReason: {
+      type: String,
+      enum: ["", "PROFILE_INCOMPLETE", "KYC_PENDING", "KYC_REJECTED"],
+      default: "",
+      trim: true,
     },
 
     // Status history log (audit trail)

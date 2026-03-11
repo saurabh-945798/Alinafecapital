@@ -53,7 +53,7 @@ export const adminCustomerController = {
     if (kycStatus) profileFilter.kycStatus = kycStatus;
 
     const profiles = await UserProfile.find(profileFilter)
-      .select("userId profileCompletion kycStatus kycRemarks verifiedAt rejectedAt updatedAt")
+      .select("userId profileCompletion kycStatus kycRemarks verifiedAt rejectedAt updatedAt avatarUrl")
       .lean();
 
     const profileMap = new Map(profiles.map((p) => [String(p.userId), p]));
@@ -91,10 +91,11 @@ export const adminCustomerController = {
                 profileCompletion: profile.profileCompletion ?? 0,
                 kycStatus: profile.kycStatus || "not_started",
                 kycRemarks: profile.kycRemarks || "",
-                verifiedAt: profile.verifiedAt || null,
-                rejectedAt: profile.rejectedAt || null,
-                updatedAt: profile.updatedAt || null,
-              }
+              verifiedAt: profile.verifiedAt || null,
+              rejectedAt: profile.rejectedAt || null,
+              updatedAt: profile.updatedAt || null,
+              avatarUrl: profile.avatarUrl || "",
+            }
             : null,
           stats: {
             totalApplications: appStats?.totalApplications || 0,
@@ -129,7 +130,7 @@ export const adminCustomerController = {
 
     const [profile, applications] = await Promise.all([
       UserProfile.findOne({ userId: user._id })
-        .select("profileCompletion kycStatus kycRemarks verifiedAt rejectedAt updatedAt")
+        .select("profileCompletion kycStatus kycRemarks verifiedAt rejectedAt updatedAt avatarUrl")
         .lean(),
       LoanApplication.find({ phone: user.phone })
         .select("status requestedAmount productSlug createdAt")
@@ -157,4 +158,3 @@ export const adminCustomerController = {
     );
   },
 };
-

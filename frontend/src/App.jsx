@@ -18,7 +18,6 @@ import Complaints from "./components/Complaints/Complaints.jsx";
 import Terms from "./components/Terms/Terms.jsx";
 import Privacy from "./components/Privacy/Privacy.jsx";
 import { ApplyLoanPage } from "./publicPages/ApplyLoanPage.jsx";
-import LoanInquiryPage from "./publicPages/LoanInquiryPage.jsx";
 import EligibilityCheckPage from "./publicPages/EligibilityCheckPage.jsx";
 import FAQPage from "./publicPages/FAQPage.jsx";
 import EligibilityDetailsPage from "./publicPages/EligibilityDetailsPage.jsx";
@@ -160,14 +159,7 @@ function App() {
           </Layout>
         }
       />
-      <Route
-        path="/loan-inquiry"
-        element={
-          <Layout>
-            <LoanInquiryPage />
-          </Layout>
-        }
-      />
+      <Route path="/loan-inquiry" element={<Navigate to="/apply" replace />} />
       <Route
         path="/eligibility-check"
         element={

@@ -5,16 +5,9 @@ import Badge from "../ui/Badge";
 import { loanApplicationsApi } from "../../services/api/loanApplications.api";
 import { useToast } from "../../context/ToastContext.jsx";
 
-const STATUS_OPTIONS = [
-  "PENDING",
-  "UNDER_REVIEW",
-  "APPROVED",
-  "REJECTED",
-  "DISBURSED",
-  "CANCELLED",
-];
-
 const STATUS_TRANSITIONS = {
+  PRE_APPLICATION: ["SUBMITTED", "CANCELLED"],
+  SUBMITTED: ["UNDER_REVIEW", "REJECTED", "CANCELLED"],
   PENDING: ["UNDER_REVIEW", "REJECTED", "CANCELLED"],
   UNDER_REVIEW: ["APPROVED", "REJECTED", "CANCELLED"],
   APPROVED: ["DISBURSED", "CANCELLED"],
@@ -24,6 +17,8 @@ const STATUS_TRANSITIONS = {
 };
 
 const STATUS_TONE = {
+  PRE_APPLICATION: "gray",
+  SUBMITTED: "blue",
   PENDING: "amber",
   UNDER_REVIEW: "blue",
   APPROVED: "green",
@@ -31,6 +26,34 @@ const STATUS_TONE = {
   DISBURSED: "green",
   CANCELLED: "gray",
 };
+
+const QUEUE_CONFIG = {
+  precheck: {
+    label: "Pre-Applications",
+    statuses: ["PRE_APPLICATION"],
+    description: "Applicants who need profile/KYC completion before underwriting.",
+  },
+  applications: {
+    label: "Applications",
+    statuses: [
+      "SUBMITTED",
+      "PENDING",
+      "UNDER_REVIEW",
+      "APPROVED",
+      "REJECTED",
+      "DISBURSED",
+      "CANCELLED",
+    ],
+    description: "Underwriting and decision queue for ready applications.",
+  },
+};
+
+const PRECHECK_REASON_LABEL = {
+  PROFILE_INCOMPLETE: "Profile incomplete",
+  KYC_PENDING: "KYC pending",
+  KYC_REJECTED: "KYC rejected",
+};
+
 
 const formatDate = (value) => {
   if (!value) return "-";
@@ -60,6 +83,7 @@ export default function LoanApplication() {
   const [error, setError] = useState("");
 
   const [filters, setFilters] = useState({
+    queue: searchParams.get("queue") || "applications",
     status: searchParams.get("status") || "",
     q: searchParams.get("q") || "",
     sortBy: searchParams.get("sortBy") || "createdAt",
@@ -84,6 +108,9 @@ export default function LoanApplication() {
   const [decisionLoading, setDecisionLoading] = useState(false);
 
   const selectedStatus = selected?.status || "";
+  const activeQueue = QUEUE_CONFIG[filters.queue] ? filters.queue : "applications";
+  const statusOptions = QUEUE_CONFIG[activeQueue].statuses;
+  const isPrecheckQueue = activeQueue === "precheck";
   const allowedNextStatuses = useMemo(
     () => STATUS_TRANSITIONS[selectedStatus] || [],
     [selectedStatus]
@@ -93,7 +120,11 @@ export default function LoanApplication() {
     setLoading(true);
     setError("");
     try {
-      const res = await loanApplicationsApi.list(filters);
+      const params = { ...filters, queue: activeQueue };
+      if (!filters.status) {
+        params.status = QUEUE_CONFIG[activeQueue].statuses.join(",");
+      }
+      const res = await loanApplicationsApi.list(params);
       setItems(res?.items || []);
       setPagination(
         res?.pagination || {
@@ -117,6 +148,7 @@ export default function LoanApplication() {
   }, [
     filters.page,
     filters.limit,
+    filters.queue,
     filters.status,
     filters.q,
     filters.sortBy,
@@ -128,6 +160,7 @@ export default function LoanApplication() {
   useEffect(() => {
     setFilters((prev) => ({
       ...prev,
+      queue: searchParams.get("queue") || "applications",
       status: searchParams.get("status") || "",
       q: searchParams.get("q") || "",
       sortBy: searchParams.get("sortBy") || "createdAt",
@@ -141,6 +174,7 @@ export default function LoanApplication() {
 
   useEffect(() => {
     const params = new URLSearchParams();
+    if (filters.queue && filters.queue !== "applications") params.set("queue", filters.queue);
     if (filters.status) params.set("status", filters.status);
     if (filters.q) params.set("q", filters.q);
     if (filters.sortBy && filters.sortBy !== "createdAt") params.set("sortBy", filters.sortBy);
@@ -270,6 +304,38 @@ export default function LoanApplication() {
         </div>
       </div>
 
+      <div className="rounded-xl border bg-white p-2">
+        <div className="grid gap-2 md:grid-cols-2">
+          {Object.entries(QUEUE_CONFIG).map(([key, queue]) => {
+            const active = key === activeQueue;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() =>
+                  setFilters((p) => ({
+                    ...p,
+                    queue: key,
+                    status: "",
+                    page: 1,
+                  }))
+                }
+                className={`rounded-lg border px-3 py-2 text-left transition ${
+                  active
+                    ? "border-slate-900 bg-slate-900 text-white"
+                    : "border-slate-200 bg-white hover:border-slate-300"
+                }`}
+              >
+                <p className="text-sm font-semibold">{queue.label}</p>
+                <p className={`text-xs ${active ? "text-slate-200" : "text-slate-500"}`}>
+                  {queue.description}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {error ? (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {error}
@@ -290,8 +356,8 @@ export default function LoanApplication() {
             value={filters.status}
             onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value, page: 1 }))}
           >
-            <option value="">All Status</option>
-            {STATUS_OPTIONS.map((status) => (
+            <option value="">All Status ({QUEUE_CONFIG[activeQueue].label})</option>
+            {statusOptions.map((status) => (
               <option key={status} value={status}>
                 {status}
               </option>
@@ -336,6 +402,7 @@ export default function LoanApplication() {
             variant="outline"
             onClick={() =>
               setFilters({
+                queue: activeQueue,
                 status: "",
                 q: "",
                 sortBy: "createdAt",
@@ -361,7 +428,7 @@ export default function LoanApplication() {
                 <th className="px-4 py-3 text-left">Product</th>
                 <th className="px-4 py-3 text-left">Amount</th>
                 <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-left">SLA</th>
+                <th className="px-4 py-3 text-left">{isPrecheckQueue ? "Precheck" : "SLA"}</th>
                 <th className="px-4 py-3 text-left">Created</th>
                 <th className="px-4 py-3 text-left">Action</th>
               </tr>
@@ -392,12 +459,26 @@ export default function LoanApplication() {
                       <Badge tone={STATUS_TONE[item.status] || "gray"}>{item.status}</Badge>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-xs">
-                        <p>{item?.sla?.ageBucket || "-"}</p>
-                        <p className={item?.sla?.slaBreached ? "text-rose-600" : "text-slate-500"}>
-                          {item?.sla?.slaBreached ? "Breached" : "On time"}
-                        </p>
-                      </div>
+                      {isPrecheckQueue ? (
+                        <div className="text-xs">
+                          <p className="font-medium text-slate-800">
+                            {PRECHECK_REASON_LABEL[item?.precheckReason] || "Awaiting checks"}
+                          </p>
+                          <p className="text-slate-500">
+                            Profile: {Number(item?.profileSummary?.profileCompletion || 0)}%
+                          </p>
+                          <p className="text-slate-500">
+                            KYC: {item?.profileSummary?.kycStatus || "not_started"}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-xs">
+                          <p>{item?.sla?.ageBucket || "-"}</p>
+                          <p className={item?.sla?.slaBreached ? "text-rose-600" : "text-slate-500"}>
+                            {item?.sla?.slaBreached ? "Breached" : "On time"}
+                          </p>
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3">{formatDate(item.createdAt)}</td>
                     <td className="px-4 py-3">
@@ -456,7 +537,7 @@ export default function LoanApplication() {
             <p className="text-sm text-slate-500">Loading application details...</p>
           ) : (
             <>
-              <div className="grid gap-3 md:grid-cols-3 text-sm">
+              <div className="grid gap-3 md:grid-cols-4 text-sm">
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-slate-500">Applicant</p>
                   <p className="font-semibold">{selected.fullName}</p>
@@ -478,6 +559,37 @@ export default function LoanApplication() {
                   </div>
                   <p className="mt-2 text-xs text-slate-500">
                     Created: {formatDate(selected.createdAt)}
+                  </p>
+                  {selected.precheckReason ? (
+                    <p className="mt-2 text-xs text-slate-600">
+                      Precheck:{" "}
+                      {PRECHECK_REASON_LABEL[selected.precheckReason] || selected.precheckReason}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-slate-500">KYC & Profile</p>
+                  <p className="font-semibold text-slate-900">
+                    Completion: {Number(selected?.applicantProfile?.profileCompletion || 0)}%
+                  </p>
+                  <div className="mt-1">
+                    <Badge
+                      tone={
+                        selected?.applicantProfile?.kycStatus === "verified"
+                          ? "green"
+                          : selected?.applicantProfile?.kycStatus === "rejected"
+                          ? "red"
+                          : selected?.applicantProfile?.kycStatus === "pending"
+                          ? "amber"
+                          : "gray"
+                      }
+                    >
+                      {selected?.applicantProfile?.kycStatus || "not_started"}
+                    </Badge>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Submitted: {formatDate(selected?.applicantProfile?.submittedAt)}
                   </p>
                 </div>
               </div>

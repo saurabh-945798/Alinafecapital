@@ -4,12 +4,23 @@ import Button from "../ui/Button";
 import Badge from "../ui/Badge";
 import { customersApi } from "../../services/api/customers.api";
 import { useToast } from "../../context/ToastContext.jsx";
+import { ADMIN_FILE_BASE_URL } from "../../config/api";
 
 const formatDate = (value) => {
   if (!value) return "-";
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? "-" : d.toLocaleString();
 };
+
+const FALLBACK_AVATAR =
+  "data:image/svg+xml;utf8," +
+  encodeURIComponent(
+    `<svg xmlns='http://www.w3.org/2000/svg' width='96' height='96' viewBox='0 0 96 96'>
+      <rect width='96' height='96' rx='48' fill='#E2E8F0'/>
+      <circle cx='48' cy='37' r='18' fill='#94A3B8'/>
+      <path d='M16 84c6-14 18-22 32-22s26 8 32 22' fill='#94A3B8'/>
+    </svg>`
+  );
 
 export default function CustomersPage() {
   const toast = useToast();
@@ -37,6 +48,7 @@ export default function CustomersPage() {
   const [selectedId, setSelectedId] = useState("");
   const [selected, setSelected] = useState(null);
   const [selectedLoading, setSelectedLoading] = useState(false);
+  const [avatarBroken, setAvatarBroken] = useState(false);
 
   const fetchList = async () => {
     setLoading(true);
@@ -101,6 +113,7 @@ export default function CustomersPage() {
   const openDetails = async (id) => {
     setSelectedId(id);
     setSelected(null);
+    setAvatarBroken(false);
     setSelectedLoading(true);
     setError("");
     try {
@@ -243,7 +256,7 @@ export default function CustomersPage() {
                         {item.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3">
+                  <td className="px-4 py-3">
                       <Button size="sm" variant="outline" onClick={() => openDetails(item.id)}>
                         View
                       </Button>
@@ -296,6 +309,28 @@ export default function CustomersPage() {
           ) : (
             <>
               <div className="grid gap-3 md:grid-cols-3 text-sm">
+                <div className="rounded-lg border p-3 md:col-span-3">
+                  <p className="text-xs text-slate-500 mb-2">Profile Photo</p>
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={
+                        !avatarBroken && selected?.profile?.avatarUrl
+                          ? selected.profile.avatarUrl.startsWith("http")
+                            ? selected.profile.avatarUrl
+                            : `${ADMIN_FILE_BASE_URL}${selected.profile.avatarUrl}`
+                          : FALLBACK_AVATAR
+                      }
+                      onError={() => setAvatarBroken(true)}
+                      alt="Customer profile"
+                      className="h-16 w-16 rounded-full object-cover border border-slate-200"
+                    />
+                    <p className="text-xs text-slate-500">
+                      {selected?.profile?.avatarUrl && !avatarBroken
+                        ? "Uploaded photo"
+                        : "Fallback avatar"}
+                    </p>
+                  </div>
+                </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-slate-500">Identity</p>
                   <p className="font-semibold">{selected.fullName}</p>

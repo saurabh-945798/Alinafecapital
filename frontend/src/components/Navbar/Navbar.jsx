@@ -62,13 +62,13 @@ const mobileLinkClass = ({ isActive }) =>
 
 const desktopLinkClass = ({ isActive }) =>
   [
-    "rounded-md px-2 py-1 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+    "rounded-md px-2 py-1 text-base font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
     isActive ? "text-[#002D5B]" : "text-slate-700 hover:text-[#002D5B]",
   ].join(" ");
 
 const moreLinkClass = ({ isActive }) =>
   [
-    "block rounded-md px-3 py-2 text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+    "block rounded-md px-3 py-2 text-base transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
     isActive ? "bg-slate-100 text-[#002D5B]" : "text-slate-700 hover:bg-slate-100 hover:text-[#002D5B]",
   ].join(" ");
 
@@ -168,7 +168,11 @@ export default function Navbar() {
   };
 
   const handleApply = () => {
-    navigate("/loan-inquiry");
+    if (!isAuthenticated) {
+      navigate(`/login?next=${encodeURIComponent("/apply")}`);
+      return;
+    }
+    navigate("/apply");
   };
 
   const moreMenuId = "navbar-more-menu";
@@ -264,7 +268,7 @@ export default function Navbar() {
                 ref={moreButtonRef}
                 type="button"
                 onClick={() => setIsMoreOpen((prev) => !prev)}
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-slate-700 hover:text-[#002D5B] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-base font-medium text-slate-700 hover:text-[#002D5B] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
                 aria-haspopup="menu"
                 aria-expanded={isMoreOpen}
                 aria-controls={moreMenuId}
@@ -350,7 +354,7 @@ export default function Navbar() {
                 {userName ? <span className="text-xs text-slate-600">Hi, {userName}</span> : null}
                 <NavLink
                   to="/dashboard"
-                  className="rounded-lg border px-4 py-2 text-sm font-medium transition"
+                  className="rounded-lg border px-4 py-2 text-base font-medium transition"
                   style={{ borderColor: BRAND_NAVY, color: BRAND_NAVY }}
                 >
                   Dashboard
@@ -358,7 +362,7 @@ export default function Navbar() {
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-base font-medium text-slate-700 transition hover:bg-slate-50"
                 >
                   Logout
                 </button>
@@ -366,18 +370,22 @@ export default function Navbar() {
             ) : (
               <NavLink
                 to="/login"
-                className="rounded-lg border px-4 py-2 text-sm font-medium transition"
+                className="rounded-lg border px-4 py-2 text-base font-medium transition"
                 style={{ borderColor: BRAND_NAVY, color: BRAND_NAVY }}
               >
-                Client Login
+                 Login
               </NavLink>
             )}
 
             <button
               type="button"
               onClick={handleApply}
-              className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-95"
-              style={{ backgroundColor: BRAND_GOLD }}
+              className="rounded-lg border px-5 py-2 text-base font-semibold transition hover:opacity-95"
+              style={{
+                color: BRAND_NAVY,
+                borderColor: "rgba(0,45,91,0.25)",
+                background: "linear-gradient(135deg, #ffffff 0%, #e8f1ff 100%)",
+              }}
             >
               Apply Loan
             </button>
@@ -445,7 +453,7 @@ export default function Navbar() {
                           <NavLink
                             to="/dashboard"
                             onClick={() => setIsOpen(false)}
-                            className="rounded-lg border px-4 py-2.5 text-center text-sm font-medium"
+                            className="rounded-lg border px-4 py-2.5 text-center text-base font-medium"
                             style={{ borderColor: BRAND_NAVY, color: BRAND_NAVY }}
                           >
                             Dashboard
@@ -456,7 +464,7 @@ export default function Navbar() {
                               setIsOpen(false);
                               handleLogout();
                             }}
-                            className="rounded-lg border border-slate-300 px-4 py-2.5 text-center text-sm font-medium text-slate-700"
+                            className="rounded-lg border border-slate-300 px-4 py-2.5 text-center text-base font-medium text-slate-700"
                           >
                             Logout
                           </button>
@@ -465,7 +473,7 @@ export default function Navbar() {
                         <NavLink
                           to="/login"
                           onClick={() => setIsOpen(false)}
-                          className="rounded-lg border px-4 py-2.5 text-center text-sm font-medium"
+                          className="rounded-lg border px-4 py-2.5 text-center text-base font-medium"
                           style={{ borderColor: BRAND_NAVY, color: BRAND_NAVY }}
                         >
                           Client Login
@@ -478,8 +486,12 @@ export default function Navbar() {
                           setIsOpen(false);
                           handleApply();
                         }}
-                        className="rounded-lg px-4 py-2.5 text-center text-sm font-semibold text-white"
-                        style={{ backgroundColor: BRAND_GOLD }}
+                        className="rounded-lg border px-4 py-2.5 text-center text-base font-semibold"
+                        style={{
+                          color: BRAND_NAVY,
+                          borderColor: "rgba(0,45,91,0.25)",
+                          background: "linear-gradient(135deg, #ffffff 0%, #e8f1ff 100%)",
+                        }}
                       >
                         Apply Loan
                       </button>
