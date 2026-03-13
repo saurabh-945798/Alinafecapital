@@ -26,9 +26,6 @@ const allowedMimes = new Set([
   "image/jpeg",
   "image/png",
   "image/jpg",
-  "image/webp",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ]);
 const allowedAvatarMimes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const avatarExtByMime = {
@@ -59,9 +56,7 @@ const storage = multer.diskStorage({
 
 const fileFilter = (req, file, cb) => {
   if (!allowedMimes.has(file.mimetype)) {
-    return cb(
-      new Error("Allowed formats: PDF, JPG, JPEG, PNG, WEBP, DOC, DOCX")
-    );
+    return cb(new Error("Allowed formats: PDF, JPG, JPEG, PNG"));
   }
   cb(null, true);
 };

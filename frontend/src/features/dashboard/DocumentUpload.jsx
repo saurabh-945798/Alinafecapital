@@ -94,7 +94,7 @@ export default function DocumentUpload({ profile, onUploaded, setError, setSucce
     <div className="rounded-xl border border-slate-200 bg-white p-3">
       <p className="text-sm font-medium text-slate-700">{title}</p>
       <p className="mt-1 text-xs text-slate-500">
-        {/* Allowed: PDF, JPG, JPEG, PNG, WEBP, DOC, DOCX */}
+        Allowed: PDF, JPG, JPEG, PNG
       </p>
 
       <div className="mt-2 flex flex-col gap-3">
@@ -109,7 +109,7 @@ export default function DocumentUpload({ profile, onUploaded, setError, setSucce
         <input
           id={id}
           type="file"
-          accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,application/pdf,image/jpeg,image/png,image/webp,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
           onChange={(e) => setFile(e.target.files?.[0] || null)}
           className="hidden"
         />

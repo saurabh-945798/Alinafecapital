@@ -56,8 +56,14 @@ export default function CompliancePage() {
   const [remarks, setRemarks] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [showFullAccount, setShowFullAccount] = useState(false);
+  const [avatarBroken, setAvatarBroken] = useState(false);
 
   const fileBase = ADMIN_FILE_BASE_URL;
+  const resolveAssetUrl = (fileUrl = "") => {
+    if (!fileUrl) return "";
+    if (fileUrl.startsWith("http")) return fileUrl;
+    return `${fileBase}${fileUrl.startsWith("/") ? fileUrl : `/${fileUrl}`}`;
+  };
 
   const selected = useMemo(() => {
     const fromList = items.find((x) => String(x.userId) === String(selectedUserId));
@@ -266,6 +272,7 @@ export default function CompliancePage() {
                           setSelectedRecord(item);
                           setRemarks(item.kycRemarks || "");
                           setShowFullAccount(false);
+                          setAvatarBroken(false);
                         }}
                       >
                         Review
@@ -312,19 +319,16 @@ export default function CompliancePage() {
 
           <div className="grid gap-3 md:grid-cols-3 text-sm">
             <div className="rounded-lg border p-3 flex items-center gap-3 md:col-span-3">
-              {selected.avatarUrl ? (
+              {selected.avatarUrl && !avatarBroken ? (
                 <img
-                  src={
-                    selected.avatarUrl.startsWith("http")
-                      ? selected.avatarUrl
-                      : `${fileBase}${selected.avatarUrl}`
-                  }
+                  src={resolveAssetUrl(selected.avatarUrl)}
                   alt="Profile"
                   className="h-16 w-16 rounded-full object-cover border border-slate-200"
+                  onError={() => setAvatarBroken(true)}
                 />
               ) : (
-                <div className="h-16 w-16 rounded-full border border-slate-200 bg-slate-100 flex items-center justify-center text-slate-500 text-xs">
-                  No Photo
+                <div className="h-16 w-16 rounded-full border border-slate-200 bg-slate-100 flex items-center justify-center text-slate-500 text-base font-semibold">
+                  {String(selected.fullName || "U").trim().charAt(0).toUpperCase() || "U"}
                 </div>
               )}
               <div>
@@ -487,5 +491,4 @@ export default function CompliancePage() {
     </div>
   );
 }
-
 

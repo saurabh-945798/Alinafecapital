@@ -27,10 +27,13 @@
   // Documents: 25 (all required)
   const docs = Array.isArray(profile.documents) ? profile.documents : [];
   const docTypes = new Set(docs.map((d) => d?.type));
+  const employmentType = String(profile.employmentType || "").trim().toLowerCase();
+  const usesTwoDocumentFlow =
+    employmentType === "farmer" || employmentType === "self-employed";
   if (
     docTypes.has("national_id") &&
     docTypes.has("bank_statement_3_months") &&
-    docTypes.has("payslip_or_business_proof")
+    (usesTwoDocumentFlow || docTypes.has("payslip_or_business_proof"))
   ) {
     score += 25;
   }

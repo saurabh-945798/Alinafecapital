@@ -69,6 +69,15 @@ const money = (value) => {
 
 const getItemId = (item) => item?._id || item?.id || "";
 
+const STATUS_ACTION_LABEL = {
+  SUBMITTED: "Submit Application",
+  UNDER_REVIEW: "Move to Under Review",
+  APPROVED: "Approve Loan",
+  REJECTED: "Reject Application",
+  CANCELLED: "Cancel Application",
+  DISBURSED: "Mark as Disbursed",
+};
+
 export default function LoanApplication() {
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -638,6 +647,35 @@ export default function LoanApplication() {
                   <p className="text-xs text-slate-500">
                     No further transition is allowed from current status ({selectedStatus || "-"}).
                   </p>
+                ) : null}
+                {allowedNextStatuses.length ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Quick Actions
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {allowedNextStatuses.map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() => setDecision((p) => ({ ...p, status }))}
+                          className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                            decision.status === status
+                              ? "border-slate-900 bg-slate-900 text-white"
+                              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                          }`}
+                        >
+                          {STATUS_ACTION_LABEL[status] || status}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">
+                      Current stage: <span className="font-medium text-slate-700">{selectedStatus}</span>
+                      {selectedStatus === "SUBMITTED" || selectedStatus === "PENDING"
+                        ? " - move to Under Review before approval."
+                        : ""}
+                    </p>
+                  </div>
                 ) : null}
                 {decision.status === "DISBURSED" ? (
                   <div className="grid gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 md:grid-cols-3">

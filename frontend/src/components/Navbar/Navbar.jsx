@@ -242,7 +242,10 @@ export default function Navbar() {
       >
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-2 sm:px-4 md:px-6">
           <Link to="/" className="flex items-center" aria-label="Alinafe Capital Home">
-            <AlinafeLogo className="h-[3.2rem] w-auto sm:h-[3.8rem] md:h-[4.6rem]" showTagline={false} />
+            <AlinafeLogo
+              className="h-[4.2rem] w-auto sm:h-[5rem] md:h-[5.9rem] lg:h-[6.4rem]"
+              showTagline={false}
+            />
           </Link>
 
           <div className="hidden lg:flex items-center gap-6">

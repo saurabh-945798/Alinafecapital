@@ -25,6 +25,8 @@ const ApplyLoanPage = () => {
   });
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [usedVerifiedProfilePrefill, setUsedVerifiedProfilePrefill] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
 
   const selected = useMemo(() => {
     const productParam = searchParams.get("product") || "";
@@ -82,15 +84,36 @@ const ApplyLoanPage = () => {
           }
         }
 
+        const isVerifiedProfileReady =
+          Number(profile?.profileCompletion || 0) === 100 && profile?.kycStatus === "verified";
+
         if (active) {
           setFormData((prev) => ({
             ...prev,
-            fullName: prev.fullName || profile?.fullName || currentUser?.fullName || "",
-            phoneNumber: prev.phoneNumber || String(profile?.phone || "").replace(/^\+265/, ""),
-            email: prev.email || profile?.email || currentUser?.email || "",
+            fullName:
+              prev.fullName ||
+              (isVerifiedProfileReady ? profile?.fullName : "") ||
+              currentUser?.fullName ||
+              "",
+            phoneNumber:
+              prev.phoneNumber ||
+              (isVerifiedProfileReady ? String(profile?.phone || "").replace(/^\+265/, "") : "") ||
+              "",
+            email:
+              prev.email ||
+              (isVerifiedProfileReady ? profile?.email : "") ||
+              currentUser?.email ||
+              "",
             monthlyIncome:
-              prev.monthlyIncome || String(profile?.monthlyIncome || currentUser?.monthlyIncome || ""),
+              prev.monthlyIncome ||
+              (isVerifiedProfileReady ? String(profile?.monthlyIncome || "") : "") ||
+              String(currentUser?.monthlyIncome || ""),
+            employmentType:
+              prev.employmentType === "Government Employee" && isVerifiedProfileReady
+                ? profile?.employmentType || prev.employmentType
+                : prev.employmentType,
           }));
+          setUsedVerifiedProfilePrefill(isVerifiedProfileReady);
         }
       } catch {
         // ignore and let user continue with manual form entry
@@ -177,61 +200,77 @@ const ApplyLoanPage = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const submitApplication = async (e) => {
+  const validatePayload = () => {
+    const rawUser = typeof window !== "undefined" ? window.localStorage.getItem("user") : "";
+    let currentUser = null;
+    if (rawUser) {
+      try {
+        currentUser = JSON.parse(rawUser);
+      } catch {
+        currentUser = null;
+      }
+    }
+
+    const payload = {
+      productSlug: formData.loanProductSlug,
+      fullName: formData.fullName.trim(),
+      phone: `+265${formData.phoneNumber.replace(/\D/g, "")}`,
+      email: (formData.email || currentUser?.email || "").trim() || undefined,
+      monthlyIncome: Number(formData.monthlyIncome),
+      amount: Number(formData.loanAmount),
+      tenureMonths: Number(formData.tenureMonths),
+    };
+
+    if (!payload.productSlug || !payload.fullName || !payload.phone) {
+      throw new Error("Please fill all required fields.");
+    }
+    if (!/^\+265\d{9}$/.test(payload.phone)) {
+      throw new Error("Phone number must be a valid Malawi number.");
+    }
+    if (!Number.isFinite(payload.monthlyIncome) || payload.monthlyIncome < 0) {
+      throw new Error("Monthly income must be a valid number.");
+    }
+    if (!Number.isFinite(payload.amount) || payload.amount <= 0) {
+      throw new Error("Loan amount must be greater than zero.");
+    }
+    if (!Number.isInteger(payload.tenureMonths) || payload.tenureMonths < 1) {
+      throw new Error("Tenure must be at least 1 month.");
+    }
+
+    if (selectedLoanProduct) {
+      const minAmount = Number(selectedLoanProduct.minAmount || 0);
+      const maxAmount = Number(selectedLoanProduct.maxAmount || minAmount);
+      const minTenure = Number(selectedLoanProduct.minTenureMonths || 1);
+      const maxTenure = Number(selectedLoanProduct.maxTenureMonths || minTenure);
+
+      if (payload.amount < minAmount || payload.amount > maxAmount) {
+        throw new Error(`Loan amount must be between ${minAmount} and ${maxAmount}.`);
+      }
+      if (payload.tenureMonths < minTenure || payload.tenureMonths > maxTenure) {
+        throw new Error(`Tenure must be between ${minTenure} and ${maxTenure} months.`);
+      }
+    }
+
+    return payload;
+  };
+
+  const openReviewModal = (e) => {
     e.preventDefault();
+    setSubmitError("");
+    try {
+      validatePayload();
+      setShowReviewModal(true);
+    } catch (err) {
+      setSubmitError(err?.message || "Please check your details.");
+    }
+  };
+
+  const submitApplication = async () => {
     setSubmitError("");
     setSubmitLoading(true);
 
     try {
-      const rawUser = typeof window !== "undefined" ? window.localStorage.getItem("user") : "";
-      let currentUser = null;
-      if (rawUser) {
-        try {
-          currentUser = JSON.parse(rawUser);
-        } catch {
-          currentUser = null;
-        }
-      }
-      const payload = {
-        productSlug: formData.loanProductSlug,
-        fullName: formData.fullName.trim(),
-        phone: `+265${formData.phoneNumber.replace(/\D/g, "")}`,
-        email: (formData.email || currentUser?.email || "").trim() || undefined,
-        monthlyIncome: Number(formData.monthlyIncome),
-        amount: Number(formData.loanAmount),
-        tenureMonths: Number(formData.tenureMonths),
-      };
-
-      if (!payload.productSlug || !payload.fullName || !payload.phone) {
-        throw new Error("Please fill all required fields.");
-      }
-      if (!/^\+265\d{9}$/.test(payload.phone)) {
-        throw new Error("Phone number must be a valid Malawi number.");
-      }
-      if (!Number.isFinite(payload.monthlyIncome) || payload.monthlyIncome < 0) {
-        throw new Error("Monthly income must be a valid number.");
-      }
-      if (!Number.isFinite(payload.amount) || payload.amount <= 0) {
-        throw new Error("Loan amount must be greater than zero.");
-      }
-      if (!Number.isInteger(payload.tenureMonths) || payload.tenureMonths < 1) {
-        throw new Error("Tenure must be at least 1 month.");
-      }
-
-      if (selectedLoanProduct) {
-        const minAmount = Number(selectedLoanProduct.minAmount || 0);
-        const maxAmount = Number(selectedLoanProduct.maxAmount || minAmount);
-        const minTenure = Number(selectedLoanProduct.minTenureMonths || 1);
-        const maxTenure = Number(selectedLoanProduct.maxTenureMonths || minTenure);
-
-        if (payload.amount < minAmount || payload.amount > maxAmount) {
-          throw new Error(`Loan amount must be between ${minAmount} and ${maxAmount}.`);
-        }
-        if (payload.tenureMonths < minTenure || payload.tenureMonths > maxTenure) {
-          throw new Error(`Tenure must be between ${minTenure} and ${maxTenure} months.`);
-        }
-      }
-
+      const payload = validatePayload();
       const { data } = await api.post("/applications", payload);
       const createdId = data?.data?.applicationId || data?.data?._id || "";
       const createdStatus = data?.data?.status || "";
@@ -345,7 +384,7 @@ const ApplyLoanPage = () => {
           </aside>
 
           <form
-            onSubmit={submitApplication}
+            onSubmit={openReviewModal}
             className="rounded-2xl border bg-white p-5 shadow-sm md:p-7"
             style={{ borderColor: "rgba(0,45,91,0.14)" }}
           >
@@ -371,6 +410,11 @@ const ApplyLoanPage = () => {
             {submitError ? (
               <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm leading-5 text-rose-700">
                 {submitError}
+              </p>
+            ) : null}
+            {usedVerifiedProfilePrefill ? (
+              <p className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm leading-5 text-emerald-800">
+                Your verified profile details have been filled automatically.
               </p>
             ) : null}
 
@@ -531,11 +575,74 @@ const ApplyLoanPage = () => {
               disabled={submitLoading || productsLoading || loanProducts.length === 0}
               className="mt-5 w-full rounded-xl bg-gradient-to-r from-[#002D5B] to-[#0a3f75] px-6 py-3 text-white font-semibold shadow-sm transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#002D5B]/35 focus-visible:ring-offset-2 disabled:opacity-60"
             >
-              {submitLoading ? "Submitting..." : "Submit Application"}
+              Review Before Submit
             </button>
           </form>
         </div>
       </div>
+
+      {showReviewModal ? (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/55 px-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl md:p-6">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 pb-4">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Check Your Details</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Please confirm everything is correct before applying for the loan.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReviewModal(false)}
+                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Applicant</p>
+                <p className="mt-2 text-sm text-slate-800"><span className="font-semibold">Name:</span> {formData.fullName || "-"}</p>
+                <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Phone:</span> +265{formData.phoneNumber || "-"}</p>
+                <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Email:</span> {formData.email || "-"}</p>
+                <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Employment:</span> {formData.employmentType || "-"}</p>
+                <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Monthly Income:</span> MWK {Number(formData.monthlyIncome || 0).toLocaleString()}</p>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Loan Request</p>
+                <p className="mt-2 text-sm text-slate-800"><span className="font-semibold">Product:</span> {selectedLoanProduct?.loanName || "-"}</p>
+                <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Amount:</span> MWK {Number(formData.loanAmount || 0).toLocaleString()}</p>
+                <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Tenure:</span> {formData.tenureMonths || "-"} months</p>
+                <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Category:</span> {selected.category || "-"}</p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Submit only if all details are correct. Wrong information can delay review.
+            </div>
+
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowReviewModal(false)}
+                className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Edit Details
+              </button>
+              <button
+                type="button"
+                onClick={submitApplication}
+                disabled={submitLoading}
+                className="rounded-xl bg-gradient-to-r from-[#002D5B] to-[#0a3f75] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {submitLoading ? "Submitting..." : "Confirm and Apply"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 };

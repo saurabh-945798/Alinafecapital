@@ -77,20 +77,13 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const interceptorId = api.interceptors.response.use(
       (response) => response,
-      (error) => {
-        const status = error?.response?.status;
-        const hasToken = typeof window !== "undefined" && !!window.localStorage.getItem("token");
-        if (status === 401 && hasToken) {
-          clearSession();
-        }
-        return Promise.reject(error);
-      }
+      (error) => Promise.reject(error)
     );
 
     return () => {
       api.interceptors.response.eject(interceptorId);
     };
-  }, [clearSession]);
+  }, []);
 
   const value = useMemo(
     () => ({
