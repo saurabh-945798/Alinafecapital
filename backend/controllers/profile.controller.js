@@ -251,3 +251,39 @@ export async function uploadMyAvatar(req, res, next) {
   }
 }
 
+export async function removeMyAvatar(req, res, next) {
+  try {
+    const userId = req.user._id;
+    const profile = await UserProfile.findOne({ userId });
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: "Profile not found",
+        code: "NOT_FOUND",
+      });
+    }
+
+    const previousAvatarPath = profile.avatarPath || "";
+    profile.avatarPath = "";
+    profile.avatarUrl = "";
+    profile.profileCompletion = calculateProfileCompletion(profile);
+    await profile.save();
+
+    if (previousAvatarPath && fs.existsSync(previousAvatarPath)) {
+      try {
+        fs.unlinkSync(previousAvatarPath);
+      } catch {
+        // ignore cleanup failure
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: toPublicProfile(profile),
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+

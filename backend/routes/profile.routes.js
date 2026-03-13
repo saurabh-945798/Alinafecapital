@@ -7,6 +7,7 @@ import {
   uploadMyDoc,
   submitKyc,
   uploadMyAvatar,
+  removeMyAvatar,
 } from "../controllers/profile.controller.js";
 
 const router = Router();
@@ -31,6 +32,7 @@ const handleUploadError = (err, req, res, next) => {
 router.get("/me", requireAuth, getMyProfile);
 router.put("/me", requireAuth, upsertMyProfile);
 router.post("/me/avatar", requireAuth, uploadAvatar.single("file"), handleUploadError, uploadMyAvatar);
+router.delete("/me/avatar", requireAuth, removeMyAvatar);
 router.post("/me/doc", requireAuth, upload.single("file"), handleUploadError, uploadMyDoc);
 router.post("/me/submit", requireAuth, submitKyc);
 

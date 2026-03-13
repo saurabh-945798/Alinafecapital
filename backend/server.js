@@ -3,6 +3,8 @@ import dotenv from "dotenv";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import fs from "fs";
+import path from "path";
 
 import { connectDB } from "./config/config.js";
 import { getCorsOrigins, validateEnv } from "./config/env.js";
@@ -51,6 +53,21 @@ app.use(
   "/uploads",
   (req, res, next) => {
     res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    const relativePath = decodeURIComponent(String(req.path || "")).replace(/^\/+/, "");
+    const absolutePath = path.resolve(UPLOAD_ROOT, relativePath);
+
+    if (!absolutePath.startsWith(UPLOAD_ROOT)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid upload path",
+        data: null,
+      });
+    }
+
+    if (fs.existsSync(absolutePath)) {
+      return res.sendFile(absolutePath);
+    }
+
     next();
   },
   express.static(UPLOAD_ROOT)

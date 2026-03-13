@@ -1,15 +1,23 @@
 import { useMemo, useState } from "react";
 import { CheckCircle2, Circle } from "lucide-react";
 import { useProfile } from "../hooks/useProfile";
-import { DocumentUpload, KycSubmitButton, ProfileForm } from "../features/dashboard";
+import { DocumentUpload, ProfileForm } from "../features/dashboard";
 
 export default function DashboardProfilePage() {
   const { profile, loading, error, refresh } = useProfile();
   const [uiError, setUiError] = useState("");
   const [uiSuccess, setUiSuccess] = useState("");
   const [saveState, setSaveState] = useState(""); // "", "saving", "saved", "error"
+  const [selectedEmploymentType, setSelectedEmploymentType] = useState("");
 
   const completion = profile?.profileCompletion ?? 0;
+  const employmentType = String(
+    selectedEmploymentType || profile?.employmentType || ""
+  )
+    .trim()
+    .toLowerCase();
+  const useTwoDocumentFlow =
+    employmentType === "farmer" || employmentType === "self-employed";
 
   const checklist = useMemo(() => {
     if (!profile) return [];
@@ -38,19 +46,23 @@ export default function DashboardProfilePage() {
           Array.isArray(profile.documents) &&
           profile.documents.some((d) => d?.type === "bank_statement_3_months"),
       },
-      {
-        label: "Payslip / Business Proof",
-        done:
-          Array.isArray(profile.documents) &&
-          profile.documents.some((d) => d?.type === "payslip_or_business_proof"),
-      },
+      ...(!useTwoDocumentFlow
+        ? [
+            {
+              label: "Payslip",
+              done:
+                Array.isArray(profile.documents) &&
+                profile.documents.some((d) => d?.type === "payslip_or_business_proof"),
+            },
+          ]
+        : []),
     ];
-  }, [profile]);
+  }, [profile, useTwoDocumentFlow]);
 
   const nextStep =
     completion < 100
       ? "Complete missing fields below."
-      : "Profile complete. Upload KYC docs and submit below.";
+      : "Profile complete. Upload your remaining KYC documents below.";
 
   if (loading) return <div className="p-4">Loading profile...</div>;
 
@@ -111,6 +123,7 @@ export default function DashboardProfilePage() {
           <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <ProfileForm
               profile={profile}
+              onEmploymentTypeChange={setSelectedEmploymentType}
               onSaved={() => {
                 setSaveState("saved");
                 refresh();
@@ -131,23 +144,17 @@ export default function DashboardProfilePage() {
             <div>
               <h2 className="text-base font-semibold text-slate-900">KYC Documents</h2>
               <p className="text-sm text-slate-500">
-                Upload your required PDFs and submit KYC from this same page.
+                Upload each document separately. You can upload one now and the rest later.
               </p>
             </div>
 
             <DocumentUpload
+              profile={{
+                ...profile,
+                employmentType: selectedEmploymentType || profile?.employmentType || "",
+              }}
               onUploaded={() => {
                 setUiSuccess("Documents uploaded successfully.");
-                refresh();
-              }}
-              setError={(msg) => setUiError(msg)}
-              setSuccess={(msg) => setUiSuccess(msg)}
-            />
-
-            <KycSubmitButton
-              profile={profile}
-              onSubmitted={() => {
-                setUiSuccess("KYC submitted successfully.");
                 refresh();
               }}
               setError={(msg) => setUiError(msg)}
@@ -182,7 +189,7 @@ export default function DashboardProfilePage() {
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Complete profile fields, upload PDFs, then submit KYC all from this page.
+            Complete profile fields and upload your documents from this page.
           </div>
         </div>
 

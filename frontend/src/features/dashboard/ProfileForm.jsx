@@ -19,9 +19,16 @@ const BANK_OPTIONS = [
   "Indebank",
 ];
 
-export default function ProfileForm({ profile, onSaved, setError, setSuccess }) {
+export default function ProfileForm({
+  profile,
+  onSaved,
+  setError,
+  setSuccess,
+  onEmploymentTypeChange,
+}) {
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarRemoving, setAvatarRemoving] = useState(false);
   const [showCongratsModal, setShowCongratsModal] = useState(false);
   const prevCompletionRef = useRef(Number(profile?.profileCompletion || 0));
   const [form, setForm] = useState({
@@ -54,7 +61,8 @@ export default function ProfileForm({ profile, onSaved, setError, setSuccess }) 
       accountNumber: profile.accountNumber || "",
       branchCode: profile.branchCode || "",
     });
-  }, [profile]);
+    onEmploymentTypeChange?.(profile.employmentType || "");
+  }, [profile, onEmploymentTypeChange]);
 
   useEffect(() => {
     const previous = Number(prevCompletionRef.current || 0);
@@ -150,6 +158,22 @@ export default function ProfileForm({ profile, onSaved, setError, setSuccess }) 
     }
   };
 
+  const removeAvatar = async () => {
+    setError("");
+    setSuccess("");
+    setAvatarRemoving(true);
+    try {
+      await api.delete("/profile/me/avatar");
+      setAvatarFile(null);
+      setSuccess("Profile photo removed.");
+      onSaved();
+    } catch (err) {
+      setError(err?.response?.data?.message || "Failed to remove profile photo.");
+    } finally {
+      setAvatarRemoving(false);
+    }
+  };
+
   return (
     <form id="profileForm" onSubmit={save} className="space-y-6">
       <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
@@ -191,6 +215,14 @@ export default function ProfileForm({ profile, onSaved, setError, setSuccess }) 
                 : profile?.avatarUrl
                 ? "Change Photo"
                 : "Upload Photo"}
+            </button>
+            <button
+              type="button"
+              onClick={removeAvatar}
+              disabled={!profile?.avatarUrl || avatarRemoving || avatarUploading}
+              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
+            >
+              {avatarRemoving ? "Removing..." : "Remove Photo"}
             </button>
           </div>
         </div>
@@ -252,7 +284,11 @@ export default function ProfileForm({ profile, onSaved, setError, setSuccess }) 
             <select
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
               value={form.employmentType}
-              onChange={(e) => setForm((p) => ({ ...p, employmentType: e.target.value }))}
+              onChange={(e) => {
+                const value = e.target.value;
+                setForm((p) => ({ ...p, employmentType: value }));
+                onEmploymentTypeChange?.(value);
+              }}
             >
               <option value="">Select employment type</option>
               <option>Government Employee</option>

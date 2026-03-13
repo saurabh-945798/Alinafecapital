@@ -21,7 +21,15 @@ const sanitizeFileName = (name = "file") =>
     .replace(/_+/g, "_")
     .slice(0, 120);
 
-const allowedMimes = new Set(["application/pdf"]);
+const allowedMimes = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/jpg",
+  "image/webp",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
 const allowedAvatarMimes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const avatarExtByMime = {
   "image/jpeg": ".jpg",
@@ -51,7 +59,9 @@ const storage = multer.diskStorage({
 
 const fileFilter = (req, file, cb) => {
   if (!allowedMimes.has(file.mimetype)) {
-    return cb(new Error("Only PDF files are allowed"));
+    return cb(
+      new Error("Allowed formats: PDF, JPG, JPEG, PNG, WEBP, DOC, DOCX")
+    );
   }
   cb(null, true);
 };
