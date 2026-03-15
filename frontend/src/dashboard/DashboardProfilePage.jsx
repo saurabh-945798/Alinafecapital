@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Circle } from "lucide-react";
 import { useProfile } from "../hooks/useProfile";
 import { DocumentUpload, ProfileForm } from "../features/dashboard";
@@ -10,6 +10,14 @@ export default function DashboardProfilePage() {
   const [saveState, setSaveState] = useState(""); // "", "saving", "saved", "error"
   const [selectedEmploymentType, setSelectedEmploymentType] = useState("");
   const [showSavedModal, setShowSavedModal] = useState(false);
+  const [profileSectionsComplete, setProfileSectionsComplete] = useState(false);
+  const [latestDocuments, setLatestDocuments] = useState(
+    Array.isArray(profile?.documents) ? profile.documents : []
+  );
+
+  useEffect(() => {
+    setLatestDocuments(Array.isArray(profile?.documents) ? profile.documents : []);
+  }, [profile?.documents]);
 
   const completion = profile?.profileCompletion ?? 0;
   const employmentType = String(
@@ -21,6 +29,8 @@ export default function DashboardProfilePage() {
     employmentType === "farmer" || employmentType === "self-employed";
 
   const checklist = useMemo(() => {
+    const activeDocuments = Array.isArray(latestDocuments) ? latestDocuments : [];
+
     if (!profile) return [];
 
     return [
@@ -39,26 +49,45 @@ export default function DashboardProfilePage() {
       },
       {
         label: "National ID Document",
-        done: Array.isArray(profile.documents) && profile.documents.some((d) => d?.type === "national_id"),
+        done: activeDocuments.some((d) => d?.type === "national_id"),
       },
       {
         label: "Bank Statement (3 Months)",
-        done:
-          Array.isArray(profile.documents) &&
-          profile.documents.some((d) => d?.type === "bank_statement_3_months"),
+        done: activeDocuments.some((d) => d?.type === "bank_statement_3_months"),
       },
       ...(!useTwoDocumentFlow
         ? [
             {
               label: "Payslip",
-              done:
-                Array.isArray(profile.documents) &&
-                profile.documents.some((d) => d?.type === "payslip_or_business_proof"),
+              done: activeDocuments.some((d) => d?.type === "payslip_or_business_proof"),
             },
           ]
         : []),
     ];
-  }, [profile, useTwoDocumentFlow]);
+  }, [latestDocuments, profile, useTwoDocumentFlow]);
+
+  const documentsComplete = useMemo(() => {
+    const activeDocuments = Array.isArray(latestDocuments) ? latestDocuments : [];
+    const hasNationalId = activeDocuments.some((d) => d?.type === "national_id");
+    const hasBankStatement = activeDocuments.some(
+      (d) => d?.type === "bank_statement_3_months"
+    );
+    const hasPayslip = activeDocuments.some(
+      (d) => d?.type === "payslip_or_business_proof"
+    );
+
+    if (!hasNationalId || !hasBankStatement) return false;
+    if (useTwoDocumentFlow) return true;
+    return hasPayslip;
+  }, [latestDocuments, useTwoDocumentFlow]);
+
+  const canSubmitWholeProfile = profileSectionsComplete && documentsComplete;
+  const kycStatus = String(profile?.kycStatus || "not_started").toLowerCase();
+  const isUnderReview = kycStatus === "pending";
+  const isApproved = kycStatus === "verified";
+  const statusBadgeClass = isApproved
+    ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+    : "border border-amber-200 bg-amber-50 text-amber-700";
 
   const nextStep =
     completion < 100
@@ -66,6 +95,75 @@ export default function DashboardProfilePage() {
       : "Profile complete. Upload your remaining KYC documents below.";
 
   if (loading) return <div className="p-4">Loading profile...</div>;
+
+  if (isUnderReview || isApproved) {
+    return (
+      <div className="space-y-6">
+        {showSavedModal ? (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 px-4">
+            <div className="w-full max-w-md rounded-3xl border border-emerald-200 bg-white p-6 text-center shadow-2xl">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+                <CheckCircle2 size={30} className="text-emerald-700" />
+              </div>
+              <h3 className="mt-4 text-2xl font-semibold text-slate-900">
+                Thank You for Submitting
+              </h3>
+              <p className="mt-2 text-sm text-slate-600">
+                Your profile and KYC have been submitted successfully. They are now under review.
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+              <CheckCircle2 size={30} className="text-emerald-700" />
+            </div>
+            <h1 className="mt-4 text-2xl font-semibold text-slate-900">
+              {isApproved ? "Profile + KYC Approved" : "Profile + KYC Under Review"}
+            </h1>
+            <p className="mt-3 text-sm text-slate-600">
+              {isApproved
+                ? "Your profile and KYC have been approved successfully."
+                : "Our team is currently reviewing your profile details and uploaded documents."}
+            </p>
+
+            <div className="mt-6 grid gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Completion
+                </div>
+                <div className="mt-2 text-xl font-semibold text-slate-900">{completion}%</div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Status
+                </div>
+                <div className="mt-2">
+                  <span
+                    className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold capitalize ${statusBadgeClass}`}
+                  >
+                    {profile?.kycStatus || "pending"}
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                <div className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Submitted On
+                </div>
+                <div className="mt-2 text-sm font-semibold text-slate-900">
+                  {profile?.submittedAt
+                    ? new Date(profile.submittedAt).toLocaleString()
+                    : "Just now"}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -125,6 +223,8 @@ export default function DashboardProfilePage() {
             <ProfileForm
               profile={profile}
               onEmploymentTypeChange={setSelectedEmploymentType}
+              onCompletionChange={setProfileSectionsComplete}
+              documentsComplete={documentsComplete}
               onSaved={() => {
                 setSaveState("saved");
                 setShowSavedModal(true);
@@ -132,7 +232,7 @@ export default function DashboardProfilePage() {
                 setTimeout(() => {
                   setSaveState("");
                   setShowSavedModal(false);
-                }, 4000);
+                }, 5000);
               }}
               setError={(msg) => {
                 setSaveState("error");
@@ -156,9 +256,15 @@ export default function DashboardProfilePage() {
             <DocumentUpload
               profile={{
                 ...profile,
+                documents: latestDocuments,
                 employmentType: selectedEmploymentType || profile?.employmentType || "",
               }}
-              onUploaded={() => {}}
+              onUploaded={(nextProfile) => {
+                setUiError("");
+                if (Array.isArray(nextProfile?.documents)) {
+                  setLatestDocuments(nextProfile.documents);
+                }
+              }}
               setError={(msg) => setUiError(msg)}
               setSuccess={() => {}}
             />
@@ -169,17 +275,22 @@ export default function DashboardProfilePage() {
               {saveState === "saving" && "Saving..."}
               {saveState === "saved" && "Saved just now"}
               {saveState === "error" && "Error saving changes"}
+              {!canSubmitWholeProfile &&
+                saveState === "" &&
+                "Complete all profile details and required KYC documents first"}
             </div>
 
-            <div className="flex w-full sm:w-auto">
-              <button
-                type="submit"
-                form="profileForm"
-                className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 sm:w-auto"
-              >
-                Submit Details
-              </button>
-            </div>
+            {canSubmitWholeProfile ? (
+              <div className="flex w-full sm:w-auto">
+                <button
+                  type="submit"
+                  form="profileForm"
+                  className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 sm:w-auto"
+                >
+                  Submit Profile + KYC
+                </button>
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
@@ -219,7 +330,7 @@ export default function DashboardProfilePage() {
             </div>
             <h3 className="mt-4 text-2xl font-semibold text-slate-900">Details Saved</h3>
             <p className="mt-2 text-sm text-slate-600">
-              Your profile details were saved successfully. The page is updating with your latest information.
+              Your profile and KYC have been submitted successfully. They are now under review.
             </p>
           </div>
         </div>

@@ -25,6 +25,8 @@ export default function ProfileForm({
   setError,
   setSuccess,
   onEmploymentTypeChange,
+  documentsComplete = false,
+  onCompletionChange,
 }) {
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
@@ -72,10 +74,53 @@ export default function ProfileForm({
     prevCompletionRef.current = current;
   }, [profile?.profileCompletion]);
 
+  useEffect(() => {
+    const resolvedBankName =
+      form.bankNameOption === "Other"
+        ? String(form.bankNameOther || "").trim()
+        : String(form.bankNameOption || "").trim();
+
+    const sectionsComplete =
+      !!String(form.addressLine1 || "").trim() &&
+      !!String(form.city || "").trim() &&
+      !!String(form.district || "").trim() &&
+      !!String(form.employmentType || "").trim() &&
+      !!String(form.monthlyIncome || "").trim() &&
+      Number(form.monthlyIncome) > 0 &&
+      !!resolvedBankName &&
+      (form.bankNameOption !== "Other" || !!String(form.bankNameOther || "").trim()) &&
+      !!String(form.accountNumber || "").trim() &&
+      !!String(form.branchCode || "").trim();
+
+    onCompletionChange?.(sectionsComplete);
+  }, [form, onCompletionChange]);
+
   const resolveAssetUrl = (path = "") => {
     if (!path) return "";
     if (path.startsWith("http")) return path;
     return `${FILE_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+  };
+
+  const validateForm = () => {
+    const resolvedBankName =
+      form.bankNameOption === "Other"
+        ? String(form.bankNameOther || "").trim()
+        : String(form.bankNameOption || "").trim();
+
+    if (!String(form.addressLine1 || "").trim()) return "Please enter your address line.";
+    if (!String(form.city || "").trim()) return "Please enter your city or town.";
+    if (!String(form.district || "").trim()) return "Please enter your district.";
+    if (!String(form.employmentType || "").trim()) return "Please select your employment type.";
+    if (!String(form.monthlyIncome || "").trim()) return "Please enter your monthly income.";
+    if (Number(form.monthlyIncome) <= 0) return "Monthly income must be greater than zero.";
+    if (!resolvedBankName) return "Please select your bank name.";
+    if (form.bankNameOption === "Other" && !String(form.bankNameOther || "").trim()) {
+      return "Please enter your bank name.";
+    }
+    if (!String(form.accountNumber || "").trim()) return "Please enter your account number.";
+    if (!String(form.branchCode || "").trim()) return "Please enter your branch.";
+
+    return "";
   };
 
   const save = async (e) => {
@@ -88,8 +133,14 @@ export default function ProfileForm({
         ? String(form.bankNameOther || "").trim()
         : form.bankNameOption;
 
-    if (!resolvedBankName) {
-      setError("Please select your bank name.");
+    const validationMessage = validateForm();
+    if (validationMessage) {
+      setError(validationMessage);
+      return;
+    }
+
+    if (!documentsComplete) {
+      setError("Please upload all required KYC documents before submitting.");
       return;
     }
 
@@ -106,18 +157,22 @@ export default function ProfileForm({
         branchCode: form.branchCode,
       });
 
+      const savedProfile = response?.data?.item ?? response?.data?.data ?? null;
       const previousCompletion = Number(profile?.profileCompletion || 0);
-      const nextCompletion = Number(response?.data?.data?.profileCompletion || 0);
+      const nextCompletion = Number(savedProfile?.profileCompletion || 0);
       if (previousCompletion < 100 && nextCompletion === 100) setShowCongratsModal(true);
 
-      setSuccess("Profile updated");
-      onSaved();
+      const submitResponse = await api.post("/profile/me/submit");
+      const submittedProfile = submitResponse?.data?.item ?? submitResponse?.data?.data ?? savedProfile;
+
+      setSuccess("Profile submitted successfully.");
+      onSaved?.(submittedProfile);
     } catch (err) {
       if (err?.response?.status === 401) {
         setError("Session expired. Please login again.");
         return;
       }
-      setError(err?.response?.data?.message || "Failed to update profile");
+      setError(err?.response?.data?.message || "Failed to submit profile");
     }
   };
 
@@ -220,6 +275,7 @@ export default function ProfileForm({
             placeholder="Area, street, or plot details"
             value={form.addressLine1}
             onChange={(e) => setForm((p) => ({ ...p, addressLine1: e.target.value }))}
+            required
           />
         </label>
 
@@ -230,6 +286,7 @@ export default function ProfileForm({
             placeholder="Example: Lilongwe"
             value={form.city}
             onChange={(e) => setForm((p) => ({ ...p, city: e.target.value }))}
+            required
           />
         </label>
 
@@ -240,6 +297,7 @@ export default function ProfileForm({
             placeholder="Example: Blantyre"
             value={form.district}
             onChange={(e) => setForm((p) => ({ ...p, district: e.target.value }))}
+            required
           />
         </label>
 
@@ -266,6 +324,7 @@ export default function ProfileForm({
                 setForm((p) => ({ ...p, employmentType: value }));
                 onEmploymentTypeChange?.(value);
               }}
+              required
             >
               <option value="">Select employment type</option>
               <option>Government Employee</option>
@@ -284,6 +343,7 @@ export default function ProfileForm({
               min="0"
               value={form.monthlyIncome}
               onChange={(e) => setForm((p) => ({ ...p, monthlyIncome: e.target.value }))}
+              required
             />
           </label>
         </div>
@@ -301,6 +361,7 @@ export default function ProfileForm({
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
               value={form.bankNameOption}
               onChange={(e) => setForm((p) => ({ ...p, bankNameOption: e.target.value }))}
+              required
             >
               <option value="">Select bank</option>
               {BANK_OPTIONS.map((bank) => (
@@ -320,6 +381,7 @@ export default function ProfileForm({
                 placeholder="Enter your bank name"
                 value={form.bankNameOther}
                 onChange={(e) => setForm((p) => ({ ...p, bankNameOther: e.target.value }))}
+                required
               />
             </label>
           ) : null}
@@ -331,6 +393,7 @@ export default function ProfileForm({
               placeholder="Enter account number"
               value={form.accountNumber}
               onChange={(e) => setForm((p) => ({ ...p, accountNumber: e.target.value }))}
+              required
             />
           </label>
 
@@ -341,6 +404,7 @@ export default function ProfileForm({
               placeholder="Enter branch Name"
               value={form.branchCode}
               onChange={(e) => setForm((p) => ({ ...p, branchCode: e.target.value }))}
+              required
             />
           </label>
         </div>
