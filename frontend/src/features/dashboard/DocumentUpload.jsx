@@ -1,14 +1,20 @@
 import { useMemo, useState } from "react";
 import { CheckCircle2, FileText, LoaderCircle, Upload } from "lucide-react";
 import { api } from "../../services/api";
+import { useEffect } from "react";
 
 export default function DocumentUpload({ profile, onUploaded, setError, setSuccess }) {
-  const [nationalId, setNationalId] = useState(null);
-  const [bankStatement, setBankStatement] = useState(null);
-  const [incomeProof, setIncomeProof] = useState(null);
   const [uploadingType, setUploadingType] = useState("");
+  const [successType, setSuccessType] = useState("");
+  const [localDocuments, setLocalDocuments] = useState(
+    Array.isArray(profile?.documents) ? profile.documents : []
+  );
 
-  const documents = Array.isArray(profile?.documents) ? profile.documents : [];
+  useEffect(() => {
+    setLocalDocuments(Array.isArray(profile?.documents) ? profile.documents : []);
+  }, [profile?.documents]);
+
+  const documents = localDocuments;
   const employmentType = String(profile?.employmentType || "").trim().toLowerCase();
   const useTwoDocumentFlow =
     employmentType === "farmer" || employmentType === "self-employed";
@@ -50,21 +56,26 @@ export default function DocumentUpload({ profile, onUploaded, setError, setSucce
     const formData = new FormData();
     formData.append("type", type);
     formData.append("file", file);
-    await api.post("/profile/me/doc", formData);
+    return api.post("/profile/me/doc", formData);
   };
 
   const uploadSingle = async (type, file) => {
     setError("");
     setSuccess("");
+    setSuccessType("");
     try {
       if (!file) {
         setError("Choose a file before uploading.");
         return;
       }
       setUploadingType(type);
-      await uploadDoc(type, file);
-      setSuccess("Document uploaded successfully.");
-      onUploaded();
+      const { data } = await uploadDoc(type, file);
+      const nextProfile = data?.item ?? data?.data ?? null;
+      if (Array.isArray(nextProfile?.documents)) {
+        setLocalDocuments(nextProfile.documents);
+      }
+      setSuccessType(type);
+      onUploaded?.(nextProfile);
     } catch (err) {
       setError(err?.response?.data?.message || err?.message || "Failed to upload document");
     } finally {
@@ -72,23 +83,24 @@ export default function DocumentUpload({ profile, onUploaded, setError, setSucce
     }
   };
 
-  const fileByType = {
-    national_id: nationalId,
-    bank_statement_3_months: bankStatement,
-    payslip_or_business_proof: incomeProof,
+  const getUploadedFileName = (doc) => {
+    if (!doc?.fileUrl) return "";
+    const cleanPath = String(doc.fileUrl).split("?")[0];
+    const rawName = cleanPath.substring(cleanPath.lastIndexOf("/") + 1);
+    const withoutStamp = rawName.replace(/^\d+-/, "");
+    return decodeURIComponent(withoutStamp || rawName);
   };
 
-  const setFileByType = {
-    national_id: setNationalId,
-    bank_statement_3_months: setBankStatement,
-    payslip_or_business_proof: setIncomeProof,
+  const handleFilePick = async (type, file) => {
+    if (!file) return;
+    await uploadSingle(type, file);
   };
 
   const renderPicker = ({ id, key, title }) => {
-    const file = fileByType[key];
-    const setFile = setFileByType[key];
     const uploadedDoc = uploadedMap[key];
     const isUploading = uploadingType === key;
+    const uploadedFileName = getUploadedFileName(uploadedDoc);
+    const isSuccess = successType === key;
 
     return (
     <div className="rounded-xl border border-slate-200 bg-white p-3">
@@ -110,40 +122,43 @@ export default function DocumentUpload({ profile, onUploaded, setError, setSucce
           id={id}
           type="file"
           accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
+          onChange={(e) => {
+            const nextFile = e.target.files?.[0] || null;
+            handleFilePick(key, nextFile);
+            e.target.value = "";
+          }}
           className="hidden"
         />
 
-        {file ? (
-          <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-            <FileText size={13} />
-            {file.name}
-          </span>
-        ) : (
-          <span className="text-xs text-slate-500">No file selected</span>
-        )}
+        <span className="text-xs text-slate-500">
+          {isUploading ? "Uploading file..." : "Choose a file to upload instantly"}
+        </span>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          {uploadedDoc ? (
+        {isUploading ? (
+          <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+            <LoaderCircle size={13} className="animate-spin" />
+            Uploading...
+          </div>
+        ) : uploadedDoc ? (
+          <div className="space-y-1">
             <span className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
               <CheckCircle2 size={13} />
               Uploaded
             </span>
-          ) : (
-            <span className="text-xs text-slate-500">Not uploaded yet</span>
-          )}
-
-          <button
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={() => uploadSingle(key, file)}
-            type="button"
-            disabled={!file || isUploading}
-          >
-            {isUploading ? <LoaderCircle size={14} className="animate-spin" /> : <Upload size={14} />}
-            {uploadedDoc ? "Replace Document" : "Upload Document"}
-          </button>
-        </div>
+            {isSuccess ? (
+              <p className="text-xs font-medium text-emerald-700">
+                Uploaded successfully
+              </p>
+            ) : null}
+            <p className="flex items-center gap-2 text-xs text-slate-600">
+              <FileText size={13} />
+              {uploadedFileName || "Document uploaded"}
+            </p>
+          </div>
+        ) : (
+          <span className="text-xs text-slate-500">No document uploaded yet</span>
+        )}
       </div>
     </div>
     );

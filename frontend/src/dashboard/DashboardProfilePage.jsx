@@ -9,6 +9,7 @@ export default function DashboardProfilePage() {
   const [uiSuccess, setUiSuccess] = useState("");
   const [saveState, setSaveState] = useState(""); // "", "saving", "saved", "error"
   const [selectedEmploymentType, setSelectedEmploymentType] = useState("");
+  const [showSavedModal, setShowSavedModal] = useState(false);
 
   const completion = profile?.profileCompletion ?? 0;
   const employmentType = String(
@@ -126,8 +127,12 @@ export default function DashboardProfilePage() {
               onEmploymentTypeChange={setSelectedEmploymentType}
               onSaved={() => {
                 setSaveState("saved");
+                setShowSavedModal(true);
                 refresh();
-                setTimeout(() => setSaveState(""), 3000);
+                setTimeout(() => {
+                  setSaveState("");
+                  setShowSavedModal(false);
+                }, 4000);
               }}
               setError={(msg) => {
                 setSaveState("error");
@@ -144,7 +149,7 @@ export default function DashboardProfilePage() {
             <div>
               <h2 className="text-base font-semibold text-slate-900">KYC Documents</h2>
               <p className="text-sm text-slate-500">
-                Upload each document separately. You can upload one now and the rest later.
+                Documents are saved immediately after you choose each file.
               </p>
             </div>
 
@@ -153,12 +158,9 @@ export default function DashboardProfilePage() {
                 ...profile,
                 employmentType: selectedEmploymentType || profile?.employmentType || "",
               }}
-              onUploaded={() => {
-                setUiSuccess("Documents uploaded successfully.");
-                refresh();
-              }}
+              onUploaded={() => {}}
               setError={(msg) => setUiError(msg)}
-              setSuccess={(msg) => setUiSuccess(msg)}
+              setSuccess={() => {}}
             />
           </div>
 
@@ -169,21 +171,13 @@ export default function DashboardProfilePage() {
               {saveState === "error" && "Error saving changes"}
             </div>
 
-            <div className="flex w-full gap-3 sm:w-auto">
+            <div className="flex w-full sm:w-auto">
               <button
                 type="submit"
                 form="profileForm"
                 className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 sm:w-auto"
               >
-                Save Changes
-              </button>
-
-              <button
-                type="reset"
-                form="profileForm"
-                className="w-full rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium transition hover:bg-slate-100 sm:w-auto"
-              >
-                Cancel
+                Submit Details
               </button>
             </div>
           </div>
@@ -216,6 +210,20 @@ export default function DashboardProfilePage() {
           </div>
         </div>
       </div>
+
+      {showSavedModal ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 px-4">
+          <div className="w-full max-w-md rounded-3xl border border-emerald-200 bg-white p-6 text-center shadow-2xl">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+              <CheckCircle2 size={30} className="text-emerald-700" />
+            </div>
+            <h3 className="mt-4 text-2xl font-semibold text-slate-900">Details Saved</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Your profile details were saved successfully. The page is updating with your latest information.
+            </p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

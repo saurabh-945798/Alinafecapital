@@ -28,7 +28,6 @@ export default function ProfileForm({
 }) {
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
-  const [avatarRemoving, setAvatarRemoving] = useState(false);
   const [showCongratsModal, setShowCongratsModal] = useState(false);
   const prevCompletionRef = useRef(Number(profile?.profileCompletion || 0));
   const [form, setForm] = useState({
@@ -145,32 +144,18 @@ export default function ProfileForm({
     try {
       const payload = new FormData();
       payload.append("file", avatarFile);
-      await api.post("/profile/me/avatar", payload, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      await api.post("/profile/me/avatar", payload);
       setAvatarFile(null);
       setSuccess("Profile photo updated.");
       onSaved();
     } catch (err) {
+      if (err?.response?.status === 401) {
+        setError("Session expired. Please login again.");
+        return;
+      }
       setError(err?.response?.data?.message || "Failed to upload profile photo.");
     } finally {
       setAvatarUploading(false);
-    }
-  };
-
-  const removeAvatar = async () => {
-    setError("");
-    setSuccess("");
-    setAvatarRemoving(true);
-    try {
-      await api.delete("/profile/me/avatar");
-      setAvatarFile(null);
-      setSuccess("Profile photo removed.");
-      onSaved();
-    } catch (err) {
-      setError(err?.response?.data?.message || "Failed to remove profile photo.");
-    } finally {
-      setAvatarRemoving(false);
     }
   };
 
@@ -215,14 +200,6 @@ export default function ProfileForm({
                 : profile?.avatarUrl
                 ? "Change Photo"
                 : "Upload Photo"}
-            </button>
-            <button
-              type="button"
-              onClick={removeAvatar}
-              disabled={!profile?.avatarUrl || avatarRemoving || avatarUploading}
-              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:opacity-60"
-            >
-              {avatarRemoving ? "Removing..." : "Remove Photo"}
             </button>
           </div>
         </div>
