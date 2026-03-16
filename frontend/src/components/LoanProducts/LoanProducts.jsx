@@ -14,9 +14,23 @@ function classNames(...classes) {
 }
 
 const buildDetailsHref = (product) => `/loan-products/${product.slug}`;
+const DESCRIPTION_PREVIEW_LIMIT = 132;
+
+const getDescriptionPreview = (text = "") => {
+  const normalized = String(text || "").trim();
+  if (normalized.length <= DESCRIPTION_PREVIEW_LIMIT) {
+    return { preview: normalized, truncated: false };
+  }
+
+  return {
+    preview: `${normalized.slice(0, DESCRIPTION_PREVIEW_LIMIT).trimEnd()}...`,
+    truncated: true,
+  };
+};
 
 const LoanProducts = () => {
   const [activeFilter, setActiveFilter] = useState("All");
+  const [expandedDescriptions, setExpandedDescriptions] = useState({});
   const navigate = useNavigate();
   const { loanProducts, loading, filterTabs, error } = useLoanProducts();
 
@@ -47,6 +61,13 @@ const LoanProducts = () => {
   const onApply = (productSlug) => {
     if (!productSlug) return;
     guardStartApplication({ productId: productSlug, navigate, api });
+  };
+
+  const toggleDescription = (slug) => {
+    setExpandedDescriptions((prev) => ({
+      ...prev,
+      [slug]: !prev[slug],
+    }));
   };
 
   return (
@@ -204,6 +225,11 @@ const LoanProducts = () => {
         <div className="mt-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredProducts.map((product) => {
             const Icon = product.icon || ShieldCheck;
+            const descriptionState = getDescriptionPreview(product.description);
+            const isExpanded = Boolean(expandedDescriptions[product.slug]);
+            const displayedDescription = isExpanded
+              ? product.description
+              : descriptionState.preview;
 
             return (
               <article
@@ -241,7 +267,19 @@ const LoanProducts = () => {
                     {product.loanName}
                   </h4>
 
-                  <p className="mt-2 text-sm text-gray-600">{product.description}</p>
+                  <div className="mt-2 min-h-[72px]">
+                    <p className="text-sm text-gray-600">{displayedDescription}</p>
+                    {descriptionState.truncated ? (
+                      <button
+                        type="button"
+                        onClick={() => toggleDescription(product.slug)}
+                        className="mt-2 text-sm font-semibold"
+                        style={{ color: BRAND_INDIGO }}
+                      >
+                        {isExpanded ? "Read less" : "Read more"}
+                      </button>
+                    ) : null}
+                  </div>
 
                   <div
                     className="mt-5 rounded-2xl bg-gray-50 border p-4 text-sm"

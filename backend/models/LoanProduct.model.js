@@ -8,15 +8,18 @@ const LoanProductSchema = new mongoose.Schema(
       type: String,
       enum: [
         "Personal",
+        "Private",
         "Business",
         "Agriculture",
+        "Government",
+        "Public",
         "Education",
         "Group",
         "Asset Finance",
         "Digital Credit",
         "Other",
       ],
-      default: "Personal",
+      default: "Private",
       trim: true,
     },
     description: { type: String, default: "" },
@@ -34,6 +37,7 @@ const LoanProductSchema = new mongoose.Schema(
 
     processingFeeType: { type: String, enum: ["flat", "percent"], default: "percent" },
     processingFeeValue: { type: Number, default: 0, min: 0 },
+    loanAdministrationFeeMonthly: { type: Number, default: 0, min: 0 },
 
     insuranceType: { type: String, enum: ["none", "flat", "percent"], default: "none" },
     insuranceValue: { type: Number, default: 0, min: 0 },

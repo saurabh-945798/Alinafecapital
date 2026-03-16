@@ -47,6 +47,9 @@ export const emiCalculatorService = {
       processingFee = (amount * product.processingFeeValue) / 100;
     }
 
+    const loanAdministrationFeeMonthly = Number(product.loanAdministrationFeeMonthly || 0);
+    const loanAdministrationFeeTotal = loanAdministrationFeeMonthly * tenureMonths;
+
     // Insurance
     let insurance = 0;
     if (product.insuranceType === "flat") {
@@ -59,13 +62,15 @@ export const emiCalculatorService = {
     const tax = ((processingFee + insurance) * product.taxRatePercent) / 100;
 
     const totalPayable =
-      amount + totalInterest + processingFee + insurance + tax;
+      amount + totalInterest + processingFee + insurance + tax + loanAdministrationFeeTotal;
 
     return {
       principal: amount,
       emi: Number(emi.toFixed(2)),
       totalInterest: Number(totalInterest.toFixed(2)),
       processingFee: Number(processingFee.toFixed(2)),
+      loanAdministrationFeeMonthly: Number(loanAdministrationFeeMonthly.toFixed(2)),
+      loanAdministrationFeeTotal: Number(loanAdministrationFeeTotal.toFixed(2)),
       insurance: Number(insurance.toFixed(2)),
       tax: Number(tax.toFixed(2)),
       totalPayable: Number(totalPayable.toFixed(2)),

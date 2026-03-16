@@ -7,7 +7,7 @@ import { useToast } from "../../context/ToastContext.jsx";
 const DEFAULT_FORM = {
   name: "",
   slug: "",
-  category: "Personal",
+  category: "Private",
   description: "",
   currency: "MWK",
   minAmount: "",
@@ -18,6 +18,7 @@ const DEFAULT_FORM = {
   interestRateMonthly: "",
   processingFeeType: "percent",
   processingFeeValue: "0",
+  loanAdministrationFeeMonthly: "0",
   status: "active",
   featured: false,
 };
@@ -90,7 +91,7 @@ export default function LoanProductsPage() {
     setForm({
       name: item.name || "",
       slug: item.slug || "",
-      category: item.category || "Personal",
+      category: item.category || "Private",
       description: item.description || "",
       currency: item.currency || "MWK",
       minAmount: String(item.minAmount ?? ""),
@@ -101,6 +102,7 @@ export default function LoanProductsPage() {
       interestRateMonthly: String(item.interestRateMonthly ?? ""),
       processingFeeType: item.processingFeeType || "percent",
       processingFeeValue: String(item.processingFeeValue ?? 0),
+      loanAdministrationFeeMonthly: String(item.loanAdministrationFeeMonthly ?? 0),
       status: item.status || "active",
       featured: Boolean(item.featured),
     });
@@ -132,6 +134,7 @@ export default function LoanProductsPage() {
     interestRateMonthly: toNumber(form.interestRateMonthly),
     processingFeeType: form.processingFeeType,
     processingFeeValue: toNumber(form.processingFeeValue),
+    loanAdministrationFeeMonthly: toNumber(form.loanAdministrationFeeMonthly),
     status: form.status,
     featured: Boolean(form.featured),
   });
@@ -180,6 +183,28 @@ export default function LoanProductsPage() {
       await fetchList();
     } catch (err) {
       const msg = err?.response?.data?.message || "Failed to update product status.";
+      setError(msg);
+      toast.error(msg);
+    }
+  };
+
+  const handleDelete = async (item) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete this loan product?\n\n${item.name}`
+    );
+
+    if (!confirmed) return;
+
+    setError("");
+    try {
+      await loanProductsApi.deactivate(item._id);
+      if (editingId && String(item._id) === editingId) {
+        resetForm();
+      }
+      toast.success("Loan product deleted successfully.");
+      await fetchList();
+    } catch (err) {
+      const msg = err?.response?.data?.message || "Failed to delete loan product.";
       setError(msg);
       toast.error(msg);
     }
@@ -245,14 +270,11 @@ export default function LoanProductsPage() {
                 value={form.category}
                 onChange={handleInput}
               >
-                <option value="Personal">Personal</option>
+                <option value="Private">Private</option>
                 <option value="Business">Business</option>
                 <option value="Agriculture">Agriculture</option>
-                <option value="Education">Education</option>
-                <option value="Group">Group</option>
-                <option value="Asset Finance">Asset Finance</option>
-                <option value="Digital Credit">Digital Credit</option>
-                <option value="Other">Other</option>
+                <option value="Government">Government</option>
+                <option value="Public">Public</option>
               </select>
               <FieldHint>Select how this product should appear in frontend tabs.</FieldHint>
             </label>
@@ -311,20 +333,6 @@ export default function LoanProductsPage() {
                 onChange={handleInput}
               />
               <FieldHint>Largest loan allowed for this product.</FieldHint>
-            </label>
-
-            <label className="text-xs text-slate-600">
-              Monthly Interest Rate (%) *
-              <input
-                className={INPUT_CLASS}
-                placeholder="5.5"
-                name="interestRateMonthly"
-                type="number"
-                step="0.01"
-                value={form.interestRateMonthly}
-                onChange={handleInput}
-              />
-              <FieldHint>Example: type 5.5 for 5.5% per month.</FieldHint>
             </label>
 
             <label className="text-xs text-slate-600">
@@ -398,6 +406,20 @@ export default function LoanProductsPage() {
                 </label>
 
                 <label className="text-xs text-slate-600">
+                  Interest Rate per Month (%) *
+                  <input
+                    className={INPUT_CLASS}
+                    placeholder="5.5"
+                    name="interestRateMonthly"
+                    type="number"
+                    step="0.01"
+                    value={form.interestRateMonthly}
+                    onChange={handleInput}
+                  />
+                  <FieldHint>Example: type 5.5 for 5.5% per month.</FieldHint>
+                </label>
+
+                <label className="text-xs text-slate-600">
                   Processing Fee Type
                   <select className={INPUT_CLASS} name="processingFeeType" value={form.processingFeeType} onChange={handleInput}>
                     <option value="percent">percent</option>
@@ -407,7 +429,7 @@ export default function LoanProductsPage() {
                 </label>
 
                 <label className="text-xs text-slate-600">
-                  Processing Fee Value
+                  Processing Fees and Insurance per Month
                   <input
                     className={INPUT_CLASS}
                     placeholder="0"
@@ -417,7 +439,21 @@ export default function LoanProductsPage() {
                     value={form.processingFeeValue}
                     onChange={handleInput}
                   />
-                  <FieldHint>Example: 2 if fee type is percent, or 10000 if flat.</FieldHint>
+                  <FieldHint>Use this as the single monthly charge amount or percentage.</FieldHint>
+                </label>
+
+                <label className="text-xs text-slate-600">
+                  Loan Administration Fees per Month
+                  <input
+                    className={INPUT_CLASS}
+                    placeholder="0"
+                    name="loanAdministrationFeeMonthly"
+                    type="number"
+                    step="0.01"
+                    value={form.loanAdministrationFeeMonthly}
+                    onChange={handleInput}
+                  />
+                  <FieldHint>Monthly administration charge added for this loan product.</FieldHint>
                 </label>
               </div>
             </>
@@ -492,13 +528,19 @@ export default function LoanProductsPage() {
                         <Button size="sm" variant="outline" onClick={() => handleEdit(item)}>
                           Edit
                         </Button>
-                        <Button
-                          size="sm"
-                          variant={item.status === "active" ? "danger" : "secondary"}
-                          onClick={() => toggleStatus(item)}
-                        >
-                          {item.status === "active" ? "Deactivate" : "Activate"}
-                        </Button>
+                        {item.status === "inactive" ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => toggleStatus(item)}
+                          >
+                            Activate
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="danger" onClick={() => handleDelete(item)}>
+                            Delete
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

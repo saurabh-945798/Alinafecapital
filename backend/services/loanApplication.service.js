@@ -26,6 +26,7 @@ const pickProductSnapshot = (p) => ({
 
   processingFeeType: p.processingFeeType,
   processingFeeValue: p.processingFeeValue,
+  loanAdministrationFeeMonthly: p.loanAdministrationFeeMonthly,
 
   insuranceType: p.insuranceType,
   insuranceValue: p.insuranceValue,

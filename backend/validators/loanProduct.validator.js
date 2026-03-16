@@ -9,15 +9,18 @@ export const createLoanProductSchema = z.object({
   category: z
     .enum([
       "Personal",
+      "Private",
       "Business",
       "Agriculture",
+      "Government",
+      "Public",
       "Education",
       "Group",
       "Asset Finance",
       "Digital Credit",
       "Other",
     ])
-    .default("Personal"),
+    .default("Private"),
   description: z.string().optional(),
 
   currency: z.string().default("MWK"),
@@ -32,6 +35,7 @@ export const createLoanProductSchema = z.object({
 
   processingFeeType: z.enum(["flat", "percent"]).default("percent"),
   processingFeeValue: z.number().nonnegative().default(0),
+  loanAdministrationFeeMonthly: z.number().nonnegative().default(0),
 
   insuranceType: z.enum(["none", "flat", "percent"]).default("none"),
   insuranceValue: z.number().nonnegative().default(0),
