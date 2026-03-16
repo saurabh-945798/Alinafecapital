@@ -30,6 +30,24 @@ export default function Dashboard() {
   const fullName = profile?.fullName || user?.fullName || "Customer";
   const completion = Number(gate?.completion || 0);
   const canApply = !!gate?.canApply;
+  const kycStatus = String(gate?.kycStatus || "not_started");
+  const kycBadgeClass =
+    kycStatus === "verified"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : kycStatus === "pending"
+      ? "border-amber-200 bg-amber-50 text-amber-700"
+      : kycStatus === "rejected"
+      ? "border-red-200 bg-red-50 text-red-700"
+      : "border-slate-200 bg-slate-50 text-slate-700";
+  const kycLabel =
+    kycStatus === "verified"
+      ? "Verified"
+      : kycStatus === "pending"
+      ? "Pending"
+      : kycStatus === "rejected"
+      ? "Rejected"
+      : "Not Started";
+  const showFixKycButton = kycStatus === "rejected";
 
   if (loading) {
     return (
@@ -98,9 +116,54 @@ export default function Dashboard() {
                   : "bg-slate-900 text-white hover:bg-slate-800",
               ].join(" ")}
             >
-              {canApply ? "View Profile + KYC" : "Complete Profile + KYC"}
+              {canApply ? "View Profile" : "Complete Profile"}
             </Link>
           </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">KYC Status</h2>
+              <p className="text-sm text-slate-600">
+                Check whether your verification is pending, approved, or rejected.
+              </p>
+            </div>
+            <span
+              className={[
+                "inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold",
+                kycBadgeClass,
+              ].join(" ")}
+            >
+              {kycLabel}
+            </span>
+          </div>
+
+          <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+            <p className="text-sm font-medium text-slate-900">
+              {kycStatus === "verified"
+                ? "Your KYC has been approved."
+                : kycStatus === "pending"
+                ? "Your KYC is under review."
+                : kycStatus === "rejected"
+                ? "Your KYC needs attention."
+                : "You have not submitted KYC yet."}
+            </p>
+            <p className="mt-1 text-xs text-slate-600">
+              {gate?.blockReason || "Complete your profile details to continue."}
+            </p>
+          </div>
+
+          {showFixKycButton ? (
+            <div className="mt-5">
+              <Link
+                to="/dashboard/profile-completion"
+                className="inline-flex items-center rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
+              >
+                Fix KYC
+              </Link>
+            </div>
+          ) : null}
         </Card>
 
         <Card className="lg:col-span-3">

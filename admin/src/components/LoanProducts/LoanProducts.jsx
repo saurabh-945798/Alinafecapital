@@ -18,10 +18,6 @@ const DEFAULT_FORM = {
   interestRateMonthly: "",
   processingFeeType: "percent",
   processingFeeValue: "0",
-  insuranceType: "none",
-  insuranceValue: "0",
-  taxRatePercent: "0",
-  repaymentFrequency: "monthly",
   status: "active",
   featured: false,
 };
@@ -105,10 +101,6 @@ export default function LoanProductsPage() {
       interestRateMonthly: String(item.interestRateMonthly ?? ""),
       processingFeeType: item.processingFeeType || "percent",
       processingFeeValue: String(item.processingFeeValue ?? 0),
-      insuranceType: item.insuranceType || "none",
-      insuranceValue: String(item.insuranceValue ?? 0),
-      taxRatePercent: String(item.taxRatePercent ?? 0),
-      repaymentFrequency: item.repaymentFrequency || "monthly",
       status: item.status || "active",
       featured: Boolean(item.featured),
     });
@@ -140,10 +132,6 @@ export default function LoanProductsPage() {
     interestRateMonthly: toNumber(form.interestRateMonthly),
     processingFeeType: form.processingFeeType,
     processingFeeValue: toNumber(form.processingFeeValue),
-    insuranceType: form.insuranceType,
-    insuranceValue: toNumber(form.insuranceValue),
-    taxRatePercent: toNumber(form.taxRatePercent),
-    repaymentFrequency: form.repaymentFrequency,
     status: form.status,
     featured: Boolean(form.featured),
   });
@@ -220,9 +208,7 @@ export default function LoanProductsPage() {
 
       <form onSubmit={submit} className="space-y-3 rounded-xl border bg-white p-4">
         <h2 className="text-lg font-semibold">{title}</h2>
-        <p className="text-sm text-slate-500">
-          Fill Basic sections first. Open Advanced only if your pricing team needs it.
-        </p>
+        <p className="text-sm text-slate-500">Fill the basic product details first, then pricing.</p>
 
         <div className="rounded-lg border p-3 space-y-3">
           <p className="text-sm font-semibold text-slate-800">1) Basic Info</p>
@@ -367,6 +353,17 @@ export default function LoanProductsPage() {
               <FieldHint>Longest repayment period.</FieldHint>
             </label>
 
+          </div>
+        </div>
+
+        <div className="rounded-lg border p-3 space-y-2">
+          <p className="text-sm font-semibold text-slate-800">3) Website Highlight</p>
+          <label className="inline-flex items-center gap-2 text-sm">
+            <input type="checkbox" name="featured" checked={form.featured} onChange={handleInput} />
+            Mark as featured on website
+          </label>
+          <FieldHint>Use for one flagship product only (hero/priority display).</FieldHint>
+          <div className="max-w-sm">
             <label className="text-xs text-slate-600">
               Status
               <select className={INPUT_CLASS} name="status" value={form.status} onChange={handleInput}>
@@ -378,27 +375,18 @@ export default function LoanProductsPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border p-3 space-y-2">
-          <p className="text-sm font-semibold text-slate-800">3) Website Highlight</p>
-          <label className="inline-flex items-center gap-2 text-sm">
-            <input type="checkbox" name="featured" checked={form.featured} onChange={handleInput} />
-            Mark as featured on website
-          </label>
-          <FieldHint>Use for one flagship product only (hero/priority display).</FieldHint>
-        </div>
-
         <div className="rounded-lg border p-3 space-y-3">
           <button
             type="button"
             className="text-sm font-semibold underline"
             onClick={() => setShowAdvanced((v) => !v)}
           >
-            {showAdvanced ? "Hide Advanced Settings" : "Show Advanced Settings"}
+            {showAdvanced ? "Hide Pricing Settings" : "Show Pricing Settings"}
           </button>
 
           {showAdvanced ? (
             <>
-              <p className="text-sm font-semibold text-slate-800">4) Advanced Pricing Settings</p>
+              <p className="text-sm font-semibold text-slate-800">4) Pricing Settings</p>
               <div className="grid gap-3 md:grid-cols-3">
                 <label className="text-xs text-slate-600">
                   Interest Type
@@ -430,44 +418,6 @@ export default function LoanProductsPage() {
                     onChange={handleInput}
                   />
                   <FieldHint>Example: 2 if fee type is percent, or 10000 if flat.</FieldHint>
-                </label>
-
-                <label className="text-xs text-slate-600">
-                  Insurance Type
-                  <select className={INPUT_CLASS} name="insuranceType" value={form.insuranceType} onChange={handleInput}>
-                    <option value="none">none</option>
-                    <option value="percent">percent</option>
-                    <option value="flat">flat</option>
-                  </select>
-                  <FieldHint>Keep none if no insurance charge is needed.</FieldHint>
-                </label>
-
-                <label className="text-xs text-slate-600">
-                  Insurance Value
-                  <input
-                    className={INPUT_CLASS}
-                    placeholder="0"
-                    name="insuranceValue"
-                    type="number"
-                    step="0.01"
-                    value={form.insuranceValue}
-                    onChange={handleInput}
-                  />
-                  <FieldHint>Works with selected insurance type.</FieldHint>
-                </label>
-
-                <label className="text-xs text-slate-600">
-                  Tax Rate Percent
-                  <input
-                    className={INPUT_CLASS}
-                    placeholder="0"
-                    name="taxRatePercent"
-                    type="number"
-                    step="0.01"
-                    value={form.taxRatePercent}
-                    onChange={handleInput}
-                  />
-                  <FieldHint>Use only if tax should be added on charges.</FieldHint>
                 </label>
               </div>
             </>
