@@ -2,10 +2,10 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AdminAccessPage from "./components/Auth/AdminAccess.jsx";
 import AdminProtectedRoute from "./components/Auth/AdminProtectedRoute.jsx";
 import CompliancePage from "./components/Compliance/Compliance.jsx";
-import CustomersPage from "./components/Customers/Customers.jsx";
 import Dashboard from "./components/Dashboard/Dashboard.jsx";
 import InquiriesPage from "./components/Inquiries/Inquiries.jsx";
 import LoanApplicationsPage from "./components/LoanApplication/LoanApplication.jsx";
+import LoanApplicationDetailPage from "./components/LoanApplication/LoanApplicationDetail.jsx";
 import LoanProductsPage from "./components/LoanProducts/LoanProducts.jsx";
 import SettingsPage from "./components/Settings/Settings.jsx";
 import AdminLayout from "./layout/AdminLayout.jsx";
@@ -21,9 +21,10 @@ export default function AppRoutes() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Dashboard />} />
           <Route path="applications" element={<LoanApplicationsPage />} />
+          <Route path="applications/:id" element={<LoanApplicationDetailPage />} />
           <Route path="inquiries" element={<InquiriesPage />} />
           <Route path="loan-products" element={<LoanProductsPage />} />
-          <Route path="customers" element={<CustomersPage />} />
+          <Route path="customers" element={<Navigate to="/admin" replace />} />
           <Route path="compliance" element={<CompliancePage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>

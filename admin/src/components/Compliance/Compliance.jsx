@@ -35,11 +35,35 @@ const maskAccountNumber = (value) => {
   return `${"*".repeat(Math.max(0, raw.length - 4))}${raw.slice(-4)}`;
 };
 
+const buildTimeline = (selected) => {
+  if (!selected) return [];
+
+  const base = [
+    { label: "Inquiry Created", value: selected.createdAt },
+    { label: "Customer Contacted", value: selected.contactedAt },
+    { label: "KYC Link Sent", value: selected.kycSentAt },
+    { label: "Profile + KYC Submitted", value: selected.submittedAt },
+    { label: "KYC Verified", value: selected.verifiedAt },
+    { label: "KYC Rejected", value: selected.rejectedAt },
+    { label: "Loan Approved", value: selected.approvedAt },
+    { label: "Inquiry Closed", value: selected.closedAt },
+  ];
+
+  if (selected.recordType !== "loan_inquiry") {
+    return base.filter((item) =>
+      ["Profile + KYC Submitted", "KYC Verified", "KYC Rejected"].includes(item.label)
+    );
+  }
+
+  return base;
+};
+
 export default function CompliancePage() {
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "all");
   const [q, setQ] = useState(searchParams.get("q") || "");
+  const [reviewFilter, setReviewFilter] = useState(searchParams.get("review") || "");
   const [page, setPage] = useState(Number(searchParams.get("page") || 1));
   const [limit] = useState(20);
   const [items, setItems] = useState([]);
@@ -51,7 +75,7 @@ export default function CompliancePage() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedUserId, setSelectedUserId] = useState("");
+  const [selectedReviewId, setSelectedReviewId] = useState("");
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [remarks, setRemarks] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
@@ -66,9 +90,13 @@ export default function CompliancePage() {
   };
 
   const selected = useMemo(() => {
-    const fromList = items.find((x) => String(x.userId) === String(selectedUserId));
+    const fromList = items.find((x) => String(x.reviewId) === String(selectedReviewId));
     return fromList || selectedRecord || null;
-  }, [items, selectedUserId, selectedRecord]);
+  }, [items, selectedReviewId, selectedRecord]);
+  const timeline = useMemo(
+    () => buildTimeline(selected).filter((item) => !!item.value),
+    [selected]
+  );
 
   const fetchKycList = async () => {
     setLoading(true);
@@ -92,8 +120,8 @@ export default function CompliancePage() {
       setItems(nextItems);
       setPagination(nextPagination);
 
-      if (selectedUserId) {
-        const inList = nextItems.find((x) => String(x.userId) === String(selectedUserId));
+      if (selectedReviewId) {
+        const inList = nextItems.find((x) => String(x.reviewId) === String(selectedReviewId));
         if (inList) setSelectedRecord(inList);
       }
     } catch (err) {
@@ -110,8 +138,20 @@ export default function CompliancePage() {
   }, [statusFilter, q, page, limit]);
 
   useEffect(() => {
+    if (!reviewFilter || items.length === 0) return;
+    const match = items.find((item) => String(item.reviewId) === String(reviewFilter));
+    if (!match) return;
+    setSelectedReviewId(String(match.reviewId));
+    setSelectedRecord(match);
+    setRemarks(match.kycRemarks || "");
+    setShowFullAccount(false);
+    setAvatarBroken(false);
+  }, [items, reviewFilter]);
+
+  useEffect(() => {
     setStatusFilter(searchParams.get("status") || "all");
     setQ(searchParams.get("q") || "");
+    setReviewFilter(searchParams.get("review") || "");
     setPage(Number(searchParams.get("page") || 1));
   }, [searchParams]);
 
@@ -119,16 +159,17 @@ export default function CompliancePage() {
     const params = new URLSearchParams();
     if (statusFilter) params.set("status", statusFilter);
     if (q) params.set("q", q);
+    if (reviewFilter) params.set("review", reviewFilter);
     if (page > 1) params.set("page", String(page));
     setSearchParams(params, { replace: true });
-  }, [statusFilter, q, page, setSearchParams]);
+  }, [statusFilter, q, reviewFilter, page, setSearchParams]);
 
   const handleVerify = async () => {
-    if (!selectedUserId) return;
+    if (!selectedReviewId) return;
     setActionLoading(true);
     setError("");
     try {
-      const updated = await complianceApi.verifyKyc(selectedUserId);
+      const updated = await complianceApi.verifyKyc(selectedReviewId);
       setSelectedRecord(updated || null);
       await fetchKycList();
       setRemarks("");
@@ -143,7 +184,7 @@ export default function CompliancePage() {
   };
 
   const handleReject = async () => {
-    if (!selectedUserId) return;
+    if (!selectedReviewId) return;
     if (!remarks.trim()) {
       setError("Remarks are required to reject KYC.");
       toast.warning("Remarks are required to reject KYC.");
@@ -152,7 +193,7 @@ export default function CompliancePage() {
     setActionLoading(true);
     setError("");
     try {
-      const updated = await complianceApi.rejectKyc(selectedUserId, remarks.trim());
+      const updated = await complianceApi.rejectKyc(selectedReviewId, remarks.trim());
       setSelectedRecord(updated || null);
       await fetchKycList();
       setRemarks("");
@@ -244,12 +285,15 @@ export default function CompliancePage() {
                 </tr>
               ) : (
                 items.map((item) => (
-                  <tr key={String(item.userId)} className="border-t border-slate-100">
+                  <tr key={String(item.reviewId || item.userId)} className="border-t border-slate-100">
                     <td className="px-4 py-3">
                       <p className="font-semibold">{item.fullName || String(item.userId)}</p>
                       <p className="text-xs text-slate-500">{item.email || "-"}</p>
                       <p className="text-xs text-slate-500">{item.phone || "-"}</p>
                       <p className="text-xs text-slate-500">{item.country || "Malawi"}</p>
+                      <p className="text-xs text-slate-500 capitalize">
+                        Source: {item.recordType === "loan_inquiry" ? "Loan Inquiry" : "Dashboard"}
+                      </p>
                     </td>
                     <td className="px-4 py-3">
                       <Badge tone={statusTone(item.kycStatus)}>{item.kycStatus}</Badge>
@@ -268,7 +312,7 @@ export default function CompliancePage() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          setSelectedUserId(String(item.userId));
+                          setSelectedReviewId(String(item.reviewId || item.userId));
                           setSelectedRecord(item);
                           setRemarks(item.kycRemarks || "");
                           setShowFullAccount(false);
@@ -339,7 +383,9 @@ export default function CompliancePage() {
               </div>
             </div>
             <div className="rounded-lg border p-3">
-              <p className="text-xs text-slate-500">User ID</p>
+              <p className="text-xs text-slate-500">
+                {selected.recordType === "loan_inquiry" ? "Inquiry ID" : "User ID"}
+              </p>
               <p className="font-semibold break-all">{String(selected.userId)}</p>
               <p className="text-xs text-slate-500 mt-1">{selected.email || "-"}</p>
               <p className="text-xs text-slate-500">{selected.phone || "-"}</p>
@@ -352,6 +398,33 @@ export default function CompliancePage() {
               <p className="text-xs text-slate-500">Submitted</p>
               <p className="font-semibold">{formatDate(selected.submittedAt)}</p>
             </div>
+          </div>
+
+          <div className="rounded-lg border p-3">
+            <p className="text-sm font-semibold">KYC Timeline</p>
+            {timeline.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-500">No recorded timeline events yet.</p>
+            ) : (
+              <div className="mt-3 overflow-x-auto">
+                <div className="flex min-w-max items-center gap-3">
+                  {timeline.map((item, index) => (
+                    <div key={item.label} className="flex items-center gap-3">
+                      <div className="min-w-[190px] rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                          {item.label}
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-slate-900">
+                          {formatDate(item.value)}
+                        </p>
+                      </div>
+                      {index < timeline.length - 1 ? (
+                        <div className="h-px w-8 bg-slate-300" />
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="rounded-lg border p-3">
@@ -368,13 +441,18 @@ export default function CompliancePage() {
               <div>
                 <p className="text-xs text-slate-500">Employment</p>
                 <p className="font-medium text-slate-800">{selected.employmentType || "-"}</p>
-                <p className="text-slate-700">Income: {selected.monthlyIncome ? `MWK ${Number(selected.monthlyIncome).toLocaleString()}` : "-"}</p>
+                <p className="text-slate-700">
+                  Income: {selected.monthlyIncome ? `MWK ${Number(selected.monthlyIncome).toLocaleString()}` : "-"}
+                </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">KYC Timeline</p>
+                <p className="text-xs text-slate-500">Loan / KYC Summary</p>
                 <p className="text-slate-700">Submitted: {formatDate(selected.submittedAt)}</p>
                 <p className="text-slate-700">Verified: {formatDate(selected.verifiedAt)}</p>
                 <p className="text-slate-700">Rejected: {formatDate(selected.rejectedAt)}</p>
+                {selected.loanProductName ? (
+                  <p className="text-slate-700">Loan Type: {selected.loanProductName}</p>
+                ) : null}
               </div>
             </div>
           </div>
@@ -471,7 +549,7 @@ export default function CompliancePage() {
             <Button
               variant="outline"
               onClick={() => {
-                setSelectedUserId("");
+                setSelectedReviewId("");
                 setSelectedRecord(null);
                 setRemarks("");
                 setShowFullAccount(false);
@@ -491,4 +569,3 @@ export default function CompliancePage() {
     </div>
   );
 }
-

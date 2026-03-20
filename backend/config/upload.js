@@ -21,6 +21,9 @@ const sanitizeFileName = (name = "file") =>
     .replace(/_+/g, "_")
     .slice(0, 120);
 
+const resolveUploadOwner = (req, fallback = "anonymous") =>
+  String(req.uploadOwnerId || req.user?._id || fallback);
+
 const allowedMimes = new Set([
   "application/pdf",
   "image/jpeg",
@@ -37,8 +40,8 @@ const avatarExtByMime = {
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     try {
-      const userId = String(req.user?._id || "anonymous");
-      const dest = path.join(UPLOAD_ROOT, "kyc", userId);
+      const ownerId = resolveUploadOwner(req);
+      const dest = path.join(UPLOAD_ROOT, "kyc", ownerId);
       ensureDir(dest);
       cb(null, dest);
     } catch (error) {
@@ -72,8 +75,8 @@ export const upload = multer({
 const avatarStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     try {
-      const userId = String(req.user?._id || "anonymous");
-      const dest = path.join(UPLOAD_ROOT, "profile", userId);
+      const ownerId = resolveUploadOwner(req);
+      const dest = path.join(UPLOAD_ROOT, "profile", ownerId);
       ensureDir(dest);
       cb(null, dest);
     } catch (error) {

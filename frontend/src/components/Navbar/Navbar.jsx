@@ -164,14 +164,10 @@ export default function Navbar() {
 
   const handleLogout = () => {
     logout();
-    navigate("/login");
+    navigate("/");
   };
 
   const handleApply = () => {
-    if (!isAuthenticated) {
-      navigate(`/login?next=${encodeURIComponent("/apply")}`);
-      return;
-    }
     navigate("/apply");
   };
 
@@ -370,15 +366,7 @@ export default function Navbar() {
                   Logout
                 </button>
               </>
-            ) : (
-              <NavLink
-                to="/login"
-                className="rounded-lg border px-4 py-2 text-base font-medium transition"
-                style={{ borderColor: BRAND_NAVY, color: BRAND_NAVY }}
-              >
-                 Login
-              </NavLink>
-            )}
+            ) : null}
 
             <button
               type="button"
@@ -472,16 +460,7 @@ export default function Navbar() {
                             Logout
                           </button>
                         </>
-                      ) : (
-                        <NavLink
-                          to="/login"
-                          onClick={() => setIsOpen(false)}
-                          className="rounded-lg border px-4 py-2.5 text-center text-base font-medium"
-                          style={{ borderColor: BRAND_NAVY, color: BRAND_NAVY }}
-                        >
-                          Client Login
-                        </NavLink>
-                      )}
+                      ) : null}
 
                       <button
                         type="button"

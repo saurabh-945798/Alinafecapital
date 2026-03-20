@@ -40,7 +40,7 @@ const runFetch = async () => {
   return profileStore.request;
 };
 
-export const useProfile = () => {
+export const useProfile = (enabled = true) => {
   const [state, setState] = useState({
     profile: profileStore.profile,
     loading: profileStore.loading,
@@ -59,7 +59,7 @@ export const useProfile = () => {
     profileStore.listeners.add(sync);
     sync();
 
-    if (!profileStore.initialized && !profileStore.request) {
+    if (enabled && !profileStore.initialized && !profileStore.request) {
       runFetch();
     }
 
@@ -69,8 +69,50 @@ export const useProfile = () => {
   }, []);
 
   const refresh = useCallback(async () => {
+    if (!enabled) return;
     await runFetch();
-  }, []);
+  }, [enabled]);
+
+  return { ...state, refresh };
+};
+
+export const usePublicProfile = (token, enabled = true) => {
+  const [state, setState] = useState({
+    profile: null,
+    loading: true,
+    error: "",
+  });
+
+  const refresh = useCallback(async () => {
+    if (!enabled) {
+      return;
+    }
+
+    if (!token) {
+      setState({ profile: null, loading: false, error: "Invalid inquiry link" });
+      return;
+    }
+
+    setState((prev) => ({ ...prev, loading: true, error: "" }));
+    try {
+      const { data } = await api.get(`/inquiries/access/${token}/profile`);
+      setState({
+        profile: data?.item ?? data?.data ?? null,
+        loading: false,
+        error: "",
+      });
+    } catch (err) {
+      setState({
+        profile: null,
+        loading: false,
+        error: err?.response?.data?.message || "Failed to load profile",
+      });
+    }
+  }, [enabled, token]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   return { ...state, refresh };
 };

@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Circle } from "lucide-react";
-import { useProfile } from "../hooks/useProfile";
+import { useParams } from "react-router-dom";
+import { useProfile, usePublicProfile } from "../hooks/useProfile";
 import { DocumentUpload, ProfileForm } from "../features/dashboard";
 
 export default function DashboardProfilePage() {
-  const { profile, loading, error, refresh } = useProfile();
+  const { token } = useParams();
+  const isPublicAccess = !!token;
+  const privateProfileState = useProfile(!isPublicAccess);
+  const publicProfileState = usePublicProfile(token, isPublicAccess);
+  const { profile, loading, error, refresh } = isPublicAccess
+    ? publicProfileState
+    : privateProfileState;
   const [uiError, setUiError] = useState("");
   const [uiSuccess, setUiSuccess] = useState("");
   const [saveState, setSaveState] = useState(""); // "", "saving", "saved", "error"
@@ -46,6 +53,14 @@ export default function DashboardProfilePage() {
       {
         label: "Bank Details (name, account number, branch code)",
         done: !!profile.bankName && !!profile.accountNumber && !!profile.branchCode,
+      },
+      {
+        label: "References (2 names and phone numbers)",
+        done:
+          !!profile.reference1Name &&
+          !!profile.reference1Phone &&
+          !!profile.reference2Name &&
+          !!profile.reference2Phone,
       },
       {
         label: "National ID Document",
@@ -93,8 +108,23 @@ export default function DashboardProfilePage() {
     completion < 100
       ? "Complete missing fields below."
       : "Profile complete. Upload your remaining KYC documents below.";
+  const profileApiBasePath = isPublicAccess
+    ? `/inquiries/access/${token}/profile`
+    : "/profile/me";
+  const profileSubmitUrl = isPublicAccess
+    ? `/inquiries/access/${token}/submit`
+    : "/profile/me/submit";
+  const profileAvatarUrl = isPublicAccess
+    ? `/inquiries/access/${token}/avatar`
+    : "/profile/me/avatar";
 
-  if (loading) return <div className="p-4">Loading profile...</div>;
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm sm:p-5">
+        Loading profile...
+      </div>
+    );
+  }
 
   if (isUnderReview || isApproved) {
     return (
@@ -167,16 +197,18 @@ export default function DashboardProfilePage() {
 
   return (
     <div className="space-y-6">
-      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="space-y-1">
             <h1 className="text-xl font-semibold text-slate-900">Profile + KYC</h1>
             <p className="text-sm text-slate-500">
-              Complete your details, upload documents, and submit KYC in one place.
+              {isPublicAccess
+                ? "Complete your details, upload documents, and submit your KYC from this secure link."
+                : "Complete your details, upload documents, and submit KYC in one place."}
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2 text-sm">
+          <div className="flex flex-wrap gap-2 text-xs sm:text-sm">
             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 font-medium text-slate-700">
               Completion: {completion}%
             </span>
@@ -199,8 +231,8 @@ export default function DashboardProfilePage() {
         <p className="text-sm text-slate-600">{nextStep}</p>
       </section>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+        <div className="space-y-4 min-w-0">
           {error ? (
             <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
@@ -219,9 +251,12 @@ export default function DashboardProfilePage() {
             </div>
           ) : null}
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <ProfileForm
               profile={profile}
+              apiBasePath={profileApiBasePath}
+              submitUrl={profileSubmitUrl}
+              avatarUrl={profileAvatarUrl}
               onEmploymentTypeChange={setSelectedEmploymentType}
               onCompletionChange={setProfileSectionsComplete}
               documentsComplete={documentsComplete}
@@ -234,6 +269,11 @@ export default function DashboardProfilePage() {
                   setShowSavedModal(false);
                 }, 5000);
               }}
+              onAvatarSaved={() => {
+                setUiError("");
+                setUiSuccess("");
+                refresh();
+              }}
               setError={(msg) => {
                 setSaveState("error");
                 setUiError(msg);
@@ -245,7 +285,7 @@ export default function DashboardProfilePage() {
             />
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+          <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <div>
               <h2 className="text-base font-semibold text-slate-900">KYC Documents</h2>
               <p className="text-sm text-slate-500">
@@ -259,6 +299,11 @@ export default function DashboardProfilePage() {
                 documents: latestDocuments,
                 employmentType: selectedEmploymentType || profile?.employmentType || "",
               }}
+              uploadUrl={
+                isPublicAccess
+                  ? `/inquiries/access/${token}/doc`
+                  : "/profile/me/doc"
+              }
               onUploaded={(nextProfile) => {
                 setUiError("");
                 if (Array.isArray(nextProfile?.documents)) {
@@ -270,8 +315,8 @@ export default function DashboardProfilePage() {
             />
           </div>
 
-          <div className="sticky bottom-0 z-10 flex flex-col items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:flex-row">
-            <div className="text-xs font-medium text-slate-500">
+          <div className="sticky bottom-0 z-10 flex flex-col items-stretch justify-between gap-3 rounded-xl border border-slate-200 bg-white/95 px-3 py-3 backdrop-blur sm:px-4 sm:flex-row sm:items-center">
+            <div className="text-xs font-medium leading-5 text-slate-500">
               {saveState === "saving" && "Saving..."}
               {saveState === "saved" && "Saved just now"}
               {saveState === "error" && "Error saving changes"}
@@ -285,7 +330,7 @@ export default function DashboardProfilePage() {
                 <button
                   type="submit"
                   form="profileForm"
-                  className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 sm:w-auto"
+                  className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 sm:w-auto"
                 >
                   Submit Profile + KYC
                 </button>
@@ -293,22 +338,22 @@ export default function DashboardProfilePage() {
             ) : null}
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
             Complete profile fields and upload your documents from this page.
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:sticky lg:top-6">
+        <div className="space-y-4 min-w-0">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 xl:sticky xl:top-6">
             <h3 className="mb-3 text-base font-semibold text-slate-900">Completion Checklist</h3>
 
             <div className="space-y-2 text-sm">
               {checklist.map((item) => (
                 <div
                   key={item.label}
-                  className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2"
+                  className="flex items-start justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2"
                 >
-                  <span className="text-slate-700">{item.label}</span>
+                  <span className="min-w-0 text-slate-700">{item.label}</span>
 
                   {item.done ? (
                     <CheckCircle2 size={16} className="text-emerald-600" aria-label="Completed" />

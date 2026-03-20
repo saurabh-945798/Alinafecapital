@@ -1,18 +1,134 @@
-﻿import UserProfile from "../models/UserProfile.js";
+import UserProfile from "../models/UserProfile.js";
+import { LoanInquiry } from "../models/LoanInquiry.model.js";
 
-const toPublicProfile = (profile) => {
-  if (!profile) return null;
+const safeRegex = (value = "") => {
+  const safe = String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return { $regex: safe, $options: "i" };
+};
+
+const toPublicDocuments = (documents = []) =>
+  (documents || []).map((d) => ({
+    type: d.type,
+    fileUrl: d.fileUrl,
+    mime: d.mime,
+    uploadedAt: d.uploadedAt,
+  }));
+
+const mapUserProfileRecord = (profile) => {
   const obj = profile.toObject ? profile.toObject() : profile;
   return {
-    ...obj,
-    documents: (obj.documents || []).map((d) => ({
-      type: d.type,
-      fileUrl: d.fileUrl,
-      mime: d.mime,
-      uploadedAt: d.uploadedAt,
-    })),
+    reviewId: `profile:${String(obj.userId)}`,
+    recordType: "user_profile",
+    userId: String(obj.userId),
+    fullName: obj.fullName || "",
+    email: obj.email || "",
+    phone: obj.phone || "",
+    addressLine1: obj.addressLine1 || "",
+    city: obj.city || "",
+    district: obj.district || "",
+    country: obj.country || "Malawi",
+    employmentType: obj.employmentType || "",
+    monthlyIncome: obj.monthlyIncome,
+    bankName: obj.bankName || "",
+    accountNumber: obj.accountNumber || "",
+    branchCode: obj.branchCode || "",
+    avatarUrl: obj.avatarUrl || "",
+    documents: toPublicDocuments(obj.documents),
+    profileCompletion: obj.profileCompletion ?? 0,
+    kycStatus: obj.kycStatus || "not_started",
+    kycRemarks: obj.kycRemarks || "",
+    submittedAt: obj.submittedAt || null,
+    verifiedAt: obj.verifiedAt || null,
+    rejectedAt: obj.rejectedAt || null,
+    updatedAt: obj.updatedAt || obj.createdAt || null,
+    createdAt: obj.createdAt || null,
+    source: "dashboard",
   };
 };
+
+const mapInquiryRecord = (inquiry) => {
+  const obj = inquiry.toObject ? inquiry.toObject() : inquiry;
+  return {
+    reviewId: `inquiry:${String(obj._id)}`,
+    recordType: "loan_inquiry",
+    userId: String(obj._id),
+    fullName: obj.fullName || "",
+    email: obj.email || "",
+    phone: obj.phone || "",
+    addressLine1: obj.addressLine1 || obj.address || "",
+    city: obj.city || "",
+    district: obj.district || "",
+    country: obj.country || "Malawi",
+    employmentType: obj.employmentType || "",
+    monthlyIncome: obj.monthlyIncome,
+    bankName: obj.bankName || "",
+    accountNumber: obj.accountNumber || "",
+    branchCode: obj.branchCode || "",
+    avatarUrl: obj.avatarUrl || "",
+    documents: toPublicDocuments(obj.documents),
+    profileCompletion: obj.profileCompletion ?? 0,
+    kycStatus: obj.kycStatus || "not_started",
+    kycRemarks: obj.kycRemarks || "",
+    submittedAt: obj.submittedAt || null,
+    verifiedAt: obj.verifiedAt || null,
+    rejectedAt: obj.rejectedAt || null,
+    updatedAt: obj.updatedAt || obj.createdAt || null,
+    createdAt: obj.createdAt || null,
+    source: "loan_inquiry",
+    loanProductName: obj.loanProductName || "",
+    inquiryStatus: obj.status || "",
+    contactedAt: obj.contactedAt || null,
+    kycSentAt: obj.kycSentAt || null,
+    approvedAt: obj.approvedAt || null,
+    closedAt: obj.closedAt || null,
+  };
+};
+
+const parseReviewId = (reviewId = "") => {
+  const [recordType, recordKey] = String(reviewId || "").split(":");
+  return { recordType, recordKey };
+};
+
+const buildProfileFilter = (status, q) => {
+  const filter = {};
+  if (status && status !== "all") filter.kycStatus = status;
+  if (q) {
+    const rx = safeRegex(q);
+    filter.$or = [{ fullName: rx }, { email: rx }, { phone: rx }, { district: rx }];
+  }
+  return filter;
+};
+
+const buildInquiryFilter = (status, q) => {
+  const filter = {};
+  if (status && status !== "all") filter.kycStatus = status;
+  if (q) {
+    const rx = safeRegex(q);
+    filter.$or = [{ fullName: rx }, { email: rx }, { phone: rx }, { district: rx }];
+  }
+  return filter;
+};
+
+async function findReviewRecord(reviewId) {
+  const { recordType, recordKey } = parseReviewId(reviewId);
+  if (!recordType || !recordKey) return null;
+
+  if (recordType === "profile") {
+    return {
+      recordType,
+      doc: await UserProfile.findOne({ userId: recordKey }),
+    };
+  }
+
+  if (recordType === "inquiry") {
+    return {
+      recordType,
+      doc: await LoanInquiry.findById(recordKey),
+    };
+  }
+
+  return null;
+}
 
 export async function listKyc(req, res, next) {
   try {
@@ -23,29 +139,28 @@ export async function listKyc(req, res, next) {
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
     const skip = (page - 1) * limit;
-    const filter = {};
-    if (status && status !== "all") filter.kycStatus = status;
-    if (q) {
-      const safe = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const rx = { $regex: safe, $options: "i" };
-      filter.$or = [{ fullName: rx }, { email: rx }, { phone: rx }, { district: rx }];
-    }
 
-    const [total, docs] = await Promise.all([
-      UserProfile.countDocuments(filter),
-      UserProfile.find(filter).sort({ updatedAt: -1 }).skip(skip).limit(limit),
+    const [profiles, inquiries] = await Promise.all([
+      UserProfile.find(buildProfileFilter(status, q)).sort({ updatedAt: -1 }),
+      LoanInquiry.find(buildInquiryFilter(status, q)).sort({ updatedAt: -1 }),
     ]);
-    const items = docs.map(toPublicProfile);
+
+    const combined = [
+      ...profiles.map(mapUserProfileRecord),
+      ...inquiries.map(mapInquiryRecord),
+    ].sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+
+    const pagedItems = combined.slice(skip, skip + limit);
 
     return res.json({
       success: true,
       data: {
-        items,
+        items: pagedItems,
         pagination: {
           page,
           limit,
-          total,
-          totalPages: Math.ceil(total / limit) || 1,
+          total: combined.length,
+          totalPages: Math.ceil(combined.length / limit) || 1,
         },
       },
     });
@@ -56,10 +171,9 @@ export async function listKyc(req, res, next) {
 
 export async function verifyKyc(req, res, next) {
   try {
-    const { userId } = req.params;
-    const profile = await UserProfile.findOne({ userId });
+    const review = await findReviewRecord(req.params.userId);
 
-    if (!profile) {
+    if (!review?.doc) {
       return res.status(404).json({
         success: false,
         message: "Profile not found",
@@ -67,15 +181,18 @@ export async function verifyKyc(req, res, next) {
       });
     }
 
-    profile.kycStatus = "verified";
-    profile.kycRemarks = "";
-    profile.verifiedAt = new Date();
-    profile.rejectedAt = null;
-    await profile.save();
+    review.doc.kycStatus = "verified";
+    review.doc.kycRemarks = "";
+    review.doc.verifiedAt = new Date();
+    review.doc.rejectedAt = null;
+    await review.doc.save();
 
     return res.json({
       success: true,
-      data: toPublicProfile(profile),
+      data:
+        review.recordType === "profile"
+          ? mapUserProfileRecord(review.doc)
+          : mapInquiryRecord(review.doc),
     });
   } catch (error) {
     return next(error);
@@ -84,11 +201,10 @@ export async function verifyKyc(req, res, next) {
 
 export async function rejectKyc(req, res, next) {
   try {
-    const { userId } = req.params;
     const remarks = String(req.body.remarks || "").trim().slice(0, 500);
+    const review = await findReviewRecord(req.params.userId);
 
-    const profile = await UserProfile.findOne({ userId });
-    if (!profile) {
+    if (!review?.doc) {
       return res.status(404).json({
         success: false,
         message: "Profile not found",
@@ -96,15 +212,18 @@ export async function rejectKyc(req, res, next) {
       });
     }
 
-    profile.kycStatus = "rejected";
-    profile.kycRemarks = remarks;
-    profile.rejectedAt = new Date();
-    profile.verifiedAt = null;
-    await profile.save();
+    review.doc.kycStatus = "rejected";
+    review.doc.kycRemarks = remarks;
+    review.doc.rejectedAt = new Date();
+    review.doc.verifiedAt = null;
+    await review.doc.save();
 
     return res.json({
       success: true,
-      data: toPublicProfile(profile),
+      data:
+        review.recordType === "profile"
+          ? mapUserProfileRecord(review.doc)
+          : mapInquiryRecord(review.doc),
     });
   } catch (error) {
     return next(error);

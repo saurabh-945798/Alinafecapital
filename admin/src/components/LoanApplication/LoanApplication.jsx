@@ -1,348 +1,163 @@
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Button from "../ui/Button";
 import Badge from "../ui/Badge";
-import { loanApplicationsApi } from "../../services/api/loanApplications.api";
+import { inquiriesApi } from "../../services/api/inquiries.api";
 import { useToast } from "../../context/ToastContext.jsx";
-
-const STATUS_TRANSITIONS = {
-  PRE_APPLICATION: ["SUBMITTED", "CANCELLED"],
-  SUBMITTED: ["UNDER_REVIEW", "REJECTED", "CANCELLED"],
-  PENDING: ["UNDER_REVIEW", "REJECTED", "CANCELLED"],
-  UNDER_REVIEW: ["APPROVED", "REJECTED", "CANCELLED"],
-  APPROVED: ["DISBURSED", "CANCELLED"],
-  REJECTED: [],
-  DISBURSED: [],
-  CANCELLED: [],
-};
+import { ADMIN_FILE_BASE_URL } from "../../config/api";
 
 const STATUS_TONE = {
-  PRE_APPLICATION: "gray",
-  SUBMITTED: "blue",
-  PENDING: "amber",
-  UNDER_REVIEW: "blue",
+  NEW: "amber",
+  CONTACTED: "blue",
+  KYC_SENT: "blue",
+  KYC_REJECTED: "red",
   APPROVED: "green",
-  REJECTED: "red",
-  DISBURSED: "green",
-  CANCELLED: "gray",
+  QUALIFIED: "green",
+  CLOSED: "gray",
 };
 
-const QUEUE_CONFIG = {
-  precheck: {
-    label: "Pre-Applications",
-    statuses: ["PRE_APPLICATION"],
-    description: "Applicants who need profile/KYC completion before underwriting.",
-  },
-  applications: {
-    label: "Applications",
-    statuses: [
-      "SUBMITTED",
-      "PENDING",
-      "UNDER_REVIEW",
-      "APPROVED",
-      "REJECTED",
-      "DISBURSED",
-      "CANCELLED",
-    ],
-    description: "Underwriting and decision queue for ready applications.",
-  },
+const SIMPLE_TABS = [
+  { value: "ALL", label: "All" },
+  { value: "NEW", label: "New" },
+  { value: "CONTACTED", label: "Pending" },
+  { value: "KYC_SENT", label: "Needs KYC" },
+  { value: "APPROVED", label: "Approved" },
+  { value: "KYC_REJECTED", label: "Rejected" },
+  { value: "CLOSED", label: "Closed" },
+];
+
+const KYC_TONE = {
+  not_started: "gray",
+  pending: "amber",
+  verified: "green",
+  rejected: "red",
 };
 
-const PRECHECK_REASON_LABEL = {
-  PROFILE_INCOMPLETE: "Profile incomplete",
-  KYC_PENDING: "KYC pending",
-  KYC_REJECTED: "KYC rejected",
+const HUMAN_STATUS = {
+  NEW: "New",
+  CONTACTED: "Pending",
+  KYC_SENT: "Needs KYC",
+  KYC_REJECTED: "KYC Rejected",
+  APPROVED: "Approved",
+  QUALIFIED: "Approved",
+  CLOSED: "Closed",
 };
 
+const HUMAN_KYC = {
+  not_started: "Not Started",
+  pending: "Pending",
+  verified: "Verified",
+  rejected: "Rejected",
+};
 
 const formatDate = (value) => {
   if (!value) return "-";
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "-";
-  return d.toLocaleString();
-};
-
-const money = (value) => {
-  const n = Number(value || 0);
-  return `MWK ${n.toLocaleString()}`;
-};
-
-const getItemId = (item) => item?._id || item?.id || "";
-
-const STATUS_ACTION_LABEL = {
-  SUBMITTED: "Submit Application",
-  UNDER_REVIEW: "Move to Under Review",
-  APPROVED: "Approve Loan",
-  REJECTED: "Reject Application",
-  CANCELLED: "Cancel Application",
-  DISBURSED: "Mark as Disbursed",
+  return Number.isNaN(d.getTime()) ? "-" : d.toLocaleString();
 };
 
 export default function LoanApplication() {
+  const navigate = useNavigate();
   const toast = useToast();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [items, setItems] = useState([]);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 20,
-    total: 0,
-    totalPages: 1,
-  });
+  const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  const [filters, setFilters] = useState({
-    queue: searchParams.get("queue") || "applications",
-    status: searchParams.get("status") || "",
-    q: searchParams.get("q") || "",
-    sortBy: searchParams.get("sortBy") || "createdAt",
-    sortOrder: searchParams.get("sortOrder") || "desc",
-    page: Number(searchParams.get("page") || 1),
-    limit: Number(searchParams.get("limit") || 20),
-    from: searchParams.get("from") || "",
-    to: searchParams.get("to") || "",
+  const [q, setQ] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [status, setStatus] = useState("ALL");
+  const [brokenAvatars, setBrokenAvatars] = useState({});
+  const [counts, setCounts] = useState({
+    ALL: 0,
+    NEW: 0,
+    CONTACTED: 0,
+    KYC_SENT: 0,
+    APPROVED: 0,
+    KYC_REJECTED: 0,
+    CLOSED: 0,
   });
+  const fetchIdRef = useRef(0);
 
-  const [selectedId, setSelectedId] = useState("");
-  const [selected, setSelected] = useState(null);
-  const [selectedLoading, setSelectedLoading] = useState(false);
-  const [decision, setDecision] = useState({
-    status: "",
-    note: "",
-    reasonCode: "",
-    disbursementReference: "",
-    disbursedAmount: "",
-    disbursedAt: "",
-  });
-  const [decisionLoading, setDecisionLoading] = useState(false);
+  const resolveAssetUrl = (fileUrl = "") => {
+    if (!fileUrl) return "";
+    if (fileUrl.startsWith("http")) return fileUrl;
+    return `${ADMIN_FILE_BASE_URL}${fileUrl.startsWith("/") ? fileUrl : `/${fileUrl}`}`;
+  };
 
-  const selectedStatus = selected?.status || "";
-  const activeQueue = QUEUE_CONFIG[filters.queue] ? filters.queue : "applications";
-  const statusOptions = QUEUE_CONFIG[activeQueue].statuses;
-  const isPrecheckQueue = activeQueue === "precheck";
-  const allowedNextStatuses = useMemo(
-    () => STATUS_TRANSITIONS[selectedStatus] || [],
-    [selectedStatus]
-  );
-
-  const fetchList = async () => {
+  const fetchList = async (page = pagination.page) => {
+    const currentFetchId = ++fetchIdRef.current;
     setLoading(true);
     setError("");
+    setItems([]);
+    setPagination((prev) => ({ ...prev, page, total: 0, totalPages: 1 }));
     try {
-      const params = { ...filters, queue: activeQueue };
-      if (!filters.status) {
-        params.status = QUEUE_CONFIG[activeQueue].statuses.join(",");
+      const data = await inquiriesApi.list({ page, limit: 20, q: debouncedQuery, status });
+      if (currentFetchId !== fetchIdRef.current) return;
+      setItems(data?.items || []);
+      setPagination(data?.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 });
+    } catch (err) {
+      if (currentFetchId !== fetchIdRef.current) return;
+      const msg = err?.response?.data?.message || "Failed to load loan inquiries.";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      if (currentFetchId === fetchIdRef.current) {
+        setLoading(false);
       }
-      const res = await loanApplicationsApi.list(params);
-      setItems(res?.items || []);
-      setPagination(
-        res?.pagination || {
-          page: 1,
-          limit: filters.limit,
-          total: 0,
-          totalPages: 1,
-        }
+    }
+  };
+
+  const fetchCounts = async () => {
+    try {
+      const statuses = ["ALL", "NEW", "CONTACTED", "KYC_SENT", "APPROVED", "KYC_REJECTED", "CLOSED"];
+      const responses = await Promise.all(
+        statuses.map((value) =>
+          inquiriesApi.list({
+            status: value,
+            page: 1,
+            limit: 1,
+          })
+        )
       );
-    } catch (err) {
-      const msg = err?.response?.data?.message || "Failed to load applications.";
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setLoading(false);
+
+      const nextCounts = statuses.reduce((acc, value, index) => {
+        acc[value] = Number(responses[index]?.pagination?.total || 0);
+        return acc;
+      }, {});
+
+      setCounts((prev) => ({ ...prev, ...nextCounts }));
+    } catch {
+      // counts are secondary UI data; keep the page usable even if they fail
     }
   };
 
   useEffect(() => {
-    fetchList();
-  }, [
-    filters.page,
-    filters.limit,
-    filters.queue,
-    filters.status,
-    filters.q,
-    filters.sortBy,
-    filters.sortOrder,
-    filters.from,
-    filters.to,
-  ]);
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(q);
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+  }, [q]);
 
   useEffect(() => {
-    setFilters((prev) => ({
-      ...prev,
-      queue: searchParams.get("queue") || "applications",
-      status: searchParams.get("status") || "",
-      q: searchParams.get("q") || "",
-      sortBy: searchParams.get("sortBy") || "createdAt",
-      sortOrder: searchParams.get("sortOrder") || "desc",
-      page: Number(searchParams.get("page") || 1),
-      limit: Number(searchParams.get("limit") || 20),
-      from: searchParams.get("from") || "",
-      to: searchParams.get("to") || "",
-    }));
-  }, [searchParams]);
+    fetchList(1);
+  }, [debouncedQuery, status]);
 
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (filters.queue && filters.queue !== "applications") params.set("queue", filters.queue);
-    if (filters.status) params.set("status", filters.status);
-    if (filters.q) params.set("q", filters.q);
-    if (filters.sortBy && filters.sortBy !== "createdAt") params.set("sortBy", filters.sortBy);
-    if (filters.sortOrder && filters.sortOrder !== "desc") params.set("sortOrder", filters.sortOrder);
-    if (filters.page > 1) params.set("page", String(filters.page));
-    if (filters.limit !== 20) params.set("limit", String(filters.limit));
-    if (filters.from) params.set("from", filters.from);
-    if (filters.to) params.set("to", filters.to);
-    setSearchParams(params, { replace: true });
-  }, [filters, setSearchParams]);
+    fetchCounts();
+  }, []);
 
-  const openDetails = async (id) => {
-    if (!id) return;
-    setSelectedId(id);
-    setSelected(null);
-    setDecision({
-      status: "",
-      note: "",
-      reasonCode: "",
-      disbursementReference: "",
-      disbursedAmount: "",
-      disbursedAt: "",
-    });
-    setSelectedLoading(true);
-    try {
-      const doc = await loanApplicationsApi.getById(id);
-      setSelected(doc);
-    } catch (err) {
-      const msg = err?.response?.data?.message || "Failed to load application details.";
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setSelectedLoading(false);
-    }
+  const openDetails = (item) => {
+    navigate(`/admin/applications/${item._id}`);
   };
-
-  const closeDetails = () => {
-    setSelectedId("");
-    setSelected(null);
-    setDecision({
-      status: "",
-      note: "",
-      reasonCode: "",
-      disbursementReference: "",
-      disbursedAmount: "",
-      disbursedAt: "",
-    });
-  };
-
-  const submitDecision = async () => {
-    if (!selectedId || !decision.status) return;
-    setDecisionLoading(true);
-    setError("");
-    try {
-      const payload = {
-        status: decision.status,
-        note: decision.note.trim(),
-        reasonCode: decision.reasonCode.trim().toUpperCase(),
-      };
-      if (decision.status === "DISBURSED") {
-        payload.disbursementReference = decision.disbursementReference.trim();
-        payload.disbursedAmount = Number(decision.disbursedAmount);
-        payload.disbursedAt = decision.disbursedAt
-          ? new Date(decision.disbursedAt).toISOString()
-          : undefined;
-      }
-      await loanApplicationsApi.updateStatus(selectedId, payload);
-      await openDetails(selectedId);
-      await fetchList();
-      toast.success("Application status updated successfully.");
-      setDecision((prev) => ({
-        ...prev,
-        note: "",
-        reasonCode: "",
-        disbursementReference: "",
-        disbursedAmount: "",
-        disbursedAt: "",
-      }));
-    } catch (err) {
-      const msg = err?.response?.data?.message || "Failed to update status.";
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setDecisionLoading(false);
-    }
-  };
-
-  const canSubmitDecision = useMemo(() => {
-    if (!decision.status) return false;
-    if (!allowedNextStatuses.includes(decision.status)) return false;
-    if (decision.status === selectedStatus) return false;
-    if (
-      (decision.status === "REJECTED" || decision.status === "CANCELLED") &&
-      !decision.reasonCode.trim()
-    ) {
-      return false;
-    }
-    if (decision.status === "DISBURSED") {
-      if (!decision.disbursementReference.trim()) return false;
-      if (!Number.isFinite(Number(decision.disbursedAmount)) || Number(decision.disbursedAmount) <= 0) {
-        return false;
-      }
-      if (Number(decision.disbursedAmount) > Number(selected?.requestedAmount || 0)) {
-        return false;
-      }
-      if (!decision.disbursedAt) return false;
-    }
-    return true;
-  }, [
-    decision.status,
-    decision.reasonCode,
-    decision.disbursementReference,
-    decision.disbursedAmount,
-    decision.disbursedAt,
-    allowedNextStatuses,
-    selectedStatus,
-  ]);
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Loan Applications</h1>
-          <p className="text-sm text-slate-500">
-            Review, approve, reject and track all incoming applications.
-          </p>
-        </div>
-      </div>
-
-      <div className="rounded-xl border bg-white p-2">
-        <div className="grid gap-2 md:grid-cols-2">
-          {Object.entries(QUEUE_CONFIG).map(([key, queue]) => {
-            const active = key === activeQueue;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() =>
-                  setFilters((p) => ({
-                    ...p,
-                    queue: key,
-                    status: "",
-                    page: 1,
-                  }))
-                }
-                className={`rounded-lg border px-3 py-2 text-left transition ${
-                  active
-                    ? "border-slate-900 bg-slate-900 text-white"
-                    : "border-slate-200 bg-white hover:border-slate-300"
-                }`}
-              >
-                <p className="text-sm font-semibold">{queue.label}</p>
-                <p className={`text-xs ${active ? "text-slate-200" : "text-slate-500"}`}>
-                  {queue.description}
-                </p>
-              </button>
-            );
-          })}
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold">Loan Inquiries</h1>
+        <p className="text-sm text-slate-500">
+          Review customer requests in a simple card view and open full details when needed.
+        </p>
       </div>
 
       {error ? (
@@ -351,160 +166,135 @@ export default function LoanApplication() {
         </div>
       ) : null}
 
-      <div className="rounded-xl border bg-white p-4">
-        <div className="grid gap-3 md:grid-cols-7">
+      <div className="rounded-xl border bg-white p-4 space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {SIMPLE_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => setStatus(tab.value)}
+              className={[
+                "rounded-full border px-4 py-2 text-sm font-semibold transition",
+                status === tab.value
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+              ].join(" ")}
+            >
+              <span>{tab.label}</span>
+              <span
+                className={[
+                  "ml-2 inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                  status === tab.value ? "bg-white/15 text-white" : "bg-slate-100 text-slate-700",
+                ].join(" ")}
+              >
+                {counts[tab.value] ?? 0}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
           <input
             className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
-            placeholder="Search name / phone / email / product"
-            value={filters.q}
-            onChange={(e) => setFilters((p) => ({ ...p, q: e.target.value, page: 1 }))}
+            placeholder="Search name / phone / email / loan type"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
           />
-
-          <select
-            className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
-            value={filters.status}
-            onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value, page: 1 }))}
-          >
-            <option value="">All Status ({QUEUE_CONFIG[activeQueue].label})</option>
-            {statusOptions.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-
-          <select
-            className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
-            value={filters.sortBy}
-            onChange={(e) => setFilters((p) => ({ ...p, sortBy: e.target.value }))}
-          >
-            <option value="createdAt">Sort: Created</option>
-            <option value="requestedAmount">Sort: Amount</option>
-            <option value="status">Sort: Status</option>
-            <option value="updatedAt">Sort: Updated</option>
-          </select>
-
-          <select
-            className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
-            value={filters.sortOrder}
-            onChange={(e) => setFilters((p) => ({ ...p, sortOrder: e.target.value }))}
-          >
-            <option value="desc">Desc</option>
-            <option value="asc">Asc</option>
-          </select>
-
-          <input
-            className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
-            type="date"
-            value={filters.from}
-            onChange={(e) => setFilters((p) => ({ ...p, from: e.target.value, page: 1 }))}
-          />
-
-          <input
-            className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
-            type="date"
-            value={filters.to}
-            onChange={(e) => setFilters((p) => ({ ...p, to: e.target.value, page: 1 }))}
-          />
-
           <Button
             variant="outline"
-            onClick={() =>
-              setFilters({
-                queue: activeQueue,
-                status: "",
-                q: "",
-                sortBy: "createdAt",
-                sortOrder: "desc",
-                page: 1,
-                limit: 20,
-                from: "",
-                to: "",
-              })
-            }
+            onClick={() => {
+              fetchList(1);
+              fetchCounts();
+            }}
           >
-            Reset Filters
+            Refresh
           </Button>
         </div>
       </div>
 
-      <div className="rounded-xl border bg-white overflow-hidden">
-        <div className="overflow-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-slate-600">
-              <tr>
-                <th className="px-4 py-3 text-left">Applicant</th>
-                <th className="px-4 py-3 text-left">Product</th>
-                <th className="px-4 py-3 text-left">Amount</th>
-                <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-left">{isPrecheckQueue ? "Precheck" : "SLA"}</th>
-                <th className="px-4 py-3 text-left">Created</th>
-                <th className="px-4 py-3 text-left">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td className="px-4 py-6 text-slate-500" colSpan={7}>
-                    Loading applications...
-                  </td>
-                </tr>
-              ) : items.length === 0 ? (
-                <tr>
-                  <td className="px-4 py-6 text-slate-500" colSpan={7}>
-                    No applications found.
-                  </td>
-                </tr>
-              ) : (
-                items.map((item) => (
-                  <tr key={getItemId(item)} className="border-t border-slate-100">
-                    <td className="px-4 py-3">
-                      <p className="font-semibold text-slate-900">{item.fullName}</p>
-                      <p className="text-xs text-slate-500">{item.phone}</p>
-                    </td>
-                    <td className="px-4 py-3">{item.productSlug}</td>
-                    <td className="px-4 py-3">{money(item.requestedAmount)}</td>
-                    <td className="px-4 py-3">
-                      <Badge tone={STATUS_TONE[item.status] || "gray"}>{item.status}</Badge>
-                    </td>
-                    <td className="px-4 py-3">
-                      {isPrecheckQueue ? (
-                        <div className="text-xs">
-                          <p className="font-medium text-slate-800">
-                            {PRECHECK_REASON_LABEL[item?.precheckReason] || "Awaiting checks"}
-                          </p>
-                          <p className="text-slate-500">
-                            Profile: {Number(item?.profileSummary?.profileCompletion || 0)}%
-                          </p>
-                          <p className="text-slate-500">
-                            KYC: {item?.profileSummary?.kycStatus || "not_started"}
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="text-xs">
-                          <p>{item?.sla?.ageBucket || "-"}</p>
-                          <p className={item?.sla?.slaBreached ? "text-rose-600" : "text-slate-500"}>
-                            {item?.sla?.slaBreached ? "Breached" : "On time"}
-                          </p>
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">{formatDate(item.createdAt)}</td>
-                    <td className="px-4 py-3">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openDetails(getItemId(item))}
-                      >
-                        Review
-                      </Button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {loading ? (
+          <div className="rounded-xl border bg-white p-6 text-sm text-slate-500">
+            Loading inquiries...
+          </div>
+        ) : items.length === 0 ? (
+          <div className="rounded-xl border bg-white p-6 text-sm text-slate-500">
+            No loan inquiries found.
+          </div>
+        ) : (
+          items.map((item) => (
+            <article
+              key={item._id}
+              className="rounded-2xl border bg-white p-5 shadow-sm transition hover:shadow-md"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <h3 className="text-lg font-semibold text-slate-900">{item.fullName}</h3>
+                  <p className="text-sm text-slate-500">{item.phone}</p>
+                  <p className="text-sm text-slate-500">{item.email || "No email provided"}</p>
+                </div>
+                {item.avatarUrl && !brokenAvatars[item._id] ? (
+                  <img
+                    src={resolveAssetUrl(item.avatarUrl)}
+                    alt={item.fullName || "Customer"}
+                    className="h-11 w-11 rounded-full object-cover border border-slate-200"
+                    onError={() =>
+                      setBrokenAvatars((prev) => ({
+                        ...prev,
+                        [item._id]: true,
+                      }))
+                    }
+                  />
+                ) : (
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-700">
+                    {String(item.fullName || "U").trim().charAt(0).toUpperCase() || "U"}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Loan Type
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-slate-900">
+                    {item.loanProductName || item.loanProductSlug}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Created
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-slate-900">
+                    {formatDate(item.createdAt)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Address
+                </p>
+                <p className="mt-1 text-sm text-slate-700">{item.address || "-"}</p>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Badge tone={STATUS_TONE[item.status] || "gray"}>
+                  {HUMAN_STATUS[item.status] || item.status}
+                </Badge>
+                <Badge tone={KYC_TONE[item.kycStatus] || "gray"}>
+                  KYC: {HUMAN_KYC[item.kycStatus] || item.kycStatus || "Not Started"}
+                </Badge>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button size="sm" onClick={() => openDetails(item)}>
+                  View Details
+                </Button>
+              </div>
+            </article>
+          ))
+        )}
       </div>
 
       <div className="flex items-center justify-between">
@@ -513,264 +303,23 @@ export default function LoanApplication() {
         </p>
         <div className="flex gap-2">
           <Button
-            variant="outline"
             size="sm"
+            variant="outline"
             disabled={pagination.page <= 1}
-            onClick={() => setFilters((p) => ({ ...p, page: Math.max(1, p.page - 1) }))}
+            onClick={() => fetchList(Math.max(1, pagination.page - 1))}
           >
             Previous
           </Button>
           <Button
-            variant="outline"
             size="sm"
+            variant="outline"
             disabled={pagination.page >= pagination.totalPages}
-            onClick={() =>
-              setFilters((p) => ({ ...p, page: Math.min(pagination.totalPages, p.page + 1) }))
-            }
+            onClick={() => fetchList(Math.min(pagination.totalPages, pagination.page + 1))}
           >
             Next
           </Button>
         </div>
       </div>
-
-      {selectedId ? (
-        <div className="rounded-xl border bg-white p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Application Review</h2>
-            <Button variant="outline" size="sm" onClick={closeDetails}>
-              Close
-            </Button>
-          </div>
-
-          {selectedLoading || !selected ? (
-            <p className="text-sm text-slate-500">Loading application details...</p>
-          ) : (
-            <>
-              <div className="grid gap-3 md:grid-cols-4 text-sm">
-                <div className="rounded-lg border p-3">
-                  <p className="text-xs text-slate-500">Applicant</p>
-                  <p className="font-semibold">{selected.fullName}</p>
-                  <p>{selected.phone}</p>
-                  <p>{selected.email || "-"}</p>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-xs text-slate-500">Loan</p>
-                  <p className="font-semibold">{selected.productSlug}</p>
-                  <p>{money(selected.requestedAmount)}</p>
-                  <p>{selected.tenureMonths} months</p>
-                </div>
-                <div className="rounded-lg border p-3">
-                  <p className="text-xs text-slate-500">Current Status</p>
-                  <div className="mt-1">
-                    <Badge tone={STATUS_TONE[selected.status] || "gray"}>
-                      {selected.status}
-                    </Badge>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Created: {formatDate(selected.createdAt)}
-                  </p>
-                  {selected.precheckReason ? (
-                    <p className="mt-2 text-xs text-slate-600">
-                      Precheck:{" "}
-                      {PRECHECK_REASON_LABEL[selected.precheckReason] || selected.precheckReason}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="rounded-lg border p-3">
-                  <p className="text-xs text-slate-500">KYC & Profile</p>
-                  <p className="font-semibold text-slate-900">
-                    Completion: {Number(selected?.applicantProfile?.profileCompletion || 0)}%
-                  </p>
-                  <div className="mt-1">
-                    <Badge
-                      tone={
-                        selected?.applicantProfile?.kycStatus === "verified"
-                          ? "green"
-                          : selected?.applicantProfile?.kycStatus === "rejected"
-                          ? "red"
-                          : selected?.applicantProfile?.kycStatus === "pending"
-                          ? "amber"
-                          : "gray"
-                      }
-                    >
-                      {selected?.applicantProfile?.kycStatus || "not_started"}
-                    </Badge>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Submitted: {formatDate(selected?.applicantProfile?.submittedAt)}
-                  </p>
-                </div>
-              </div>
-
-              <div className="rounded-lg border p-3 space-y-3">
-                <h3 className="text-sm font-semibold">Decision</h3>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <select
-                    className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
-                    value={decision.status}
-                    onChange={(e) =>
-                      setDecision((p) => ({ ...p, status: e.target.value }))
-                    }
-                  >
-                    <option value="">
-                      {allowedNextStatuses.length
-                        ? "Select next status"
-                        : "No transition available"}
-                    </option>
-                    {allowedNextStatuses.map((status) => (
-                      <option key={status} value={status}>
-                        {status}
-                      </option>
-                    ))}
-                  </select>
-
-                  <input
-                    className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
-                    placeholder="Reason code (required for REJECTED/CANCELLED)"
-                    value={decision.reasonCode}
-                    onChange={(e) =>
-                      setDecision((p) => ({ ...p, reasonCode: e.target.value }))
-                    }
-                  />
-
-                  <input
-                    className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
-                    placeholder="Optional note"
-                    value={decision.note}
-                    onChange={(e) =>
-                      setDecision((p) => ({ ...p, note: e.target.value }))
-                    }
-                  />
-                </div>
-                {!allowedNextStatuses.length ? (
-                  <p className="text-xs text-slate-500">
-                    No further transition is allowed from current status ({selectedStatus || "-"}).
-                  </p>
-                ) : null}
-                {allowedNextStatuses.length ? (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Quick Actions
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {allowedNextStatuses.map((status) => (
-                        <button
-                          key={status}
-                          type="button"
-                          onClick={() => setDecision((p) => ({ ...p, status }))}
-                          className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${
-                            decision.status === status
-                              ? "border-slate-900 bg-slate-900 text-white"
-                              : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
-                          }`}
-                        >
-                          {STATUS_ACTION_LABEL[status] || status}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="mt-2 text-xs text-slate-500">
-                      Current stage: <span className="font-medium text-slate-700">{selectedStatus}</span>
-                      {selectedStatus === "SUBMITTED" || selectedStatus === "PENDING"
-                        ? " - move to Under Review before approval."
-                        : ""}
-                    </p>
-                  </div>
-                ) : null}
-                {decision.status === "DISBURSED" ? (
-                  <div className="grid gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 md:grid-cols-3">
-                    <input
-                      className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
-                      placeholder="Transfer reference (required)"
-                      value={decision.disbursementReference}
-                      onChange={(e) =>
-                        setDecision((p) => ({ ...p, disbursementReference: e.target.value }))
-                      }
-                    />
-                    <input
-                      className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
-                      type="number"
-                      min="0"
-                      max={Number(selected?.requestedAmount || 0)}
-                      placeholder="Disbursed amount (MWK)"
-                      value={decision.disbursedAmount}
-                      onChange={(e) =>
-                        setDecision((p) => ({ ...p, disbursedAmount: e.target.value }))
-                      }
-                    />
-                    <input
-                      className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
-                      type="datetime-local"
-                      value={decision.disbursedAt}
-                      onChange={(e) =>
-                        setDecision((p) => ({ ...p, disbursedAt: e.target.value }))
-                      }
-                    />
-                    {Number(decision.disbursedAmount || 0) > Number(selected?.requestedAmount || 0) ? (
-                      <p className="text-xs text-rose-700 md:col-span-3">
-                        Disbursed amount cannot exceed requested amount ({money(selected?.requestedAmount)}).
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-                <div className="flex justify-end">
-                  <Button
-                    disabled={!canSubmitDecision || decisionLoading}
-                    onClick={submitDecision}
-                  >
-                    {decisionLoading ? "Updating..." : "Update Status"}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="rounded-lg border p-3">
-                <h3 className="text-sm font-semibold mb-2">Status History</h3>
-                <div className="space-y-2">
-                  {(selected.statusHistory || []).length === 0 ? (
-                    <p className="text-sm text-slate-500">No status history.</p>
-                  ) : (
-                    (selected.statusHistory || []).slice().reverse().map((row, idx) => (
-                      <div key={`${row.updatedAt}-${idx}`} className="flex flex-wrap items-center gap-2 text-sm">
-                        <Badge tone={STATUS_TONE[row.status] || "gray"}>{row.status}</Badge>
-                        <span className="text-slate-600">{row.note || "-"}</span>
-                        <span className="text-xs text-slate-500">
-                          {row.reasonCode ? `(${row.reasonCode})` : ""}
-                        </span>
-                        <span className="text-xs text-slate-500">{formatDate(row.updatedAt)}</span>
-                        <span className="text-xs text-slate-500">{row.updatedBy || "-"}</span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {selected.disbursement?.reference ? (
-                <div className="rounded-lg border p-3">
-                  <h3 className="text-sm font-semibold mb-2">Disbursement Details</h3>
-                  <div className="grid gap-3 text-sm md:grid-cols-3">
-                    <div>
-                      <p className="text-xs text-slate-500">Reference</p>
-                      <p className="font-semibold text-slate-900">{selected.disbursement.reference}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500">Amount</p>
-                      <p className="font-semibold text-slate-900">{money(selected.disbursement.amount)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500">Disbursed At</p>
-                      <p className="font-semibold text-slate-900">{formatDate(selected.disbursement.disbursedAt)}</p>
-                    </div>
-                    <div className="md:col-span-3">
-                      <p className="text-xs text-slate-500">Note</p>
-                      <p className="text-slate-700">{selected.disbursement.note || "-"}</p>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-            </>
-          )}
-        </div>
-      ) : null}
     </div>
   );
 }

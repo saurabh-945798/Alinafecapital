@@ -22,15 +22,19 @@ const BANK_OPTIONS = [
 export default function ProfileForm({
   profile,
   onSaved,
+  onAvatarSaved,
   setError,
   setSuccess,
   onEmploymentTypeChange,
   documentsComplete = false,
   onCompletionChange,
+  apiBasePath = "/profile/me",
+  submitUrl = "/profile/me/submit",
+  avatarUrl = "/profile/me/avatar",
 }) {
-  const [avatarFile, setAvatarFile] = useState(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [showCongratsModal, setShowCongratsModal] = useState(false);
+  const [showAvatarModal, setShowAvatarModal] = useState(false);
   const prevCompletionRef = useRef(Number(profile?.profileCompletion || 0));
   const [form, setForm] = useState({
     addressLine1: "",
@@ -43,6 +47,10 @@ export default function ProfileForm({
     bankNameOther: "",
     accountNumber: "",
     branchCode: "",
+    reference1Name: "",
+    reference1Phone: "",
+    reference2Name: "",
+    reference2Phone: "",
   });
 
   useEffect(() => {
@@ -61,6 +69,10 @@ export default function ProfileForm({
       bankNameOther: isKnownBank ? "" : existingBankName,
       accountNumber: profile.accountNumber || "",
       branchCode: profile.branchCode || "",
+      reference1Name: profile.reference1Name || "",
+      reference1Phone: profile.reference1Phone || "",
+      reference2Name: profile.reference2Name || "",
+      reference2Phone: profile.reference2Phone || "",
     });
     onEmploymentTypeChange?.(profile.employmentType || "");
   }, [profile, onEmploymentTypeChange]);
@@ -90,7 +102,11 @@ export default function ProfileForm({
       !!resolvedBankName &&
       (form.bankNameOption !== "Other" || !!String(form.bankNameOther || "").trim()) &&
       !!String(form.accountNumber || "").trim() &&
-      !!String(form.branchCode || "").trim();
+      !!String(form.branchCode || "").trim() &&
+      !!String(form.reference1Name || "").trim() &&
+      !!String(form.reference1Phone || "").trim() &&
+      !!String(form.reference2Name || "").trim() &&
+      !!String(form.reference2Phone || "").trim();
 
     onCompletionChange?.(sectionsComplete);
   }, [form, onCompletionChange]);
@@ -119,6 +135,10 @@ export default function ProfileForm({
     }
     if (!String(form.accountNumber || "").trim()) return "Please enter your account number.";
     if (!String(form.branchCode || "").trim()) return "Please enter your branch.";
+    if (!String(form.reference1Name || "").trim()) return "Please enter reference 1 name.";
+    if (!String(form.reference1Phone || "").trim()) return "Please enter reference 1 phone number.";
+    if (!String(form.reference2Name || "").trim()) return "Please enter reference 2 name.";
+    if (!String(form.reference2Phone || "").trim()) return "Please enter reference 2 phone number.";
 
     return "";
   };
@@ -145,7 +165,7 @@ export default function ProfileForm({
     }
 
     try {
-      const response = await api.put("/profile/me", {
+      const response = await api.put(apiBasePath, {
         addressLine1: form.addressLine1,
         city: form.city,
         district: form.district,
@@ -155,6 +175,10 @@ export default function ProfileForm({
         bankName: resolvedBankName,
         accountNumber: form.accountNumber,
         branchCode: form.branchCode,
+        reference1Name: form.reference1Name,
+        reference1Phone: form.reference1Phone,
+        reference2Name: form.reference2Name,
+        reference2Phone: form.reference2Phone,
       });
 
       const savedProfile = response?.data?.item ?? response?.data?.data ?? null;
@@ -162,7 +186,7 @@ export default function ProfileForm({
       const nextCompletion = Number(savedProfile?.profileCompletion || 0);
       if (previousCompletion < 100 && nextCompletion === 100) setShowCongratsModal(true);
 
-      const submitResponse = await api.post("/profile/me/submit");
+      const submitResponse = await api.post(submitUrl);
       const submittedProfile = submitResponse?.data?.item ?? submitResponse?.data?.data ?? savedProfile;
 
       setSuccess("Profile submitted successfully.");
@@ -176,21 +200,21 @@ export default function ProfileForm({
     }
   };
 
-  const uploadAvatar = async () => {
+  const uploadAvatar = async (file) => {
     setError("");
     setSuccess("");
 
-    if (!avatarFile) {
+    if (!file) {
       setError("Please choose an image file first.");
       return;
     }
 
     const allowed = new Set(["image/jpeg", "image/png", "image/webp"]);
-    if (!allowed.has(avatarFile.type)) {
+    if (!allowed.has(file.type)) {
       setError("Only JPG, PNG, or WEBP images are allowed.");
       return;
     }
-    if (avatarFile.size > 2 * 1024 * 1024) {
+    if (file.size > 2 * 1024 * 1024) {
       setError("Image must be less than 2MB.");
       return;
     }
@@ -198,11 +222,12 @@ export default function ProfileForm({
     setAvatarUploading(true);
     try {
       const payload = new FormData();
-      payload.append("file", avatarFile);
-      await api.post("/profile/me/avatar", payload);
-      setAvatarFile(null);
+      payload.append("file", file);
+      await api.post(avatarUrl, payload);
       setSuccess("Profile photo updated.");
-      onSaved();
+      setShowAvatarModal(true);
+      onAvatarSaved?.();
+      window.setTimeout(() => setShowAvatarModal(false), 2200);
     } catch (err) {
       if (err?.response?.status === 401) {
         setError("Session expired. Please login again.");
@@ -215,12 +240,12 @@ export default function ProfileForm({
   };
 
   return (
-    <form id="profileForm" onSubmit={save} className="space-y-6">
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
+    <form id="profileForm" onSubmit={save} className="space-y-5 sm:space-y-6">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
         <h3 className="text-base font-semibold text-slate-800">Profile Photo (Optional)</h3>
         <p className="mt-1 text-sm text-slate-500">JPG, PNG or WEBP. Max size 2MB.</p>
         <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="h-20 w-20 overflow-hidden rounded-full border border-slate-300 bg-slate-100">
+          <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full border border-slate-300 bg-slate-100">
             {profile?.avatarUrl ? (
               <img
                 src={resolveAssetUrl(profile.avatarUrl)}
@@ -241,33 +266,34 @@ export default function ProfileForm({
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp"
-              onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+              onChange={(e) => {
+                const nextFile = e.target.files?.[0] || null;
+                if (nextFile) {
+                  uploadAvatar(nextFile);
+                }
+                e.target.value = "";
+              }}
               className="block w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
             />
-            <button
-              type="button"
-              onClick={uploadAvatar}
-              disabled={!avatarFile || avatarUploading}
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
-            >
+            <div className="text-xs text-slate-500">
               {avatarUploading
-                ? "Uploading..."
+                ? "Uploading image..."
                 : profile?.avatarUrl
-                ? "Change Photo"
-                : "Upload Photo"}
-            </button>
+                ? "Choose a new image to change photo instantly."
+                : "Choose an image to upload instantly."}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-4 md:p-5">
+      <div className="rounded-2xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-4 sm:p-5">
         <h2 className="text-lg font-semibold text-slate-800">Personal & Address Information</h2>
         <p className="mt-1 text-sm text-slate-500">
           Provide accurate details to improve your approval speed.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <label className="space-y-1.5">
           <span className="text-sm font-medium text-slate-700">Address Line</span>
           <input
@@ -311,9 +337,9 @@ export default function ProfileForm({
         </label>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
         <h3 className="text-base font-semibold text-slate-800">Employment Details</h3>
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <label className="space-y-1.5">
             <span className="text-sm font-medium text-slate-700">Employment Type</span>
             <select
@@ -349,13 +375,13 @@ export default function ProfileForm({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 md:p-5">
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
         <h3 className="text-base font-semibold text-slate-800">Bank Details (For Disbursement)</h3>
         <p className="mt-1 text-sm text-slate-500">
           Add once here. We use these details when your loan is approved.
         </p>
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <label className="space-y-1.5 md:col-span-2">
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <label className="space-y-1.5 lg:col-span-2">
             <span className="text-sm font-medium text-slate-700">Bank Name</span>
             <select
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
@@ -374,7 +400,7 @@ export default function ProfileForm({
           </label>
 
           {form.bankNameOption === "Other" ? (
-            <label className="space-y-1.5 md:col-span-2">
+            <label className="space-y-1.5 lg:col-span-2">
               <span className="text-sm font-medium text-slate-700">Other Bank Name</span>
               <input
                 className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
@@ -410,8 +436,60 @@ export default function ProfileForm({
         </div>
       </div>
 
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
         Keep your profile details up to date. This helps us verify your account faster.
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+        <h3 className="text-base font-semibold text-slate-800">References</h3>
+        <p className="mt-1 text-sm text-slate-500">
+          Add two people we can contact if needed.
+        </p>
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <label className="space-y-1.5">
+            <span className="text-sm font-medium text-slate-700">Reference 1 Name</span>
+            <input
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+              placeholder="Enter first reference name"
+              value={form.reference1Name}
+              onChange={(e) => setForm((p) => ({ ...p, reference1Name: e.target.value }))}
+              required
+            />
+          </label>
+
+          <label className="space-y-1.5">
+            <span className="text-sm font-medium text-slate-700">Reference 1 Phone</span>
+            <input
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+              placeholder="Enter first reference phone"
+              value={form.reference1Phone}
+              onChange={(e) => setForm((p) => ({ ...p, reference1Phone: e.target.value }))}
+              required
+            />
+          </label>
+
+          <label className="space-y-1.5">
+            <span className="text-sm font-medium text-slate-700">Reference 2 Name</span>
+            <input
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+              placeholder="Enter second reference name"
+              value={form.reference2Name}
+              onChange={(e) => setForm((p) => ({ ...p, reference2Name: e.target.value }))}
+              required
+            />
+          </label>
+
+          <label className="space-y-1.5">
+            <span className="text-sm font-medium text-slate-700">Reference 2 Phone</span>
+            <input
+              className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+              placeholder="Enter second reference phone"
+              value={form.reference2Phone}
+              onChange={(e) => setForm((p) => ({ ...p, reference2Phone: e.target.value }))}
+              required
+            />
+          </label>
+        </div>
       </div>
 
       <button className="sr-only" type="submit">
@@ -445,6 +523,21 @@ export default function ProfileForm({
                 Continue
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {showAvatarModal ? (
+        <div className="fixed inset-0 z-[85] grid place-items-center px-4">
+          <div className="absolute inset-0 bg-black/45" />
+          <div className="relative z-10 w-full max-w-sm rounded-2xl border border-emerald-200 bg-white p-6 text-center shadow-2xl">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+              <span className="text-2xl font-bold">+</span>
+            </div>
+            <h3 className="mt-4 text-xl font-semibold text-slate-900">Image Uploaded</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Your profile photo was uploaded successfully.
+            </p>
           </div>
         </div>
       ) : null}

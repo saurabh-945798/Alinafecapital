@@ -82,6 +82,10 @@ export async function upsertMyProfile(req, res, next) {
       bankName: req.body.bankName,
       accountNumber: req.body.accountNumber,
       branchCode: req.body.branchCode,
+      reference1Name: req.body.reference1Name,
+      reference1Phone: req.body.reference1Phone,
+      reference2Name: req.body.reference2Name,
+      reference2Phone: req.body.reference2Phone,
     };
 
     Object.keys(update).forEach((k) => update[k] === undefined && delete update[k]);

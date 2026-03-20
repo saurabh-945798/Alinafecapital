@@ -91,7 +91,7 @@ export default function DashboardLayout() {
             nextRequiredAction={gate?.blockReason || "Review your account tasks"}
             onLogout={() => {
               logout();
-              navigate("/login");
+              navigate("/");
             }}
             activeSection={activeSection}
             onGoToSection={handleGoToSection}

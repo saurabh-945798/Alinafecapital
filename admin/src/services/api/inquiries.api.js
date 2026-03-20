@@ -8,9 +8,13 @@ export const inquiriesApi = {
     return normalize(data);
   },
 
+  async getById(id) {
+    const { data } = await api.get(`/admin/inquiries/${id}`);
+    return normalize(data);
+  },
+
   async update(id, payload) {
     const { data } = await api.patch(`/admin/inquiries/${id}`, payload);
     return normalize(data);
   },
 };
-

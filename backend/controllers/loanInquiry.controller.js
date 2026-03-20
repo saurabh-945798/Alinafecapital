@@ -1,14 +1,28 @@
 import { z } from "zod";
 import mongoose from "mongoose";
+import crypto from "crypto";
+import fs from "fs";
 import { LoanInquiry } from "../models/LoanInquiry.model.js";
 import { LoanProduct } from "../models/LoanProduct.model.js";
 import { normalizePhone } from "../utils/normalize.js";
+import { calculateProfileCompletion } from "../utils/profileCompletion.js";
+
+const PUBLIC_LOAN_TYPES = [
+  { slug: "home-loan", name: "Home Loan" },
+  { slug: "education-loan", name: "Education Loan" },
+  { slug: "vehicle-loan", name: "Vehicle Loan" },
+  { slug: "business-loan", name: "Business Loan" },
+  { slug: "agriculture-loan", name: "Agriculture Loan" },
+  { slug: "personal-loan", name: "Personal Loan" },
+];
 
 const publicCreateSchema = z.object({
   fullName: z.string().trim().min(2),
   phone: z.string().trim().min(6),
   email: z.string().trim().email().optional().or(z.literal("")),
+  address: z.string().trim().min(5),
   loanProductSlug: z.string().trim().min(2),
+  loanProductName: z.string().trim().min(2).optional(),
   monthlyIncome: z.coerce.number().min(0).optional(),
   requestedAmount: z.coerce.number().min(0).optional(),
   preferredTenureMonths: z.coerce.number().int().min(1).optional(),
@@ -23,9 +37,61 @@ const adminListSchema = z.object({
 });
 
 const adminUpdateSchema = z.object({
-  status: z.enum(["NEW", "CONTACTED", "QUALIFIED", "CLOSED"]).optional(),
+  status: z.enum(["NEW", "CONTACTED", "KYC_SENT", "KYC_REJECTED", "APPROVED", "CLOSED", "QUALIFIED"]).optional(),
   adminNote: z.string().trim().max(1000).optional(),
 });
+
+const publicProfileUpdateSchema = z.object({
+  addressLine1: z.string().trim().min(3),
+  city: z.string().trim().min(2),
+  district: z.string().trim().min(2),
+  country: z.string().trim().default("Malawi"),
+  employmentType: z.string().trim().min(2),
+  monthlyIncome: z.coerce.number().gt(0),
+  bankName: z.string().trim().min(2),
+  accountNumber: z.string().trim().min(3),
+  branchCode: z.string().trim().min(2),
+  reference1Name: z.string().trim().min(2),
+  reference1Phone: z.string().trim().min(6),
+  reference2Name: z.string().trim().min(2),
+  reference2Phone: z.string().trim().min(6),
+});
+
+const ALLOWED_DOC_TYPES = new Set([
+  "national_id",
+  "bank_statement_3_months",
+  "payslip_or_business_proof",
+]);
+
+const toPublicFileUrl = (filePath = "") => {
+  const normalized = String(filePath).replace(/\\/g, "/");
+  const idx = normalized.indexOf("uploads/");
+  const relative = idx >= 0 ? normalized.slice(idx) : normalized;
+  return `/${relative}`;
+};
+
+const toPublicInquiryProfile = (inquiry) => {
+  if (!inquiry) return null;
+  const obj = inquiry.toObject ? inquiry.toObject() : inquiry;
+  const { avatarPath, publicAccessToken, ...safe } = obj;
+
+  return {
+    ...safe,
+    documents: (obj.documents || []).map((d) => ({
+      type: d.type,
+      fileUrl: d.fileUrl,
+      mime: d.mime,
+      uploadedAt: d.uploadedAt,
+    })),
+  };
+};
+
+const syncInquiryCompletion = (inquiry) => {
+  inquiry.profileCompletion = calculateProfileCompletion(inquiry);
+  return inquiry.profileCompletion;
+};
+
+const generatePublicAccessToken = () => crypto.randomBytes(24).toString("hex");
 
 export const loanInquiryController = {
   createPublic: async (req, res) => {
@@ -41,11 +107,12 @@ export const loanInquiryController = {
 
     const payload = parsed.data;
     const loanProductSlug = String(payload.loanProductSlug || "").trim().toLowerCase();
+    const publicLoanType = PUBLIC_LOAN_TYPES.find((item) => item.slug === loanProductSlug);
     const loanProduct = await LoanProduct.findOne({ slug: loanProductSlug, status: "active" })
-      .select("_id slug")
+      .select("_id slug name")
       .lean();
 
-    if (!loanProduct) {
+    if (!loanProduct && !publicLoanType) {
       return res.status(400).json({
         success: false,
         message: "Selected loan product is not available",
@@ -57,13 +124,21 @@ export const loanInquiryController = {
       fullName: payload.fullName,
       phone: normalizePhone(payload.phone),
       email: payload.email || "",
-      loanProductSlug: loanProduct.slug,
+      address: payload.address,
+      addressLine1: payload.address,
+      loanProductSlug: loanProduct?.slug || publicLoanType.slug,
+      loanProductName:
+        loanProduct?.name ||
+        payload.loanProductName ||
+        publicLoanType?.name ||
+        loanProductSlug,
       monthlyIncome: payload.monthlyIncome,
       requestedAmount: payload.requestedAmount,
       preferredTenureMonths: payload.preferredTenureMonths,
       notes: payload.notes || "",
       source: "website",
       status: "NEW",
+      publicAccessToken: generatePublicAccessToken(),
     });
 
     return res.status(201).json({
@@ -72,6 +147,162 @@ export const loanInquiryController = {
         id: inquiry._id,
         message: "Inquiry submitted successfully",
       },
+    });
+  },
+
+  publicProfile: async (req, res) => {
+    const inquiry = req.inquiry;
+
+    if (inquiry.avatarPath && !fs.existsSync(inquiry.avatarPath)) {
+      inquiry.avatarPath = "";
+      inquiry.avatarUrl = "";
+    }
+
+    syncInquiryCompletion(inquiry);
+    if (inquiry.isModified("avatarPath") || inquiry.isModified("avatarUrl") || inquiry.isModified("profileCompletion")) {
+      await inquiry.save({ validateBeforeSave: false });
+    }
+
+    return res.json({
+      success: true,
+      data: toPublicInquiryProfile(inquiry),
+    });
+  },
+
+  publicProfileUpdate: async (req, res) => {
+    const parsed = publicProfileUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        code: "VALIDATION_ERROR",
+        details: parsed.error.issues,
+      });
+    }
+
+    const inquiry = req.inquiry;
+    const payload = parsed.data;
+
+    inquiry.addressLine1 = payload.addressLine1;
+    inquiry.address = payload.addressLine1;
+    inquiry.city = payload.city;
+    inquiry.district = payload.district;
+    inquiry.country = payload.country || "Malawi";
+    inquiry.employmentType = payload.employmentType;
+    inquiry.monthlyIncome = Number(payload.monthlyIncome);
+    inquiry.bankName = payload.bankName;
+    inquiry.accountNumber = payload.accountNumber;
+    inquiry.branchCode = payload.branchCode;
+    inquiry.reference1Name = payload.reference1Name;
+    inquiry.reference1Phone = payload.reference1Phone;
+    inquiry.reference2Name = payload.reference2Name;
+    inquiry.reference2Phone = payload.reference2Phone;
+
+    syncInquiryCompletion(inquiry);
+    await inquiry.save();
+
+    return res.json({
+      success: true,
+      data: toPublicInquiryProfile(inquiry),
+    });
+  },
+
+  publicDocUpload: async (req, res) => {
+    const inquiry = req.inquiry;
+    const type = String(req.body.type || "").trim();
+
+    if (!ALLOWED_DOC_TYPES.has(type)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Document type must be national_id, bank_statement_3_months, or payslip_or_business_proof",
+        code: "VALIDATION_ERROR",
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "File is required",
+        code: "VALIDATION_ERROR",
+      });
+    }
+
+    inquiry.documents = (inquiry.documents || []).filter((d) => d.type !== type);
+    inquiry.documents.push({
+      type,
+      fileUrl: toPublicFileUrl(req.file.path),
+      filePath: req.file.path,
+      mime: req.file.mimetype,
+      uploadedAt: new Date(),
+    });
+
+    syncInquiryCompletion(inquiry);
+    await inquiry.save();
+
+    return res.json({
+      success: true,
+      data: toPublicInquiryProfile(inquiry),
+    });
+  },
+
+  publicAvatarUpload: async (req, res) => {
+    const inquiry = req.inquiry;
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Avatar file is required",
+        code: "VALIDATION_ERROR",
+      });
+    }
+
+    const previousAvatarPath = inquiry.avatarPath || "";
+    inquiry.avatarPath = req.file.path;
+    inquiry.avatarUrl = toPublicFileUrl(req.file.path);
+    syncInquiryCompletion(inquiry);
+    await inquiry.save();
+
+    if (previousAvatarPath && previousAvatarPath !== inquiry.avatarPath && fs.existsSync(previousAvatarPath)) {
+      try {
+        fs.unlinkSync(previousAvatarPath);
+      } catch {
+        // ignore cleanup failure
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: toPublicInquiryProfile(inquiry),
+    });
+  },
+
+  publicSubmitKyc: async (req, res) => {
+    const inquiry = req.inquiry;
+    syncInquiryCompletion(inquiry);
+
+    if (inquiry.profileCompletion !== 100) {
+      await inquiry.save();
+      return res.status(400).json({
+        success: false,
+        message: "Profile must be 100% complete before submission",
+        code: "PROFILE_INCOMPLETE",
+      });
+    }
+
+    inquiry.kycStatus = "pending";
+    inquiry.submittedAt = new Date();
+    inquiry.verifiedAt = null;
+    inquiry.rejectedAt = null;
+    if (inquiry.status === "NEW" || inquiry.status === "CONTACTED") {
+      inquiry.status = "KYC_SENT";
+      inquiry.kycSentAt = new Date();
+    }
+    await inquiry.save();
+
+    return res.json({
+      success: true,
+      data: toPublicInquiryProfile(inquiry),
     });
   },
 
@@ -108,10 +339,22 @@ export const loanInquiryController = {
       LoanInquiry.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
     ]);
 
+    const patchedItems = await Promise.all(
+      items.map(async (item) => {
+        if (item.publicAccessToken) return item;
+        const nextToken = generatePublicAccessToken();
+        await LoanInquiry.updateOne(
+          { _id: item._id, publicAccessToken: { $exists: false } },
+          { $set: { publicAccessToken: nextToken } }
+        );
+        return { ...item, publicAccessToken: nextToken };
+      })
+    );
+
     return res.json({
       success: true,
       data: {
-        items,
+        items: patchedItems,
         pagination: {
           page,
           limit,
@@ -119,6 +362,30 @@ export const loanInquiryController = {
           totalPages: Math.ceil(total / limit) || 1,
         },
       },
+    });
+  },
+
+  adminGetById: async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid inquiry id",
+        code: "VALIDATION_ERROR",
+      });
+    }
+
+    const doc = await LoanInquiry.findById(req.params.id).lean();
+    if (!doc) {
+      return res.status(404).json({
+        success: false,
+        message: "Inquiry not found",
+        code: "NOT_FOUND",
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: doc,
     });
   },
 
@@ -140,22 +407,7 @@ export const loanInquiryController = {
       });
     }
 
-    const update = {};
-    if (parsed.data.status) {
-      update.status = parsed.data.status;
-      if (parsed.data.status === "CONTACTED") {
-        update.contactedAt = new Date();
-      }
-    }
-    if (parsed.data.adminNote !== undefined) {
-      update.adminNote = parsed.data.adminNote;
-    }
-
-    const doc = await LoanInquiry.findByIdAndUpdate(
-      req.params.id,
-      { $set: update },
-      { returnDocument: "after" }
-    ).lean();
+    const doc = await LoanInquiry.findById(req.params.id);
 
     if (!doc) {
       return res.status(404).json({
@@ -165,6 +417,44 @@ export const loanInquiryController = {
       });
     }
 
-    return res.json({ success: true, data: doc });
+    if (parsed.data.status) {
+      if (parsed.data.status === "APPROVED" && doc.kycStatus !== "verified") {
+        return res.status(400).json({
+          success: false,
+          message: "KYC must be verified before the inquiry can be approved.",
+          code: "KYC_NOT_VERIFIED",
+        });
+      }
+
+      doc.status = parsed.data.status;
+      if (parsed.data.status === "CONTACTED") {
+        doc.contactedAt = new Date();
+      }
+      if (parsed.data.status === "KYC_SENT" && !doc.publicAccessToken) {
+        doc.publicAccessToken = generatePublicAccessToken();
+      }
+      if (parsed.data.status === "KYC_SENT") {
+        doc.kycSentAt = new Date();
+      }
+      if (parsed.data.status === "KYC_REJECTED") {
+        doc.kycStatus = "rejected";
+        doc.rejectedAt = new Date();
+        doc.verifiedAt = null;
+        doc.kycRemarks = String(parsed.data.adminNote || doc.adminNote || "").trim();
+      }
+      if (parsed.data.status === "APPROVED") {
+        doc.approvedAt = new Date();
+      }
+      if (parsed.data.status === "CLOSED") {
+        doc.closedAt = new Date();
+      }
+    }
+    if (parsed.data.adminNote !== undefined) {
+      doc.adminNote = parsed.data.adminNote;
+    }
+
+    await doc.save();
+
+    return res.json({ success: true, data: doc.toObject() });
   },
 };

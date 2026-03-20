@@ -63,11 +63,8 @@ const ApplyLoanPage = () => {
 
     const loadApplyContext = async () => {
       const token = typeof window !== "undefined" ? window.localStorage.getItem("token") : "";
-      const queryString = searchParams.toString();
-      const nextPath = queryString ? `/apply?${queryString}` : "/apply";
-
       if (!token) {
-        navigate(`/login?next=${encodeURIComponent(nextPath)}`, { replace: true });
+        if (active) setGateChecking(false);
         return;
       }
 
@@ -281,12 +278,6 @@ const ApplyLoanPage = () => {
         : "/dashboard/my-applications";
       navigate(next, { replace: true });
     } catch (err) {
-      if (err?.response?.status === 401) {
-        const queryString = searchParams.toString();
-        const nextPath = queryString ? `/apply?${queryString}` : "/apply";
-        navigate(`/login?next=${encodeURIComponent(nextPath)}`, { replace: true });
-        return;
-      }
       setSubmitError(
         err?.response?.data?.message ||
           err?.message ||

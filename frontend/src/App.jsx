@@ -17,12 +17,10 @@ import Eligibility from "./components/Eligibility/Eligibility.jsx";
 import Complaints from "./components/Complaints/Complaints.jsx";
 import Terms from "./components/Terms/Terms.jsx";
 import Privacy from "./components/Privacy/Privacy.jsx";
-import { ApplyLoanPage } from "./publicPages/ApplyLoanPage.jsx";
+import LoanInquiryPage from "./publicPages/LoanInquiryPage.jsx";
 import EligibilityCheckPage from "./publicPages/EligibilityCheckPage.jsx";
 import FAQPage from "./publicPages/FAQPage.jsx";
 import EligibilityDetailsPage from "./publicPages/EligibilityDetailsPage.jsx";
-import Login from "./pages/Login.jsx";
-import Signup from "./pages/Signup.jsx";
 import Dashboard from "./dashboard/Dashboard.jsx";
 import DashboardLayout from "./dashboard/DashboardLayout.jsx";
 import DashboardProfilePage from "./dashboard/DashboardProfilePage.jsx";
@@ -71,9 +69,6 @@ function App() {
       />
 
       <Route path="/home" element={<Navigate to="/" replace />} />
-
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
 
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<DashboardLayout />}>
@@ -155,7 +150,15 @@ function App() {
         path="/apply"
         element={
           <Layout noNavbar>
-            <ApplyLoanPage />
+            <LoanInquiryPage />
+          </Layout>
+        }
+      />
+      <Route
+        path="/profile-kyc/:token"
+        element={
+          <Layout noNavbar>
+            <DashboardProfilePage />
           </Layout>
         }
       />

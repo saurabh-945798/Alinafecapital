@@ -1,12 +1,13 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { ChevronsLeft, ChevronsRight, LogOut, Menu, X } from "lucide-react";
 import { sidebarNav } from "./sidebarNav";
 import { clearAdminSession, getAdminUser } from "../../utils/adminAuth";
+import { inquiriesApi } from "../../services/api/inquiries.api";
 
 const cx = (...a) => a.filter(Boolean).join(" ");
 
-function NavItems({ collapsed, onNavigate }) {
+function NavItems({ collapsed, onNavigate, badges = {} }) {
   const nav = useMemo(() => sidebarNav, []);
   return (
     <nav className="flex-1 overflow-y-auto px-3 pb-4">
@@ -40,6 +41,16 @@ function NavItems({ collapsed, onNavigate }) {
                         className={cx("shrink-0", isActive ? "text-white" : "text-slate-600")}
                       />
                       {!collapsed && <span>{item.label}</span>}
+                      {!collapsed && badges[item.key] > 0 ? (
+                        <span
+                          className={cx(
+                            "ml-auto inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                            isActive ? "bg-white/15 text-white" : "bg-rose-100 text-rose-700"
+                          )}
+                        >
+                          {badges[item.key]}
+                        </span>
+                      ) : null}
                       {isActive && <span className="absolute right-2 h-2 w-2 rounded-full bg-white/90" />}
                     </>
                   )}
@@ -57,6 +68,7 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [badges, setBadges] = useState({ applications: 0 });
   const adminUser = useMemo(() => getAdminUser(), []);
 
   const width = collapsed ? "w-20" : "w-72";
@@ -66,6 +78,39 @@ export default function Sidebar() {
     setMobileOpen(false);
     navigate("/admin/login", { replace: true });
   };
+
+  useEffect(() => {
+    let active = true;
+
+    const loadBadges = async () => {
+      try {
+        const statuses = ["NEW", "CONTACTED", "KYC_SENT", "KYC_REJECTED"];
+        const responses = await Promise.all(
+          statuses.map((status) => inquiriesApi.list({ status, page: 1, limit: 1 }))
+        );
+        const applications = responses.reduce(
+          (sum, entry) => sum + Number(entry?.pagination?.total || 0),
+          0
+        );
+
+        if (active) {
+          setBadges({ applications });
+        }
+      } catch {
+        if (active) {
+          setBadges({ applications: 0 });
+        }
+      }
+    };
+
+    loadBadges();
+    const timer = window.setInterval(loadBadges, 60000);
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const shell = (
     <div className={cx("flex h-full flex-col", width)}>
@@ -91,7 +136,7 @@ export default function Sidebar() {
         </button>
       </div>
 
-      <NavItems collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+      <NavItems collapsed={collapsed} onNavigate={() => setMobileOpen(false)} badges={badges} />
 
       <div className="border-t border-slate-200 p-3">
         <div className="flex items-center gap-3 rounded-xl p-2 hover:bg-slate-50">

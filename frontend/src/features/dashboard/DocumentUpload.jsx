@@ -3,7 +3,13 @@ import { CheckCircle2, FileText, LoaderCircle, Upload } from "lucide-react";
 import { api } from "../../services/api";
 import { useEffect } from "react";
 
-export default function DocumentUpload({ profile, onUploaded, setError, setSuccess }) {
+export default function DocumentUpload({
+  profile,
+  onUploaded,
+  setError,
+  setSuccess,
+  uploadUrl = "/profile/me/doc",
+}) {
   const [uploadingType, setUploadingType] = useState("");
   const [successType, setSuccessType] = useState("");
   const [localDocuments, setLocalDocuments] = useState(
@@ -56,7 +62,7 @@ export default function DocumentUpload({ profile, onUploaded, setError, setSucce
     const formData = new FormData();
     formData.append("type", type);
     formData.append("file", file);
-    return api.post("/profile/me/doc", formData);
+    return api.post(uploadUrl, formData);
   };
 
   const uploadSingle = async (type, file) => {
@@ -103,17 +109,17 @@ export default function DocumentUpload({ profile, onUploaded, setError, setSucce
     const isSuccess = successType === key;
 
     return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3">
+    <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
       <p className="text-sm font-medium text-slate-700">{title}</p>
       <p className="mt-1 text-xs text-slate-500">
         Allowed: PDF, JPG, JPEG, PNG
       </p>
 
-      <div className="mt-2 flex flex-col gap-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mt-3 flex flex-col gap-3">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <label
           htmlFor={id}
-          className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+          className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 sm:w-auto"
         >
           <Upload size={14} />
           Choose File
@@ -130,7 +136,7 @@ export default function DocumentUpload({ profile, onUploaded, setError, setSucce
           className="hidden"
         />
 
-        <span className="text-xs text-slate-500">
+        <span className="text-xs leading-5 text-slate-500">
           {isUploading ? "Uploading file..." : "Choose a file to upload instantly"}
         </span>
         </div>

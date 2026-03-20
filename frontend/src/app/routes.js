@@ -12,8 +12,6 @@ import { ApplyLoanPage } from "../publicPages/ApplyLoanPage.jsx";
 import EligibilityCheckPage from "../publicPages/EligibilityCheckPage.jsx";
 import FAQPage from "../publicPages/FAQPage.jsx";
 import EligibilityDetailsPage from "../publicPages/EligibilityDetailsPage.jsx";
-import Login from "../pages/Login.jsx";
-import Signup from "../pages/Signup.jsx";
 import Dashboard from "../dashboard/Dashboard.jsx";
 
 export const routeComponents = {
@@ -31,7 +29,5 @@ export const routeComponents = {
   EligibilityCheckPage,
   FAQPage,
   EligibilityDetailsPage,
-  Login,
-  Signup,
   Dashboard,
 };

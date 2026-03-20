@@ -7,7 +7,7 @@ const router = Router();
 
 router.use(requireAdmin);
 router.get("/inquiries", asyncHandler(loanInquiryController.adminList));
+router.get("/inquiries/:id", asyncHandler(loanInquiryController.adminGetById));
 router.patch("/inquiries/:id", asyncHandler(loanInquiryController.adminUpdate));
 
 export default router;
-

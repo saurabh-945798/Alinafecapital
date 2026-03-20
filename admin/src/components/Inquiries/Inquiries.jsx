@@ -137,6 +137,7 @@ export default function InquiriesPage() {
                       <p className="font-semibold text-slate-900">{item.fullName}</p>
                       <p className="text-xs text-slate-500">{item.phone}</p>
                       <p className="text-xs text-slate-500">{item.email || "-"}</p>
+                      <p className="text-xs text-slate-500">{item.address || "-"}</p>
                     </td>
                     <td className="px-4 py-3">{item.loanProductSlug}</td>
                     <td className="px-4 py-3">
@@ -213,6 +214,7 @@ export default function InquiriesPage() {
               <p className="font-semibold">{selected.fullName}</p>
               <p>{selected.phone}</p>
               <p>{selected.email || "-"}</p>
+              <p>{selected.address || "-"}</p>
             </div>
             <div className="rounded-lg border p-3">
               <p className="text-xs text-slate-500">Loan</p>
@@ -263,4 +265,3 @@ export default function InquiriesPage() {
     </div>
   );
 }
-
