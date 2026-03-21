@@ -550,7 +550,12 @@ export default function LoanApplicationDetail() {
                 </div>
                 <div class="field">
                   <div class="label">Employment</div>
-                  <div class="field-value">${escapeHtml(item.employmentType || "-")}</div>
+                  <div class="field-value">${escapeHtml(item.employmentType || "-")}${
+                    String(item.employmentType || "").trim().toLowerCase() === "government employee" &&
+                    item.governmentId
+                      ? `<br/>Government ID: ${escapeHtml(item.governmentId)}`
+                      : ""
+                  }</div>
                 </div>
                 <div class="field">
                   <div class="label">Monthly Income</div>
@@ -716,6 +721,12 @@ export default function LoanApplicationDetail() {
         <div className="rounded-lg border bg-white p-4">
           <p className="text-xs text-slate-500">Loan Type</p>
           <p className="mt-1 font-semibold text-slate-900">{item.loanProductName || item.loanProductSlug}</p>
+          <p className="mt-2 text-sm text-slate-700">
+            Requested Amount: {item.requestedAmount ? `MWK ${Number(item.requestedAmount).toLocaleString()}` : "-"}
+          </p>
+          <p className="mt-1 text-sm text-slate-700">
+            Tenure: {item.preferredTenureMonths ? `${item.preferredTenureMonths} months` : "-"}
+          </p>
           <p className="mt-2 text-xs text-slate-500">Created: {formatDate(item.createdAt)}</p>
         </div>
         <div className="rounded-lg border bg-white p-4">
@@ -766,6 +777,11 @@ export default function LoanApplicationDetail() {
                 Employment
               </p>
               <p className="mt-1 text-sm font-medium text-slate-900">{item.employmentType || "-"}</p>
+              {String(item.employmentType || "").trim().toLowerCase() === "government employee" ? (
+                <p className="mt-1 text-sm text-slate-600">
+                  Government ID: {item.governmentId || "-"}
+                </p>
+              ) : null}
               <p className="mt-1 text-sm text-slate-600">
                 Income: {item.monthlyIncome ? `MWK ${Number(item.monthlyIncome).toLocaleString()}` : "-"}
               </p>

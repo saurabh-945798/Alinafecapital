@@ -77,6 +77,7 @@ export async function upsertMyProfile(req, res, next) {
       district: req.body.district,
       country: req.body.country || "Malawi",
       employmentType: req.body.employmentType,
+      governmentId: req.body.governmentId,
       monthlyIncome:
         req.body.monthlyIncome !== undefined ? Number(req.body.monthlyIncome) : undefined,
       bankName: req.body.bankName,

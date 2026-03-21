@@ -15,7 +15,13 @@
   }
 
   // Income: 20
-  if (hasText(profile.employmentType) && hasNumber(profile.monthlyIncome)) {
+  const employmentType = String(profile.employmentType || "").trim().toLowerCase();
+  const requiresGovernmentId = employmentType === "government employee";
+  if (
+    hasText(profile.employmentType) &&
+    hasNumber(profile.monthlyIncome) &&
+    (!requiresGovernmentId || hasText(profile.governmentId))
+  ) {
     score += 15;
   }
 
@@ -27,7 +33,6 @@
   // Documents: 25 (all required)
   const docs = Array.isArray(profile.documents) ? profile.documents : [];
   const docTypes = new Set(docs.map((d) => d?.type));
-  const employmentType = String(profile.employmentType || "").trim().toLowerCase();
   const usesTwoDocumentFlow =
     employmentType === "farmer" || employmentType === "self-employed";
   if (

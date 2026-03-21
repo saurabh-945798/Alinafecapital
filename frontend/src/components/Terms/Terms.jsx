@@ -37,6 +37,14 @@ const Terms = () => {
             offer.
           </p>
 
+          <div className="mt-6 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 text-sm leading-6 text-slate-700">
+            <p className="font-semibold text-slate-900">Legal Entity</p>
+            <p className="mt-2">
+              ALINAFE CAPITAL is a limited company registered by the Registrar of Companies in Malawi.
+              Company No.: COY-7WULNGE.
+            </p>
+          </div>
+
           <div className="mt-8 space-y-4">
             {sections.map((section) => (
               <article

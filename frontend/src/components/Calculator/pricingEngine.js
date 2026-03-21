@@ -45,8 +45,22 @@ export function calculateQuote({
   monthlyRate,
   processingFeeEnabled,
   processingFeeRate,
+  processingFeeType = "percent",
+  processingFeeFlat = 0,
+  adminFeeType = "flat",
+  adminFeeRate = 0,
+  adminFeeFlat = 0,
+  monthlyAdminFee = 0,
 }) {
-  const processingFee = processingFeeEnabled ? principal * processingFeeRate : 0;
+  const processingFee = processingFeeEnabled
+    ? processingFeeType === "flat"
+      ? Number(processingFeeFlat || 0)
+      : principal * processingFeeRate
+    : 0;
+  const oneTimeAdminFee =
+    adminFeeType === "percent"
+      ? principal * Number(adminFeeRate || 0)
+      : Number(adminFeeFlat || 0);
 
   const base =
     rateType === "reducing"
@@ -55,17 +69,38 @@ export function calculateQuote({
       ? calculateFlat(principal, monthlyRate, months)
       : calculateFeeOnly(principal, months, processingFee);
 
+  const totalAdminFees = oneTimeAdminFee + Number(monthlyAdminFee || 0) * months;
   const totalWithFees =
-    rateType === "fee_only" ? base.totalPayment : base.totalPayment + processingFee;
+    rateType === "fee_only"
+      ? base.totalPayment + totalAdminFees
+      : base.totalPayment + processingFee + totalAdminFees;
+  const recurringMonthlyDue = base.emi + Number(monthlyAdminFee || 0);
+  const firstMonthDue =
+    recurringMonthlyDue +
+    Number(oneTimeAdminFee || 0) +
+    (rateType === "fee_only" ? 0 : Number(processingFee || 0));
 
   return {
     ...base,
     processingFee,
+    oneTimeAdminFee,
+    monthlyAdminFee: Number(monthlyAdminFee || 0),
+    totalAdminFees,
+    monthlyDue: recurringMonthlyDue,
+    firstMonthDue,
     totalWithFees,
   };
 }
 
-export function generateSchedule(principal, rate, months, rateType, processingFee = 0) {
+export function generateSchedule(
+  principal,
+  rate,
+  months,
+  rateType,
+  processingFee = 0,
+  monthlyAdminFee = 0,
+  oneTimeAdminFee = 0
+) {
   const schedule = [];
 
   const { emi } =
@@ -91,8 +126,16 @@ export function generateSchedule(principal, rate, months, rateType, processingFe
     schedule.push({
       month: i,
       emi,
+      monthlyDue:
+        emi +
+        Number(monthlyAdminFee || 0) +
+        (i === 1
+          ? Number(oneTimeAdminFee || 0) + (rateType === "fee_only" ? 0 : Number(processingFee || 0))
+          : 0),
       principalPaid,
       interest,
+      adminFee: Number(monthlyAdminFee || 0) + (i === 1 ? Number(oneTimeAdminFee || 0) : 0),
+      processingFee: i === 1 && rateType !== "fee_only" ? Number(processingFee || 0) : 0,
       balance: balance > 0 ? balance : 0,
     });
   }

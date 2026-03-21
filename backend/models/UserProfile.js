@@ -37,6 +37,7 @@ const UserProfileSchema = new mongoose.Schema(
     district: { type: String, trim: true },
     country: { type: String, trim: true, default: "Malawi" },
     employmentType: { type: String, trim: true },
+    governmentId: { type: String, trim: true, default: "" },
     monthlyIncome: { type: Number, min: 0 },
     bankName: { type: String, trim: true },
     accountNumber: { type: String, trim: true },

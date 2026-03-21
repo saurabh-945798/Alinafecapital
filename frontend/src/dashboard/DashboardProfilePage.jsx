@@ -49,6 +49,12 @@ export default function DashboardProfilePage() {
         done: !!profile.addressLine1 && !!profile.city && !!profile.district,
       },
       { label: "Employment Info", done: !!profile.employmentType },
+      {
+        label: "Government ID",
+        done:
+          String(profile.employmentType || "").trim().toLowerCase() !== "government employee" ||
+          !!profile.governmentId,
+      },
       { label: "Monthly Income", done: !!profile.monthlyIncome },
       {
         label: "Bank Details (name, account number, branch code)",

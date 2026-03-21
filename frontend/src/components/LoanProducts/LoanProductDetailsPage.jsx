@@ -1,4 +1,4 @@
-﻿import { useMemo } from "react";
+﻿import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -11,6 +11,11 @@ import {
   Clock3,
   Users,
   HelpCircle,
+  BriefcaseBusiness,
+  Building2,
+  Tractor,
+  WalletCards,
+  Sparkles,
 } from "lucide-react";
 import { api } from "../../services/api";
 import { guardStartApplication } from "../../utils/applyGuard";
@@ -18,6 +23,66 @@ import { useLoanProducts } from "../../hooks/useLoanProducts";
 
 const BRAND_NAVY = "#002D5B";
 const BRAND_GOLD = "#B38E46";
+
+const visualByCategory = {
+  Agriculture: {
+    icon: Tractor,
+    eyebrow: "Seasonal support",
+    headline: "Built for productive growth",
+    summary:
+      "Structured funding for agriculture cycles, equipment, and business expansion with clear repayment expectations.",
+    chips: ["Clear pricing", "Fast review", "Flexible use"],
+    shellClass:
+      "border-emerald-200 bg-[radial-gradient(circle_at_top_right,_rgba(16,185,129,0.22),_transparent_42%),linear-gradient(135deg,_#062f2b,_#0f4c43_55%,_#11665a)]",
+    cardClass: "border-emerald-100 bg-white/12 text-emerald-50",
+    iconWrapClass: "bg-white/14 text-emerald-100 border-white/15",
+  },
+  Business: {
+    icon: BriefcaseBusiness,
+    eyebrow: "Business finance",
+    headline: "Working capital with clean structure",
+    summary:
+      "Designed for business owners who need predictable repayment, transparent costs, and practical turnaround time.",
+    chips: ["Business growth", "Transparent fees", "Simple review"],
+    shellClass:
+      "border-amber-200 bg-[radial-gradient(circle_at_top_right,_rgba(179,142,70,0.28),_transparent_45%),linear-gradient(135deg,_#1b2434,_#22375c_55%,_#34558c)]",
+    cardClass: "border-amber-100/30 bg-white/12 text-amber-50",
+    iconWrapClass: "bg-white/14 text-amber-100 border-white/15",
+  },
+  Personal: {
+    icon: WalletCards,
+    eyebrow: "Personal finance",
+    headline: "Simple lending for real needs",
+    summary:
+      "A straightforward loan product built for salaried and individual customers who want clarity before they apply.",
+    chips: ["Simple terms", "Fast checks", "Repayment clarity"],
+    shellClass:
+      "border-sky-200 bg-[radial-gradient(circle_at_top_right,_rgba(96,165,250,0.26),_transparent_45%),linear-gradient(135deg,_#11263d,_#173a68_55%,_#245a9b)]",
+    cardClass: "border-sky-100/30 bg-white/12 text-sky-50",
+    iconWrapClass: "bg-white/14 text-sky-100 border-white/15",
+  },
+  Group: {
+    icon: Building2,
+    eyebrow: "Community lending",
+    headline: "Shared accountability, shared progress",
+    summary:
+      "Built for group borrowers who need a disciplined structure, simple documentation, and a predictable meeting cycle.",
+    chips: ["Group support", "Shared discipline", "Structured payouts"],
+    shellClass:
+      "border-violet-200 bg-[radial-gradient(circle_at_top_right,_rgba(168,85,247,0.24),_transparent_45%),linear-gradient(135deg,_#241641,_#3c2674_55%,_#5c3aa5)]",
+    cardClass: "border-violet-100/30 bg-white/12 text-violet-50",
+    iconWrapClass: "bg-white/14 text-violet-100 border-white/15",
+  },
+};
+
+const CIVIL_SERVANT_LOAN_IMAGE =
+  "https://www.ubagroup.com/nigeria/wp-content/uploads/sites/2/2025/06/uba-civil-servant.webp";
+const STATUTORY_COMPANY_LOAN_IMAGE =
+  "https://www.shutterstock.com/image-photo/woman-borrows-money-female-employee-600nw-2504912177.jpg";
+const PRIVATE_COMPANY_LOAN_IMAGE =
+  "https://image.cnbcfm.com/api/v1/image/106818007-1609431383541-gettyimages-103919680-bld080949.jpeg?v=1666291938";
+const BUSINESS_LOAN_IMAGE =
+  "https://thumbs.dreamstime.com/b/businesspeople-legalize-cooperation-black-left-handed-businessman-sign-agreement-negotiations-married-couple-affirm-loan-141158782.jpg";
 
 const detailsBySlug = {
   "payday-emergency-loan": {
@@ -152,6 +217,194 @@ const getProductDetails = (product) => {
   return { ...defaults, ...(detailsBySlug[product.slug] || {}) };
 };
 
+const getProductVisual = (product) =>
+  visualByCategory[product.category] || visualByCategory.Personal;
+
+const normalizeLoanKey = (value = "") =>
+  String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const getProductImage = (product) => {
+  const slug = normalizeLoanKey(product?.slug || "");
+  const loanName = normalizeLoanKey(product?.loanName || "");
+  const category = normalizeLoanKey(product?.category || "");
+
+  if (slug.includes("civil") || loanName.includes("civil servant")) {
+    return CIVIL_SERVANT_LOAN_IMAGE;
+  }
+
+  if (slug.includes("statutory") || loanName.includes("statutory company")) {
+    return STATUTORY_COMPANY_LOAN_IMAGE;
+  }
+
+  if (slug.includes("private") || loanName.includes("private company")) {
+    return PRIVATE_COMPANY_LOAN_IMAGE;
+  }
+
+  if (slug.includes("business") || loanName.includes("business") || category.includes("business")) {
+    return BUSINESS_LOAN_IMAGE;
+  }
+
+  return "";
+};
+
+const ProductHeroVisual = ({ product }) => {
+  const visual = getProductVisual(product);
+  const Icon = visual.icon;
+  const imageUrl = getProductImage(product);
+  const [imageFailed, setImageFailed] = useState(false);
+
+  return (
+    <div
+      className={`relative overflow-hidden rounded-[28px] border text-white shadow-[0_24px_60px_rgba(15,23,42,0.18)] ${visual.shellClass}`}
+    >
+      <div className="absolute inset-0 opacity-70">
+        <div className="absolute -left-10 top-8 h-28 w-28 rounded-full bg-white/10 blur-2xl" />
+        <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
+        <div className="absolute bottom-0 left-1/3 h-36 w-36 rounded-full bg-black/10 blur-3xl" />
+      </div>
+
+      {imageUrl && !imageFailed ? (
+        <div className="relative z-10">
+          <div className="relative overflow-hidden lg:min-h-[420px]">
+            <img
+              src={imageUrl}
+              alt={product.loanName}
+              loading="lazy"
+              className="h-60 w-full object-cover sm:h-72 lg:h-[420px]"
+              onError={() => setImageFailed(true)}
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-900/25 to-transparent" />
+
+            <div className="absolute inset-x-0 top-0 hidden p-7 lg:block">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/75">
+                    {visual.eyebrow}
+                  </p>
+                  <h3 className="mt-3 max-w-xl text-3xl font-semibold leading-tight text-white">
+                    {visual.headline}
+                  </h3>
+                </div>
+                <div
+                  className={`grid h-14 w-14 place-items-center rounded-2xl border backdrop-blur ${visual.iconWrapClass}`}
+                >
+                  <Icon size={28} />
+                </div>
+              </div>
+            </div>
+
+            <div className="absolute inset-x-0 bottom-0 p-5 sm:p-6 lg:hidden">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/75">
+                    {visual.eyebrow}
+                  </p>
+                  <h3 className="mt-3 max-w-xl text-2xl font-semibold leading-tight text-white sm:text-3xl">
+                    {visual.headline}
+                  </h3>
+                  <p className="mt-3 max-w-2xl text-sm leading-6 text-white/85 sm:text-[15px]">
+                    {visual.summary}
+                  </p>
+                </div>
+                <div
+                  className={`grid h-14 w-14 place-items-center rounded-2xl border backdrop-blur ${visual.iconWrapClass}`}
+                >
+                  <Icon size={28} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="hidden lg:grid lg:grid-cols-[1fr_auto] lg:items-end lg:gap-6 lg:px-7 lg:py-6">
+            <div>
+              <p className="max-w-3xl text-[15px] leading-7 text-white/82">
+                {visual.summary}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {visual.chips.map((chip) => (
+                  <span
+                    key={chip}
+                    className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/90"
+                  >
+                    {chip}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid min-w-[320px] gap-3 sm:grid-cols-3">
+              <div className={`rounded-2xl border p-4 backdrop-blur ${visual.cardClass}`}>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">
+                  Product Type
+                </p>
+                <p className="mt-2 text-sm font-semibold">{product.category}</p>
+              </div>
+              <div className={`rounded-2xl border p-4 backdrop-blur ${visual.cardClass}`}>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">
+                  Pricing View
+                </p>
+                <p className="mt-2 text-sm font-semibold">{product.interestRate}</p>
+              </div>
+              <div className={`rounded-2xl border p-4 backdrop-blur ${visual.cardClass}`}>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">
+                  Repayment
+                </p>
+                <p className="mt-2 text-sm font-semibold">{product.repaymentPeriod}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="relative z-10 p-5 sm:p-6 lg:p-7">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/75">
+                {visual.eyebrow}
+              </p>
+              <h3 className="mt-3 max-w-xl text-2xl font-semibold leading-tight sm:text-3xl">
+                {visual.headline}
+              </h3>
+              <p className="mt-4 max-w-2xl text-sm leading-6 text-white/85 sm:text-[15px]">
+                {visual.summary}
+              </p>
+            </div>
+            <div
+              className={`grid h-14 w-14 place-items-center rounded-2xl border backdrop-blur ${visual.iconWrapClass}`}
+            >
+              <Icon size={28} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const OverviewCard = ({ label, value }) => (
+  <div
+    className="rounded-2xl border bg-white p-4 shadow-sm sm:p-5"
+    style={{ borderColor: "rgba(0,45,91,0.10)" }}
+  >
+    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
+    <p className="mt-2 text-sm font-semibold text-slate-900 sm:text-base">{value}</p>
+  </div>
+);
+
+const SectionCard = ({ icon: Icon, title, children, className = "" }) => (
+  <div
+    className={`rounded-[24px] border bg-white p-5 shadow-sm sm:p-6 ${className}`}
+    style={{ borderColor: "rgba(0,45,91,0.10)" }}
+  >
+    <h2 className="inline-flex items-center gap-2 text-lg font-semibold" style={{ color: BRAND_NAVY }}>
+      <Icon size={18} /> {title}
+    </h2>
+    <div className="mt-4 text-sm text-slate-700">{children}</div>
+  </div>
+);
+
 const LoanProductDetailsPage = () => {
   const navigate = useNavigate();
   const { loanProducts: dynamicLoanProducts, loading } = useLoanProducts();
@@ -190,130 +443,152 @@ const LoanProductDetailsPage = () => {
 
   const details = getProductDetails(product);
   return (
-    <section className="py-24 bg-gradient-to-br from-white to-gray-50 min-h-[70vh]">
-      <div className="max-w-6xl mx-auto px-6">
+    <section className="min-h-[70vh] bg-[linear-gradient(180deg,_#f8fafc_0%,_#ffffff_32%,_#f8fafc_100%)] py-12 sm:py-16 lg:py-20">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <a href="/home" className="inline-flex items-center gap-2 text-sm font-semibold" style={{ color: BRAND_NAVY }}>
           <ArrowLeft size={16} /> Back to Home
         </a>
 
-        <article className="mt-6 rounded-3xl border bg-white p-8 md:p-10 shadow-sm" style={{ borderColor: "rgba(0,45,91,0.12)" }}>
-          <span
-            className="inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-bold"
-            style={{ borderColor: "rgba(179,142,70,0.35)", color: BRAND_GOLD, backgroundColor: "rgba(179,142,70,0.08)" }}
-          >
-            {product.badge}
-          </span>
+        <article
+          className="mt-5 rounded-[32px] border bg-white/88 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur sm:p-8 lg:p-10"
+          style={{ borderColor: "rgba(0,45,91,0.12)" }}
+        >
+          <div>
+            <div>
+              <span
+                className="inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-bold"
+                style={{
+                  borderColor: "rgba(179,142,70,0.35)",
+                  color: BRAND_GOLD,
+                  backgroundColor: "rgba(179,142,70,0.08)",
+                }}
+              >
+                <Sparkles size={14} className="mr-1.5" /> {product.badge}
+              </span>
 
-          <h1 className="mt-4 text-3xl md:text-4xl font-bold" style={{ color: BRAND_NAVY }}>
-            {product.loanName}
-          </h1>
+              <h1 className="mt-4 text-3xl font-bold leading-tight sm:text-4xl lg:text-5xl" style={{ color: BRAND_NAVY }}>
+                {product.loanName}
+              </h1>
 
-          <p className="mt-3 text-gray-600">{product.description}</p>
+              <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600 sm:text-base">
+                {product.description}
+              </p>
 
-          <div className="mt-7 grid sm:grid-cols-3 gap-4 text-sm">
-            <div className="rounded-xl border bg-gray-50 p-4" style={{ borderColor: "rgba(0,45,91,0.10)" }}>
-              <p className="text-gray-500">Amount Range</p>
-              <p className="mt-1 font-semibold">{product.amountRange}</p>
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <OverviewCard label="Amount Range" value={product.amountRange} />
+                <OverviewCard label="Repayment Period" value={product.repaymentPeriod} />
+                <OverviewCard label="Interest Rate" value={product.interestRate} />
+              </div>
             </div>
-            <div className="rounded-xl border bg-gray-50 p-4" style={{ borderColor: "rgba(0,45,91,0.10)" }}>
-              <p className="text-gray-500">Repayment Period</p>
-              <p className="mt-1 font-semibold">{product.repaymentPeriod}</p>
-            </div>
-            <div className="rounded-xl border bg-gray-50 p-4" style={{ borderColor: "rgba(0,45,91,0.10)" }}>
-              <p className="text-gray-500">Interest</p>
-              <p className="mt-1 font-semibold">{product.interestRate}</p>
-            </div>
-          </div>
-
-          <div className="mt-8 grid gap-6 lg:grid-cols-2">
-            <div className="rounded-2xl border p-5" style={{ borderColor: "rgba(0,45,91,0.10)" }}>
-              <h2 className="text-lg font-semibold inline-flex items-center gap-2" style={{ color: BRAND_NAVY }}>
-                <ShieldCheck size={18} /> Purpose
-              </h2>
-              <p className="mt-2 text-sm text-gray-700">{details.purpose}</p>
-            </div>
-
-            <div className="rounded-2xl border p-5" style={{ borderColor: "rgba(0,45,91,0.10)" }}>
-              <h2 className="text-lg font-semibold inline-flex items-center gap-2" style={{ color: BRAND_NAVY }}>
-                <Users size={18} /> Target Users
-              </h2>
-              <ul className="mt-2 space-y-2 text-sm text-gray-700">
-                {details.targetUsers.map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 size={16} style={{ color: BRAND_GOLD, marginTop: 2 }} />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="rounded-2xl border p-5" style={{ borderColor: "rgba(0,45,91,0.10)" }}>
-              <h2 className="text-lg font-semibold inline-flex items-center gap-2" style={{ color: BRAND_NAVY }}>
-                <FileText size={18} /> Eligibility & Documents
-              </h2>
-              <p className="mt-2 text-xs font-semibold text-gray-500">Eligibility</p>
-              <ul className="mt-1 space-y-1.5 text-sm text-gray-700">
-                {details.eligibility.map((item) => (
-                  <li key={item}>• {item}</li>
-                ))}
-              </ul>
-              <p className="mt-3 text-xs font-semibold text-gray-500">Documents</p>
-              <ul className="mt-1 space-y-1.5 text-sm text-gray-700">
-                {details.documents.map((item) => (
-                  <li key={item}>• {item}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="rounded-2xl border p-5" style={{ borderColor: "rgba(0,45,91,0.10)" }}>
-              <h2 className="text-lg font-semibold inline-flex items-center gap-2" style={{ color: BRAND_NAVY }}>
-                <Clock3 size={18} /> Repayment Style
-              </h2>
-              <p className="mt-2 text-sm text-gray-700">{details.repaymentStyle}</p>
-            </div>
-
-            <div className="rounded-2xl border p-5 lg:col-span-2" style={{ borderColor: "rgba(0,45,91,0.10)" }}>
-              <h2 className="text-lg font-semibold inline-flex items-center gap-2" style={{ color: BRAND_NAVY }}>
-                <CircleDollarSign size={18} /> Fees & Disclosures
-              </h2>
-              <ul className="mt-2 space-y-2 text-sm text-gray-700">
-                {details.feesAndDisclosures.map((item) => (
-                  <li key={item} className="flex items-start gap-2">
-                    <CheckCircle2 size={16} style={{ color: BRAND_GOLD, marginTop: 2 }} />
-                    {item}
-                  </li>
-                ))}
-              </ul>
+            <div className="mt-6">
+              <ProductHeroVisual product={product} />
             </div>
           </div>
 
-          <div className="mt-8 rounded-2xl border p-5" style={{ borderColor: "rgba(0,45,91,0.10)" }}>
-            <h2 className="text-lg font-semibold" style={{ color: BRAND_NAVY }}>Application Process</h2>
-            <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {details.processTimeline.map((step, idx) => (
-                <div key={step} className="rounded-xl bg-gray-50 border p-3 text-sm" style={{ borderColor: "rgba(0,45,91,0.08)" }}>
-                  <p className="text-xs text-gray-500">Step {idx + 1}</p>
-                  <p className="mt-1 font-semibold">{step}</p>
+          <div className="mt-8 grid gap-5 lg:grid-cols-2">
+            <div className="space-y-5">
+              <SectionCard icon={ShieldCheck} title="Purpose">
+                <p className="leading-7">{details.purpose}</p>
+              </SectionCard>
+
+              <SectionCard icon={Users} title="Target Users">
+                <ul className="space-y-3">
+                  {details.targetUsers.map((item) => (
+                    <li key={item} className="flex items-start gap-3">
+                      <CheckCircle2 size={16} style={{ color: BRAND_GOLD, marginTop: 3, flexShrink: 0 }} />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </SectionCard>
+
+              <SectionCard icon={CircleDollarSign} title="Fees & Disclosures">
+                <ul className="space-y-3">
+                  {details.feesAndDisclosures.map((item) => (
+                    <li key={item} className="flex items-start gap-3">
+                      <CheckCircle2 size={16} style={{ color: BRAND_GOLD, marginTop: 3, flexShrink: 0 }} />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </SectionCard>
+            </div>
+
+            <div className="space-y-5">
+              <SectionCard icon={FileText} title="Eligibility & Documents">
+                <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-1">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      Eligibility
+                    </p>
+                    <ul className="mt-3 space-y-2">
+                      {details.eligibility.map((item) => (
+                        <li key={item} className="flex items-start gap-3">
+                          <CheckCircle2 size={16} style={{ color: BRAND_GOLD, marginTop: 3, flexShrink: 0 }} />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      Required Documents
+                    </p>
+                    <ul className="mt-3 space-y-2">
+                      {details.documents.map((item) => (
+                        <li key={item} className="flex items-start gap-3">
+                          <CheckCircle2 size={16} style={{ color: BRAND_GOLD, marginTop: 3, flexShrink: 0 }} />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
-              ))}
+              </SectionCard>
+
+              <SectionCard icon={Clock3} title="Repayment Style">
+                <p className="leading-7">{details.repaymentStyle}</p>
+              </SectionCard>
             </div>
           </div>
 
-          <div className="mt-8 rounded-2xl border p-5" style={{ borderColor: "rgba(0,45,91,0.10)" }}>
-            <h2 className="text-lg font-semibold inline-flex items-center gap-2" style={{ color: BRAND_NAVY }}>
-              <HelpCircle size={18} /> FAQs
-            </h2>
-            <div className="mt-3 space-y-3">
-              {details.faqs.map((faq) => (
-                <div key={faq.q} className="rounded-xl bg-gray-50 border p-4" style={{ borderColor: "rgba(0,45,91,0.08)" }}>
-                  <p className="font-semibold text-sm" style={{ color: BRAND_NAVY }}>{faq.q}</p>
-                  <p className="mt-1 text-sm text-gray-700">{faq.a}</p>
-                </div>
-              ))}
-            </div>
+          <div className="mt-8 grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+            <SectionCard icon={ArrowRight} title="Application Process">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {details.processTimeline.map((step, idx) => (
+                  <div
+                    key={step}
+                    className="rounded-2xl border bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] p-4"
+                    style={{ borderColor: "rgba(0,45,91,0.08)" }}
+                  >
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      Step {idx + 1}
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">{step}</p>
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+
+            <SectionCard icon={HelpCircle} title="FAQs">
+              <div className="space-y-3">
+                {details.faqs.map((faq) => (
+                  <div
+                    key={faq.q}
+                    className="rounded-2xl border bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fafc_100%)] p-4"
+                    style={{ borderColor: "rgba(0,45,91,0.08)" }}
+                  >
+                    <p className="text-sm font-semibold" style={{ color: BRAND_NAVY }}>
+                      {faq.q}
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-700">{faq.a}</p>
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
           </div>
 
-          <div className="mt-8 flex flex-col sm:flex-row gap-3">
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <button
               type="button"
               onClick={() =>
@@ -343,7 +618,3 @@ const LoanProductDetailsPage = () => {
 };
 
 export default LoanProductDetailsPage;
-
-
-
-

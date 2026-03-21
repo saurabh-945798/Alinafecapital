@@ -1,490 +1,590 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Menu, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Menu, X } from "lucide-react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import AlinafeLogo from "./AlinafeLogo";
-import { useAuth } from "../../context/AuthContext";
+import AlinafeLogo from "./AlinafeLogo.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
+import { useLanguage } from "../../context/LanguageContext.jsx";
 
 const BRAND_NAVY = "#002D5B";
 const BRAND_GOLD = "#B38E46";
+const DESKTOP_BREAKPOINT = 1024;
+const DROPDOWN_CLOSE_DELAY_MS = 180;
 
 const MAIN_LINKS = [
-  { to: "/", label: "Home", end: true },
-  { to: "/about", label: "About" },
-  { to: "/loan-products", label: "Loan Products" },
-  { to: "/how-it-works", label: "How It Works" },
-  { to: "/branches", label: "Branches" },
+  { to: "/", labelKey: "navbar.home" },
+  { to: "/about", labelKey: "navbar.about" },
+  { to: "/loan-products", labelKey: "navbar.loanProducts" },
+  { to: "/how-it-works", labelKey: "navbar.howItWorks" },
+  { to: "/branches", labelKey: "navbar.branches" },
 ];
 
-const MORE_LINKS = [
-  { to: "/interest-rates", label: "Interest Rates" },
-  { to: "/eligibility", label: "Eligibility" },
-  { to: "/calculator", label: "Repayment Calculator" },
-  { to: "/faqs", label: "FAQs" },
-  { to: "/complaints", label: "Complaints" },
-  { to: "/terms", label: "Terms & Conditions" },
-  { to: "/privacy", label: "Privacy Policy" },
-];
-
-const MOBILE_GROUPS = [
-  { title: "Company", links: MAIN_LINKS.filter((x) => ["/", "/about", "/branches"].includes(x.to)) },
+const MORE_SECTIONS = [
   {
-    title: "Products",
-    links: [
-      MAIN_LINKS.find((x) => x.to === "/loan-products"),
-      MORE_LINKS.find((x) => x.to === "/interest-rates"),
-      MORE_LINKS.find((x) => x.to === "/eligibility"),
-      MORE_LINKS.find((x) => x.to === "/calculator"),
-    ].filter(Boolean),
+    titleKey: "navbar.tools",
+    items: [
+      { to: "/interest-rates", labelKey: "navbar.interestRates" },
+      { to: "/eligibility", labelKey: "navbar.eligibility" },
+      { to: "/calculator", labelKey: "navbar.calculator" },
+    ],
   },
   {
-    title: "Support",
-    links: [
-      MAIN_LINKS.find((x) => x.to === "/how-it-works"),
-      MORE_LINKS.find((x) => x.to === "/faqs"),
-      MORE_LINKS.find((x) => x.to === "/complaints"),
-    ].filter(Boolean),
+    titleKey: "navbar.support",
+    items: [
+      { to: "/faq", labelKey: "navbar.faqs" },
+      { to: "/complaints", labelKey: "navbar.complaints" },
+    ],
   },
   {
-    title: "Legal",
-    links: [
-      MORE_LINKS.find((x) => x.to === "/terms"),
-      MORE_LINKS.find((x) => x.to === "/privacy"),
-    ].filter(Boolean),
+    titleKey: "navbar.legal",
+    items: [
+      { to: "/terms", labelKey: "navbar.terms" },
+      { to: "/privacy", labelKey: "navbar.privacy" },
+    ],
   },
 ];
 
-const mobileLinkClass = ({ isActive }) =>
-  [
-    "block rounded-md px-3 py-2.5 text-base font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
-    isActive ? "bg-slate-100" : "text-slate-700 hover:bg-slate-100",
-  ].join(" ");
-
-const desktopLinkClass = ({ isActive }) =>
-  [
-    "rounded-md px-2 py-1 text-base font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
-    isActive ? "text-[#002D5B]" : "text-slate-700 hover:text-[#002D5B]",
-  ].join(" ");
-
-const moreLinkClass = ({ isActive }) =>
-  [
-    "block rounded-md px-3 py-2 text-base transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
-    isActive ? "bg-slate-100 text-[#002D5B]" : "text-slate-700 hover:bg-slate-100 hover:text-[#002D5B]",
-  ].join(" ");
+const MOBILE_PRIMARY_SECTIONS = [
+  {
+    titleKey: "navbar.company",
+    links: [
+      { to: "/", labelKey: "navbar.home" },
+      { to: "/about", labelKey: "navbar.about" },
+      { to: "/branches", labelKey: "navbar.branches" },
+    ],
+  },
+  {
+    titleKey: "navbar.products",
+    links: [
+      { to: "/loan-products", labelKey: "navbar.loanProducts" },
+      { to: "/how-it-works", labelKey: "navbar.howItWorks" },
+    ],
+  },
+];
 
 function MobileSection({ title, children }) {
   return (
-    <div className="mt-4">
-      <p className="px-3 pb-2 text-xs font-semibold tracking-wider text-slate-500 uppercase">{title}</p>
-      <div className="flex flex-col gap-1">{children}</div>
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+        {title}
+      </p>
+      <div className="mt-3 space-y-2">{children}</div>
+    </section>
+  );
+}
+
+function DropdownMenu({ label, sections, pathname, t, isDesktop }) {
+  const [hoverOpen, setHoverOpen] = useState(false);
+  const [clickOpen, setClickOpen] = useState(false);
+  const wrapperRef = useRef(null);
+  const closeTimerRef = useRef(null);
+
+  const open = hoverOpen || clickOpen;
+  const hasActiveChild = sections.some((section) =>
+    section.items.some((item) => pathname === item.to)
+  );
+
+  const clearCloseTimer = () => {
+    if (closeTimerRef.current) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  };
+
+  const closeAll = () => {
+    clearCloseTimer();
+    setHoverOpen(false);
+    setClickOpen(false);
+  };
+
+  const scheduleHoverClose = () => {
+    if (!isDesktop) return;
+    clearCloseTimer();
+    closeTimerRef.current = window.setTimeout(() => {
+      setHoverOpen(false);
+    }, DROPDOWN_CLOSE_DELAY_MS);
+  };
+
+  const handleMouseEnter = () => {
+    if (!isDesktop) return;
+    clearCloseTimer();
+    setHoverOpen(true);
+  };
+
+  useEffect(() => {
+    closeAll();
+  }, [pathname]);
+
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (!wrapperRef.current?.contains(event.target)) {
+        closeAll();
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === "Escape") {
+        closeAll();
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      clearCloseTimer();
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isDesktop]);
+
+  return (
+    <div
+      ref={wrapperRef}
+      className="relative"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={scheduleHoverClose}
+    >
+      <button
+        type="button"
+        onClick={() => {
+          clearCloseTimer();
+          setClickOpen((prev) => !prev);
+          if (isDesktop) {
+            setHoverOpen(true);
+          }
+        }}
+        className={[
+          "inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-all duration-200 ease-out",
+          open || hasActiveChild
+            ? "bg-slate-100 text-slate-950 shadow-sm"
+            : "text-slate-700 hover:bg-slate-50 hover:text-slate-950",
+        ].join(" ")}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        <span>{label}</span>
+        <ChevronDown
+          size={16}
+          className={[
+            "transition-transform duration-200 ease-out",
+            open ? "translate-y-[1px] rotate-180" : "rotate-0",
+          ].join(" ")}
+        />
+      </button>
+
+      <div
+        className={[
+          "absolute right-0 top-full z-50 mt-3 w-[22rem] origin-top-right rounded-2xl border border-slate-200 bg-white p-5 shadow-xl ring-1 ring-slate-100/80 backdrop-blur-sm transition-all duration-200 ease-out",
+          "max-md:w-[20rem] max-sm:w-[calc(100vw-2rem)]",
+          open
+            ? "pointer-events-auto translate-y-0 scale-100 opacity-100"
+            : "pointer-events-none -translate-y-2 scale-95 opacity-0",
+        ].join(" ")}
+        role="menu"
+      >
+        <div className="space-y-4">
+          {sections.map((section, index) => (
+            <div
+              key={section.titleKey}
+              className={index === 0 ? "space-y-2" : "space-y-2 border-t border-slate-100 pt-4"}
+            >
+              <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                {t(section.titleKey)}
+              </p>
+
+              <div className="space-y-1">
+                {section.items.map((item) => {
+                  const active = pathname === item.to;
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      onClick={closeAll}
+                      className={[
+                        "flex min-h-11 items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ease-out",
+                        active
+                          ? "bg-slate-900 text-white"
+                          : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
+                      ].join(" ")}
+                    >
+                      <span>{t(item.labelKey)}</span>
+                      <ChevronRight
+                        size={16}
+                        className={active ? "text-white/80" : "text-slate-400"}
+                      />
+                    </NavLink>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MobileDropdownMenu({ label, sections, pathname, t }) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  const hasActiveChild = sections.some((section) =>
+    section.items.some((item) => pathname === item.to)
+  );
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={[
+          "flex min-h-11 w-full items-center justify-between px-4 py-4 text-left text-sm font-semibold transition-all duration-200 ease-out",
+          open || hasActiveChild ? "text-slate-950" : "text-slate-700",
+        ].join(" ")}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        <span>{label}</span>
+        <ChevronDown
+          size={18}
+          className={[
+            "transition-transform duration-200 ease-out",
+            open ? "rotate-180" : "rotate-0",
+          ].join(" ")}
+        />
+      </button>
+
+      <div
+        className={[
+          "overflow-hidden transition-all duration-200 ease-out",
+          open ? "max-h-[32rem] opacity-100" : "max-h-0 opacity-0",
+        ].join(" ")}
+      >
+        <div className="space-y-4 border-t border-slate-100 px-4 pb-4 pt-3">
+          {sections.map((section) => (
+            <div key={section.titleKey} className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+                {t(section.titleKey)}
+              </p>
+              <div className="space-y-1">
+                {section.items.map((item) => {
+                  const active = pathname === item.to;
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      onClick={() => setOpen(false)}
+                      className={[
+                        "flex min-h-11 items-center justify-between rounded-xl px-3 py-3 text-sm font-medium transition-all duration-200 ease-out",
+                        active
+                          ? "bg-slate-900 text-white"
+                          : "bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-950",
+                      ].join(" ")}
+                    >
+                      <span>{t(item.labelKey)}</span>
+                      <ChevronRight
+                        size={16}
+                        className={active ? "text-white/80" : "text-slate-400"}
+                      />
+                    </NavLink>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
 
 export default function Navbar() {
-  const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated, logout, user } = useAuth();
+  const location = useLocation();
+  const { isAuthenticated, user, logout } = useAuth();
+  const { lang, setLanguage, t } = useLanguage();
 
-  const [isOpen, setIsOpen] = useState(false);
-  const [isMoreOpen, setIsMoreOpen] = useState(false);
-  const [lang, setLang] = useState(() => {
-    if (typeof window === "undefined") return "en";
-    return localStorage.getItem("alinafe_lang") || "en";
-  });
-
-  const moreWrapRef = useRef(null);
-  const moreButtonRef = useRef(null);
-  const moreMenuRef = useRef(null);
-
-  const userName = useMemo(() => {
-    if (!user?.fullName) return "";
-    return user.fullName.split(" ")[0];
-  }, [user]);
-
-  const isPathActive = (to, end = false) => {
-    if (end || to === "/") return location.pathname === to;
-    return location.pathname === to || location.pathname.startsWith(`${to}/`);
-  };
-
-  const moreMenuActive = useMemo(
-    () => MORE_LINKS.some((link) => isPathActive(link.to, link.end)),
-    [location.pathname]
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window === "undefined" ? true : window.innerWidth >= DESKTOP_BREAKPOINT
   );
 
-  const setLanguage = (next) => {
-    setLang(next);
-    try {
-      localStorage.setItem("alinafe_lang", next);
-    } catch {
-      // ignore storage errors
-    }
-  };
+  useEffect(() => {
+    const updateViewport = () => {
+      setIsDesktop(window.innerWidth >= DESKTOP_BREAKPOINT);
+    };
+
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
+  }, []);
 
   useEffect(() => {
-    setIsOpen(false);
-    setIsMoreOpen(false);
+    setMobileOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
-    if (!isOpen) return;
-    const prevOverflow = document.body.style.overflow;
+    if (!mobileOpen) {
+      document.body.style.overflow = "";
+      return;
+    }
+
     document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = prevOverflow;
+      document.body.style.overflow = "";
     };
-  }, [isOpen]);
+  }, [mobileOpen]);
 
-  useEffect(() => {
-    if (!isMoreOpen) return;
+  const firstName = useMemo(() => {
+    const raw = user?.fullName || user?.name || "";
+    return raw.trim().split(/\s+/)[0] || "";
+  }, [user]);
 
-    const onPointerDown = (event) => {
-      if (!moreWrapRef.current?.contains(event.target)) {
-        setIsMoreOpen(false);
-      }
-    };
-
-    const onKeyDown = (event) => {
-      if (event.key === "Escape") {
-        setIsMoreOpen(false);
-        moreButtonRef.current?.focus?.();
-      }
-    };
-
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("touchstart", onPointerDown, { passive: true });
-    window.addEventListener("keydown", onKeyDown);
-
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("touchstart", onPointerDown);
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [isMoreOpen]);
+  const handleApply = () => {
+    navigate("/apply");
+  };
 
   const handleLogout = () => {
     logout();
     navigate("/");
   };
 
-  const handleApply = () => {
-    navigate("/apply");
-  };
+  const navLinkClass = ({ isActive }) =>
+    [
+      "rounded-full px-3 py-2 text-sm font-semibold transition-colors",
+      isActive ? "text-slate-950" : "text-slate-700 hover:text-slate-950",
+    ].join(" ");
 
-  const moreMenuId = "navbar-more-menu";
-
-  const focusMoreItemByIndex = (index) => {
-    const nodes = moreMenuRef.current?.querySelectorAll('[role="menuitem"]');
-    if (!nodes || !nodes.length) return;
-    const safeIndex = ((index % nodes.length) + nodes.length) % nodes.length;
-    nodes[safeIndex]?.focus?.();
-  };
-
-  const openMoreAndFocus = (index = 0) => {
-    setIsMoreOpen(true);
-    setTimeout(() => focusMoreItemByIndex(index), 0);
-  };
+  const languageButtonClass = (code) =>
+    [
+      "rounded-full px-3 py-1.5 text-xs font-semibold transition",
+      lang === code
+        ? "bg-white text-slate-950 shadow-sm ring-1 ring-slate-200"
+        : "text-slate-600 hover:bg-slate-100 hover:text-slate-950",
+    ].join(" ");
 
   return (
-    <>
-      <div
-        className="w-full border-b text-xs sm:text-sm"
-        style={{ background: "linear-gradient(90deg, rgba(0,45,91,0.08) 0%, #ffffff 100%)", borderColor: "rgba(0,45,91,0.12)" }}
-      >
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-1.5 sm:px-4 md:px-6">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-700">
-            <a
-              href="tel:+265999000000"
-              className="rounded underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-              style={{ color: BRAND_NAVY }}
-            >
-              +265 999 000 000
-            </a>
-            <span className="hidden md:inline text-slate-600">Licensed Microfinance Institution - Malawi</span>
+    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <div className="border-b border-slate-100 bg-slate-50/90">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2 text-xs text-slate-600 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            <p className="truncate font-medium">{t("navbar.licensed")}</p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="text-slate-600">MWK</span>
-            <div className="inline-flex rounded-full border bg-white p-1" style={{ borderColor: "rgba(0,45,91,0.18)" }} role="group" aria-label="Language">
-              <button
-                type="button"
-                onClick={() => setLanguage("en")}
-                className="rounded-full px-2.5 py-1 text-xs transition"
-                style={lang === "en" ? { backgroundColor: BRAND_NAVY, color: "#fff" } : { color: BRAND_NAVY }}
-                aria-pressed={lang === "en"}
-              >
-                English
-              </button>
-              <button
-                type="button"
-                onClick={() => setLanguage("ny")}
-                className="rounded-full px-2.5 py-1 text-xs transition"
-                style={lang === "ny" ? { backgroundColor: BRAND_NAVY, color: "#fff" } : { color: BRAND_NAVY }}
-                aria-pressed={lang === "ny"}
-              >
-                Chichewa
-              </button>
-            </div>
+          <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white p-1 md:inline-flex lg:hidden">
+            <button
+              type="button"
+              onClick={() => setLanguage("en")}
+              className={languageButtonClass("en")}
+            >
+              {t("navbar.languageEnglish")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setLanguage("ny")}
+              className={languageButtonClass("ny")}
+            >
+              {t("navbar.languageChichewa")}
+            </button>
           </div>
         </div>
       </div>
 
-      <motion.nav
-        initial={{ y: -30, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.35 }}
-        className="sticky top-0 z-50 border-b bg-white/95 backdrop-blur"
-        style={{ borderColor: "rgba(0,45,91,0.12)" }}
-      >
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-2 sm:px-4 md:px-6">
-          <Link to="/" className="flex items-center" aria-label="Alinafe Capital Home">
-            <AlinafeLogo
-              className="h-[4.2rem] w-auto sm:h-[5rem] md:h-[5.9rem] lg:h-[6.4rem]"
-              showTagline={false}
-            />
-          </Link>
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+        <Link
+          to="/"
+          className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+          aria-label="Alinafe Capital home"
+        >
+          <AlinafeLogo className="h-[4.2rem] w-auto sm:h-20 lg:h-24" showTagline={false} />
+        </Link>
 
-          <div className="hidden lg:flex items-center gap-6">
-            {MAIN_LINKS.map((link) => (
-              <NavLink key={link.to} to={link.to} end={link.end} className={desktopLinkClass}>
-                {({ isActive }) => (
-                  <span className="relative inline-block">
-                    {link.label}
-                    <span
-                      className="absolute -bottom-1 left-0 h-0.5 rounded-full transition-all"
-                      style={{
-                        width: isActive ? "100%" : "0%",
-                        backgroundColor: BRAND_GOLD,
-                      }}
-                    />
-                  </span>
-                )}
-              </NavLink>
-            ))}
+        <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary navigation">
+          {MAIN_LINKS.map((item) => (
+            <NavLink key={item.to} to={item.to} className={navLinkClass} end={item.to === "/"}>
+              {t(item.labelKey)}
+            </NavLink>
+          ))}
 
-            <div className="relative" ref={moreWrapRef}>
-              <button
-                ref={moreButtonRef}
-                type="button"
-                onClick={() => setIsMoreOpen((prev) => !prev)}
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-base font-medium text-slate-700 hover:text-[#002D5B] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-                aria-haspopup="menu"
-                aria-expanded={isMoreOpen}
-                aria-controls={moreMenuId}
-                onKeyDown={(event) => {
-                  if (event.key === "ArrowDown") {
-                    event.preventDefault();
-                    openMoreAndFocus(0);
-                  }
-                  if (event.key === "ArrowUp") {
-                    event.preventDefault();
-                    openMoreAndFocus(MORE_LINKS.length - 1);
-                  }
-                }}
-              >
-                <span className="relative inline-block">
-                  More
-                  <span
-                    className="absolute -bottom-1 left-0 h-0.5 rounded-full transition-all"
-                    style={{
-                      width: moreMenuActive ? "100%" : "0%",
-                      backgroundColor: BRAND_GOLD,
-                    }}
-                  />
-                </span>
-                <ChevronDown size={16} />
-              </button>
+          <DropdownMenu
+            label={t("navbar.more")}
+            sections={MORE_SECTIONS}
+            pathname={location.pathname}
+            t={t}
+            isDesktop={isDesktop}
+          />
+        </nav>
 
-              <AnimatePresence>
-                {isMoreOpen ? (
-                  <motion.div
-                    id={moreMenuId}
-                    ref={moreMenuRef}
-                    role="menu"
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 8 }}
-                    className="absolute left-0 top-10 z-50 w-64 rounded-lg border bg-white p-2 shadow-lg"
-                    style={{ borderColor: "rgba(0,45,91,0.12)" }}
-                    onKeyDown={(event) => {
-                      const nodes = moreMenuRef.current?.querySelectorAll('[role="menuitem"]');
-                      if (!nodes || !nodes.length) return;
-                      const currentIndex = Array.from(nodes).findIndex(
-                        (node) => node === document.activeElement
-                      );
-
-                      if (event.key === "ArrowDown") {
-                        event.preventDefault();
-                        focusMoreItemByIndex(currentIndex + 1);
-                      }
-                      if (event.key === "ArrowUp") {
-                        event.preventDefault();
-                        focusMoreItemByIndex(currentIndex - 1);
-                      }
-                      if (event.key === "Home") {
-                        event.preventDefault();
-                        focusMoreItemByIndex(0);
-                      }
-                      if (event.key === "End") {
-                        event.preventDefault();
-                        focusMoreItemByIndex(nodes.length - 1);
-                      }
-                      if (event.key === "Escape") {
-                        event.preventDefault();
-                        setIsMoreOpen(false);
-                        moreButtonRef.current?.focus?.();
-                      }
-                    }}
-                  >
-                    {MORE_LINKS.map((link) => (
-                      <NavLink key={link.to} to={link.to} className={moreLinkClass} role="menuitem" onClick={() => setIsMoreOpen(false)}>
-                        {link.label}
-                      </NavLink>
-                    ))}
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
-            </div>
-          </div>
-
-          <div className="hidden lg:flex items-center gap-3">
-            {isAuthenticated ? (
-              <>
-                {userName ? <span className="text-xs text-slate-600">Hi, {userName}</span> : null}
-                <NavLink
-                  to="/dashboard"
-                  className="rounded-lg border px-4 py-2 text-base font-medium transition"
-                  style={{ borderColor: BRAND_NAVY, color: BRAND_NAVY }}
-                >
-                  Dashboard
-                </NavLink>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-base font-medium text-slate-700 transition hover:bg-slate-50"
-                >
-                  Logout
-                </button>
-              </>
-            ) : null}
-
+        <div className="hidden items-center gap-3 lg:flex">
+          <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1 shadow-sm">
             <button
               type="button"
-              onClick={handleApply}
-              className="rounded-lg border px-5 py-2 text-base font-semibold transition hover:opacity-95"
-              style={{
-                color: BRAND_NAVY,
-                borderColor: "rgba(0,45,91,0.25)",
-                background: "linear-gradient(135deg, #ffffff 0%, #e8f1ff 100%)",
-              }}
+              onClick={() => setLanguage("en")}
+              className={languageButtonClass("en")}
+              aria-pressed={lang === "en"}
             >
-              Apply Loan
+              {t("navbar.languageEnglish")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setLanguage("ny")}
+              className={languageButtonClass("ny")}
+              aria-pressed={lang === "ny"}
+            >
+              {t("navbar.languageChichewa")}
             </button>
           </div>
 
+          {isAuthenticated && firstName ? (
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              <span className="text-slate-500">
+                {t("navbar.hi")}, {firstName}
+              </span>
+            </div>
+          ) : null}
+
+          {isAuthenticated ? (
+            <>
+              <Link
+                to="/dashboard"
+                className="rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
+              >
+                {t("navbar.dashboard")}
+              </Link>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
+              >
+                {t("navbar.logout")}
+              </button>
+            </>
+          ) : null}
+
           <button
-            className="lg:hidden rounded-md border p-2 text-slate-700 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-            style={{ borderColor: "rgba(0,45,91,0.2)" }}
-            onClick={() => setIsOpen((prev) => !prev)}
-            aria-label={isOpen ? "Close menu" : "Open menu"}
-            aria-expanded={isOpen}
-            aria-controls="mobile-nav-panel"
+            type="button"
+            onClick={handleApply}
+            className="rounded-2xl border px-5 py-3 text-sm font-semibold shadow-sm transition hover:-translate-y-0.5"
+            style={{
+              backgroundColor: "#eef5ff",
+              borderColor: "#b7c9e6",
+              color: BRAND_NAVY,
+            }}
           >
-            {isOpen ? <X size={24} /> : <Menu size={24} />}
+            {t("navbar.applyLoan")}
           </button>
         </div>
 
-        <AnimatePresence>
-          {isOpen ? (
-            <>
-              <motion.button
+        <button
+          type="button"
+          onClick={() => setMobileOpen((prev) => !prev)}
+          className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 text-slate-800 lg:hidden"
+          aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
+          aria-expanded={mobileOpen}
+        >
+          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+        </button>
+      </div>
+
+      {mobileOpen ? (
+        <div className="border-t border-slate-200 bg-white/95 backdrop-blur lg:hidden">
+          <div className="mx-auto max-h-[calc(100vh-7rem)] max-w-7xl space-y-4 overflow-y-auto px-4 py-5 sm:px-6">
+            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-500">
+                  {t("navbar.publicLoanInquiry")}
+                </p>
+                <p className="mt-1 text-sm font-medium text-slate-800">
+                  {t("navbar.licensed")}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 p-1">
+              <button
                 type="button"
-                className="fixed inset-0 z-40 bg-black/35 lg:hidden"
-                aria-label="Close menu overlay"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setIsOpen(false)}
-              />
-
-              <motion.div
-                id="mobile-nav-panel"
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="absolute inset-x-0 top-full z-50 border-t bg-white shadow-xl lg:hidden"
-                style={{ borderColor: "rgba(0,45,91,0.12)" }}
+                onClick={() => setLanguage("en")}
+                className={[languageButtonClass("en"), "flex-1"].join(" ")}
               >
-                <div className="mx-auto max-w-7xl px-3 pb-5 sm:px-4">
-                  <div className="mt-2 max-h-[72vh] overflow-y-auto pb-1">
-                    {MOBILE_GROUPS.map((group) => (
-                      <MobileSection key={group.title} title={group.title}>
-                        {group.links.map((link) => (
-                          <NavLink
-                            key={link.to}
-                            to={link.to}
-                            end={link.end}
-                            className={mobileLinkClass}
-                            style={({ isActive }) =>
-                              isActive
-                                ? { color: BRAND_NAVY, backgroundColor: "rgba(0,45,91,0.08)" }
-                                : undefined
-                            }
-                            onClick={() => setIsOpen(false)}
-                          >
-                            {link.label}
-                          </NavLink>
-                        ))}
-                      </MobileSection>
-                    ))}
+                {t("navbar.languageEnglish")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguage("ny")}
+                className={[languageButtonClass("ny"), "flex-1"].join(" ")}
+              >
+                {t("navbar.languageChichewa")}
+              </button>
+            </div>
 
-                    <div className="mt-5 flex flex-col gap-3 border-t border-slate-200 pt-4">
-                      {isAuthenticated ? (
-                        <>
-                          <NavLink
-                            to="/dashboard"
-                            onClick={() => setIsOpen(false)}
-                            className="rounded-lg border px-4 py-2.5 text-center text-base font-medium"
-                            style={{ borderColor: BRAND_NAVY, color: BRAND_NAVY }}
-                          >
-                            Dashboard
-                          </NavLink>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsOpen(false);
-                              handleLogout();
-                            }}
-                            className="rounded-lg border border-slate-300 px-4 py-2.5 text-center text-base font-medium text-slate-700"
-                          >
-                            Logout
-                          </button>
-                        </>
-                      ) : null}
+            <div className="grid gap-4">
+              {MOBILE_PRIMARY_SECTIONS.map((group) => (
+                <MobileSection key={group.titleKey} title={t(group.titleKey)}>
+                  {group.links.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.to === "/"}
+                      className={({ isActive }) =>
+                        [
+                          "block rounded-xl px-4 py-3 text-sm font-medium transition-colors",
+                          isActive
+                            ? "bg-slate-900 text-white"
+                            : "bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-950",
+                        ].join(" ")
+                      }
+                    >
+                      {t(item.labelKey)}
+                    </NavLink>
+                  ))}
+                </MobileSection>
+              ))}
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsOpen(false);
-                          handleApply();
-                        }}
-                        className="rounded-lg border px-4 py-2.5 text-center text-base font-semibold"
-                        style={{
-                          color: BRAND_NAVY,
-                          borderColor: "rgba(0,45,91,0.25)",
-                          background: "linear-gradient(135deg, #ffffff 0%, #e8f1ff 100%)",
-                        }}
-                      >
-                        Apply Loan
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            </>
-          ) : null}
-        </AnimatePresence>
-      </motion.nav>
-    </>
+              <MobileDropdownMenu
+                label={t("navbar.more")}
+                sections={MORE_SECTIONS}
+                pathname={location.pathname}
+                t={t}
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {isAuthenticated ? (
+                <>
+                  <Link
+                    to="/dashboard"
+                    className="min-h-11 rounded-2xl border border-slate-200 px-4 py-3 text-center text-sm font-semibold text-slate-700"
+                  >
+                    {t("navbar.dashboard")}
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="min-h-11 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
+                  >
+                    {t("navbar.logout")}
+                  </button>
+                </>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={handleApply}
+                className="min-h-11 rounded-2xl px-4 py-3 text-sm font-semibold text-white sm:col-span-2"
+                style={{
+                  background: `linear-gradient(135deg, ${BRAND_NAVY}, #13427b 70%, ${BRAND_GOLD})`,
+                }}
+              >
+                {t("navbar.applyLoan")}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </header>
   );
 }

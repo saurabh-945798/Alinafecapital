@@ -47,6 +47,7 @@ const publicProfileUpdateSchema = z.object({
   district: z.string().trim().min(2),
   country: z.string().trim().default("Malawi"),
   employmentType: z.string().trim().min(2),
+  governmentId: z.string().trim().optional().or(z.literal("")),
   monthlyIncome: z.coerce.number().gt(0),
   bankName: z.string().trim().min(2),
   accountNumber: z.string().trim().min(3),
@@ -55,6 +56,15 @@ const publicProfileUpdateSchema = z.object({
   reference1Phone: z.string().trim().min(6),
   reference2Name: z.string().trim().min(2),
   reference2Phone: z.string().trim().min(6),
+}).superRefine((data, ctx) => {
+  const employmentType = String(data.employmentType || "").trim().toLowerCase();
+  if (employmentType === "government employee" && !String(data.governmentId || "").trim()) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["governmentId"],
+      message: "Government ID is required for government employees.",
+    });
+  }
 });
 
 const ALLOWED_DOC_TYPES = new Set([
@@ -189,6 +199,7 @@ export const loanInquiryController = {
     inquiry.district = payload.district;
     inquiry.country = payload.country || "Malawi";
     inquiry.employmentType = payload.employmentType;
+    inquiry.governmentId = payload.governmentId || "";
     inquiry.monthlyIncome = Number(payload.monthlyIncome);
     inquiry.bankName = payload.bankName;
     inquiry.accountNumber = payload.accountNumber;

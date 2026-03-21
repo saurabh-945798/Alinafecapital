@@ -42,6 +42,7 @@ export default function ProfileForm({
     district: "",
     country: "Malawi",
     employmentType: "",
+    governmentId: "",
     monthlyIncome: "",
     bankNameOption: "",
     bankNameOther: "",
@@ -64,6 +65,7 @@ export default function ProfileForm({
       district: profile.district || "",
       country: profile.country || "Malawi",
       employmentType: profile.employmentType || "",
+      governmentId: profile.governmentId || "",
       monthlyIncome: profile.monthlyIncome || "",
       bankNameOption: isKnownBank ? existingBankName : existingBankName ? "Other" : "",
       bankNameOther: isKnownBank ? "" : existingBankName,
@@ -91,12 +93,15 @@ export default function ProfileForm({
       form.bankNameOption === "Other"
         ? String(form.bankNameOther || "").trim()
         : String(form.bankNameOption || "").trim();
+    const isGovernmentEmployee =
+      String(form.employmentType || "").trim().toLowerCase() === "government employee";
 
     const sectionsComplete =
       !!String(form.addressLine1 || "").trim() &&
       !!String(form.city || "").trim() &&
       !!String(form.district || "").trim() &&
       !!String(form.employmentType || "").trim() &&
+      (!isGovernmentEmployee || !!String(form.governmentId || "").trim()) &&
       !!String(form.monthlyIncome || "").trim() &&
       Number(form.monthlyIncome) > 0 &&
       !!resolvedBankName &&
@@ -122,11 +127,16 @@ export default function ProfileForm({
       form.bankNameOption === "Other"
         ? String(form.bankNameOther || "").trim()
         : String(form.bankNameOption || "").trim();
+    const isGovernmentEmployee =
+      String(form.employmentType || "").trim().toLowerCase() === "government employee";
 
     if (!String(form.addressLine1 || "").trim()) return "Please enter your address line.";
     if (!String(form.city || "").trim()) return "Please enter your city or town.";
     if (!String(form.district || "").trim()) return "Please enter your district.";
     if (!String(form.employmentType || "").trim()) return "Please select your employment type.";
+    if (isGovernmentEmployee && !String(form.governmentId || "").trim()) {
+      return "Please enter your government ID.";
+    }
     if (!String(form.monthlyIncome || "").trim()) return "Please enter your monthly income.";
     if (Number(form.monthlyIncome) <= 0) return "Monthly income must be greater than zero.";
     if (!resolvedBankName) return "Please select your bank name.";
@@ -171,6 +181,7 @@ export default function ProfileForm({
         district: form.district,
         country: form.country,
         employmentType: form.employmentType,
+        governmentId: form.governmentId,
         monthlyIncome: form.monthlyIncome === "" ? undefined : Number(form.monthlyIncome),
         bankName: resolvedBankName,
         accountNumber: form.accountNumber,
@@ -359,6 +370,19 @@ export default function ProfileForm({
               <option>Farmer</option>
             </select>
           </label>
+
+          {String(form.employmentType || "").trim().toLowerCase() === "government employee" ? (
+            <label className="space-y-1.5">
+              <span className="text-sm font-medium text-slate-700">Government ID</span>
+              <input
+                className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                placeholder="Enter your government ID"
+                value={form.governmentId}
+                onChange={(e) => setForm((p) => ({ ...p, governmentId: e.target.value }))}
+                required
+              />
+            </label>
+          ) : null}
 
           <label className="space-y-1.5">
             <span className="text-sm font-medium text-slate-700">Monthly Income (MWK)</span>

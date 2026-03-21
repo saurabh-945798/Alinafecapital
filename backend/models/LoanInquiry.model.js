@@ -31,6 +31,7 @@ const LoanInquirySchema = new mongoose.Schema(
     district: { type: String, trim: true, default: "" },
     country: { type: String, trim: true, default: "Malawi" },
     employmentType: { type: String, trim: true, default: "" },
+    governmentId: { type: String, trim: true, default: "" },
     monthlyIncome: { type: Number, min: 0 },
     bankName: { type: String, trim: true, default: "" },
     accountNumber: { type: String, trim: true, default: "" },

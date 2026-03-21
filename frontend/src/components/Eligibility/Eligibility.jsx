@@ -1,6 +1,6 @@
 const Eligibility = () => {
   const criteria = [
-    "Age: 21 to 60 years",
+    "Age: 21+ years",
     "Valid national ID or passport",
     "Stable income source (salary or business cashflow)",
     "Active mobile number for communication",

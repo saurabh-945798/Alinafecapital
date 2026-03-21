@@ -46,6 +46,11 @@ const Footer = () => {
                 <ShieldCheck size={16} />
                 Licensed Microfinance Institution
               </div>
+
+              <p className="mt-4 text-xs leading-6 text-white/70">
+                ALINAFE CAPITAL is a limited company registered by the Registrar of Companies in Malawi.
+                Company No.: COY-7WULNGE.
+              </p>
             </div>
 
             <div>

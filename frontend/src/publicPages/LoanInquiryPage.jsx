@@ -28,6 +28,8 @@ export default function LoanInquiryPage() {
     phone: "",
     email: "",
     loanProductSlug: initialSlug,
+    requestedAmount: "",
+    preferredTenureMonths: "",
     description: "",
   });
 
@@ -100,6 +102,10 @@ export default function LoanInquiryPage() {
         loanProductSlug: form.loanProductSlug,
         loanProductName:
           mergedLoanOptions.find((item) => item.slug === form.loanProductSlug)?.name || "",
+        requestedAmount: form.requestedAmount ? Number(form.requestedAmount) : undefined,
+        preferredTenureMonths: form.preferredTenureMonths
+          ? Number(form.preferredTenureMonths)
+          : undefined,
         notes: form.description || undefined,
       });
 
@@ -110,6 +116,8 @@ export default function LoanInquiryPage() {
         phone: "",
         email: "",
         loanProductSlug: initialSlug,
+        requestedAmount: "",
+        preferredTenureMonths: "",
         description: "",
       });
     } catch (err) {
@@ -238,6 +246,36 @@ export default function LoanInquiryPage() {
                 </option>
               ))}
             </select>
+            </label>
+
+            <label>
+              <span className="mb-1 block text-sm font-medium text-slate-700">Loan Amount</span>
+              <input
+                required
+                name="requestedAmount"
+                type="number"
+                min="1"
+                value={form.requestedAmount}
+                onChange={onChange}
+                className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+                placeholder="Enter loan amount"
+                inputMode="numeric"
+              />
+            </label>
+
+            <label>
+              <span className="mb-1 block text-sm font-medium text-slate-700">Tenure (Months)</span>
+              <input
+                required
+                name="preferredTenureMonths"
+                type="number"
+                min="1"
+                value={form.preferredTenureMonths}
+                onChange={onChange}
+                className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+                placeholder="e.g. 12"
+                inputMode="numeric"
+              />
             </label>
 
             <label className="md:col-span-2">
