@@ -20,6 +20,18 @@ const InquiryDocumentSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const InquiryActionSchema = new mongoose.Schema(
+  {
+    type: { type: String, required: true, trim: true },
+    title: { type: String, required: true, trim: true },
+    note: { type: String, trim: true, default: "" },
+    status: { type: String, trim: true, default: "" },
+    actor: { type: String, trim: true, default: "System" },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const LoanInquirySchema = new mongoose.Schema(
   {
     fullName: { type: String, required: true, trim: true },
@@ -67,10 +79,12 @@ const LoanInquirySchema = new mongoose.Schema(
       index: true,
     },
     adminNote: { type: String, trim: true, default: "" },
+    closeReason: { type: String, trim: true, default: "" },
     contactedAt: { type: Date, default: null },
     kycSentAt: { type: Date, default: null },
     approvedAt: { type: Date, default: null },
     closedAt: { type: Date, default: null },
+    actionHistory: { type: [InquiryActionSchema], default: [] },
     source: { type: String, trim: true, default: "website" },
   },
   { timestamps: true }

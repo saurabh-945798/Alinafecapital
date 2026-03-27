@@ -18,8 +18,7 @@ const STATUS_TONE = {
 
 const SIMPLE_TABS = [
   { value: "ALL", label: "All" },
-  { value: "NEW", label: "New" },
-  { value: "CONTACTED", label: "Pending" },
+  { value: "PENDING_GROUP", label: "Pending" },
   { value: "KYC_SENT", label: "Needs KYC" },
   { value: "APPROVED", label: "Approved" },
   { value: "KYC_REJECTED", label: "Rejected" },
@@ -34,7 +33,7 @@ const KYC_TONE = {
 };
 
 const HUMAN_STATUS = {
-  NEW: "New",
+  NEW: "Pending",
   CONTACTED: "Pending",
   KYC_SENT: "Needs KYC",
   KYC_REJECTED: "KYC Rejected",
@@ -91,10 +90,24 @@ export default function LoanApplication() {
     setItems([]);
     setPagination((prev) => ({ ...prev, page, total: 0, totalPages: 1 }));
     try {
-      const data = await inquiriesApi.list({ page, limit: 20, q: debouncedQuery, status });
+      const effectiveStatus = status === "PENDING_GROUP" ? "ALL" : status;
+      const data = await inquiriesApi.list({ page, limit: 20, q: debouncedQuery, status: effectiveStatus });
       if (currentFetchId !== fetchIdRef.current) return;
-      setItems(data?.items || []);
-      setPagination(data?.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 });
+      const rawItems = data?.items || [];
+      const filteredItems =
+        status === "PENDING_GROUP"
+          ? rawItems.filter((item) => item?.status === "NEW" || item?.status === "CONTACTED")
+          : rawItems;
+      setItems(filteredItems);
+      const nextPagination = data?.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 };
+      setPagination(
+        status === "PENDING_GROUP"
+          ? {
+              ...nextPagination,
+              total: Number(counts.NEW || 0) + Number(counts.CONTACTED || 0),
+            }
+          : nextPagination
+      );
     } catch (err) {
       if (currentFetchId !== fetchIdRef.current) return;
       const msg = err?.response?.data?.message || "Failed to load loan inquiries.";
@@ -124,6 +137,8 @@ export default function LoanApplication() {
         acc[value] = Number(responses[index]?.pagination?.total || 0);
         return acc;
       }, {});
+
+      nextCounts.PENDING_GROUP = Number(nextCounts.NEW || 0) + Number(nextCounts.CONTACTED || 0);
 
       setCounts((prev) => ({ ...prev, ...nextCounts }));
     } catch {

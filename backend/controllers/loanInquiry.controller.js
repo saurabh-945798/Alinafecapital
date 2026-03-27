@@ -39,6 +39,7 @@ const adminListSchema = z.object({
 const adminUpdateSchema = z.object({
   status: z.enum(["NEW", "CONTACTED", "KYC_SENT", "KYC_REJECTED", "APPROVED", "CLOSED", "QUALIFIED"]).optional(),
   adminNote: z.string().trim().max(1000).optional(),
+  closeReason: z.string().trim().max(200).optional(),
 });
 
 const publicProfileUpdateSchema = z.object({
@@ -80,6 +81,34 @@ const toPublicFileUrl = (filePath = "") => {
   return `/${relative}`;
 };
 
+const fileExists = (value = "") => Boolean(value) && fs.existsSync(String(value));
+
+const sanitizeInquiryAssets = async (inquiry) => {
+  if (!inquiry) return inquiry;
+
+  let changed = false;
+
+  if (inquiry.avatarPath && !fileExists(inquiry.avatarPath)) {
+    inquiry.avatarPath = "";
+    inquiry.avatarUrl = "";
+    changed = true;
+  }
+
+  const currentDocs = Array.isArray(inquiry.documents) ? inquiry.documents : [];
+  const validDocs = currentDocs.filter((doc) => fileExists(doc?.filePath));
+  if (validDocs.length !== currentDocs.length) {
+    inquiry.documents = validDocs;
+    changed = true;
+  }
+
+  if (changed) {
+    syncInquiryCompletion(inquiry);
+    await inquiry.save({ validateBeforeSave: false });
+  }
+
+  return inquiry;
+};
+
 const toPublicInquiryProfile = (inquiry) => {
   if (!inquiry) return null;
   const obj = inquiry.toObject ? inquiry.toObject() : inquiry;
@@ -102,6 +131,15 @@ const syncInquiryCompletion = (inquiry) => {
 };
 
 const generatePublicAccessToken = () => crypto.randomBytes(24).toString("hex");
+
+const pushActionHistory = (inquiry, entry) => {
+  inquiry.actionHistory = Array.isArray(inquiry.actionHistory) ? inquiry.actionHistory : [];
+  inquiry.actionHistory.push({
+    actor: "System",
+    ...entry,
+    createdAt: entry.createdAt || new Date(),
+  });
+};
 
 export const loanInquiryController = {
   createPublic: async (req, res) => {
@@ -149,6 +187,16 @@ export const loanInquiryController = {
       source: "website",
       status: "NEW",
       publicAccessToken: generatePublicAccessToken(),
+      actionHistory: [
+        {
+          type: "inquiry_created",
+          title: "Inquiry Created",
+          note: "Customer submitted a new loan inquiry.",
+          status: "NEW",
+          actor: "Customer",
+          createdAt: new Date(),
+        },
+      ],
     });
 
     return res.status(201).json({
@@ -161,17 +209,7 @@ export const loanInquiryController = {
   },
 
   publicProfile: async (req, res) => {
-    const inquiry = req.inquiry;
-
-    if (inquiry.avatarPath && !fs.existsSync(inquiry.avatarPath)) {
-      inquiry.avatarPath = "";
-      inquiry.avatarUrl = "";
-    }
-
-    syncInquiryCompletion(inquiry);
-    if (inquiry.isModified("avatarPath") || inquiry.isModified("avatarUrl") || inquiry.isModified("profileCompletion")) {
-      await inquiry.save({ validateBeforeSave: false });
-    }
+    const inquiry = await sanitizeInquiryAssets(req.inquiry);
 
     return res.json({
       success: true,
@@ -309,6 +347,13 @@ export const loanInquiryController = {
       inquiry.status = "KYC_SENT";
       inquiry.kycSentAt = new Date();
     }
+    pushActionHistory(inquiry, {
+      type: "profile_kyc_submitted",
+      title: "Profile + KYC Submitted",
+      note: "Customer completed profile details and uploaded KYC documents.",
+      status: inquiry.status,
+      actor: "Customer",
+    });
     await inquiry.save();
 
     return res.json({
@@ -352,13 +397,37 @@ export const loanInquiryController = {
 
     const patchedItems = await Promise.all(
       items.map(async (item) => {
-        if (item.publicAccessToken) return item;
+        const updates = {};
+        const nextItem = { ...item };
+        if (item.avatarPath && !fileExists(item.avatarPath)) {
+          updates.avatarPath = "";
+          updates.avatarUrl = "";
+          nextItem.avatarPath = "";
+          nextItem.avatarUrl = "";
+        }
+        if (Array.isArray(item.documents)) {
+          const validDocs = item.documents.filter((doc) => fileExists(doc?.filePath));
+          if (validDocs.length !== item.documents.length) {
+            updates.documents = validDocs;
+            nextItem.documents = validDocs;
+          }
+        }
+        if (Object.keys(updates).length > 0) {
+          updates.profileCompletion = calculateProfileCompletion(nextItem);
+        }
         const nextToken = generatePublicAccessToken();
-        await LoanInquiry.updateOne(
-          { _id: item._id, publicAccessToken: { $exists: false } },
-          { $set: { publicAccessToken: nextToken } }
-        );
-        return { ...item, publicAccessToken: nextToken };
+        if (!item.publicAccessToken) {
+          updates.publicAccessToken = nextToken;
+        }
+        if (Object.keys(updates).length > 0) {
+          const refreshed = await LoanInquiry.findByIdAndUpdate(
+            item._id,
+            { $set: updates },
+            { new: true, lean: true }
+          );
+          return refreshed || { ...item, ...updates, publicAccessToken: updates.publicAccessToken || item.publicAccessToken };
+        }
+        return item;
       })
     );
 
@@ -385,7 +454,7 @@ export const loanInquiryController = {
       });
     }
 
-    const doc = await LoanInquiry.findById(req.params.id).lean();
+    const doc = await LoanInquiry.findById(req.params.id);
     if (!doc) {
       return res.status(404).json({
         success: false,
@@ -394,9 +463,14 @@ export const loanInquiryController = {
       });
     }
 
+    if (!doc.publicAccessToken) {
+      doc.publicAccessToken = generatePublicAccessToken();
+    }
+    await sanitizeInquiryAssets(doc);
+
     return res.json({
       success: true,
-      data: doc,
+      data: doc.toObject(),
     });
   },
 
@@ -427,6 +501,9 @@ export const loanInquiryController = {
         code: "NOT_FOUND",
       });
     }
+
+    const previousStatus = doc.status;
+    const previousAdminNote = doc.adminNote || "";
 
     if (parsed.data.status) {
       if (parsed.data.status === "APPROVED" && doc.kycStatus !== "verified") {
@@ -462,6 +539,41 @@ export const loanInquiryController = {
     }
     if (parsed.data.adminNote !== undefined) {
       doc.adminNote = parsed.data.adminNote;
+    }
+    if (parsed.data.closeReason !== undefined) {
+      doc.closeReason = parsed.data.closeReason;
+    }
+
+    if (doc.status === "CLOSED" && !String(doc.closeReason || "").trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Close reason is required before closing the inquiry.",
+        code: "CLOSE_REASON_REQUIRED",
+      });
+    }
+
+    if (parsed.data.status && parsed.data.status !== previousStatus) {
+      pushActionHistory(doc, {
+        type: "status_updated",
+        title: `Status changed to ${parsed.data.status}`,
+        note:
+          parsed.data.status === "CLOSED" && doc.closeReason
+            ? `Close reason: ${doc.closeReason}`
+            : String(parsed.data.adminNote || "").trim(),
+        status: parsed.data.status,
+        actor: "Admin",
+      });
+    } else if (
+      parsed.data.adminNote !== undefined &&
+      String(parsed.data.adminNote || "").trim() !== String(previousAdminNote || "").trim()
+    ) {
+      pushActionHistory(doc, {
+        type: "note_updated",
+        title: "Admin Note Updated",
+        note: String(parsed.data.adminNote || "").trim(),
+        status: doc.status,
+        actor: "Admin",
+      });
     }
 
     await doc.save();

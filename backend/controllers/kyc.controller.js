@@ -1,5 +1,6 @@
 import UserProfile from "../models/UserProfile.js";
 import { LoanInquiry } from "../models/LoanInquiry.model.js";
+import fs from "fs";
 
 const safeRegex = (value = "") => {
   const safe = String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -7,7 +8,7 @@ const safeRegex = (value = "") => {
 };
 
 const toPublicDocuments = (documents = []) =>
-  (documents || []).map((d) => ({
+  (documents || []).filter((d) => d?.filePath && fs.existsSync(String(d.filePath))).map((d) => ({
     type: d.type,
     fileUrl: d.fileUrl,
     mime: d.mime,
@@ -32,7 +33,7 @@ const mapUserProfileRecord = (profile) => {
     bankName: obj.bankName || "",
     accountNumber: obj.accountNumber || "",
     branchCode: obj.branchCode || "",
-    avatarUrl: obj.avatarUrl || "",
+    avatarUrl: obj.avatarPath && fs.existsSync(String(obj.avatarPath)) ? obj.avatarUrl || "" : "",
     documents: toPublicDocuments(obj.documents),
     profileCompletion: obj.profileCompletion ?? 0,
     kycStatus: obj.kycStatus || "not_started",
@@ -64,7 +65,7 @@ const mapInquiryRecord = (inquiry) => {
     bankName: obj.bankName || "",
     accountNumber: obj.accountNumber || "",
     branchCode: obj.branchCode || "",
-    avatarUrl: obj.avatarUrl || "",
+    avatarUrl: obj.avatarPath && fs.existsSync(String(obj.avatarPath)) ? obj.avatarUrl || "" : "",
     documents: toPublicDocuments(obj.documents),
     profileCompletion: obj.profileCompletion ?? 0,
     kycStatus: obj.kycStatus || "not_started",
@@ -77,6 +78,8 @@ const mapInquiryRecord = (inquiry) => {
     source: "loan_inquiry",
     loanProductName: obj.loanProductName || "",
     inquiryStatus: obj.status || "",
+    closeReason: obj.closeReason || "",
+    actionHistory: Array.isArray(obj.actionHistory) ? obj.actionHistory : [],
     contactedAt: obj.contactedAt || null,
     kycSentAt: obj.kycSentAt || null,
     approvedAt: obj.approvedAt || null,
@@ -185,6 +188,17 @@ export async function verifyKyc(req, res, next) {
     review.doc.kycRemarks = "";
     review.doc.verifiedAt = new Date();
     review.doc.rejectedAt = null;
+    if (review.recordType === "inquiry") {
+      review.doc.actionHistory = Array.isArray(review.doc.actionHistory) ? review.doc.actionHistory : [];
+      review.doc.actionHistory.push({
+        type: "kyc_verified",
+        title: "KYC Verified",
+        note: "Admin verified the customer KYC submission.",
+        status: review.doc.status,
+        actor: "Admin",
+        createdAt: new Date(),
+      });
+    }
     await review.doc.save();
 
     return res.json({
@@ -216,6 +230,17 @@ export async function rejectKyc(req, res, next) {
     review.doc.kycRemarks = remarks;
     review.doc.rejectedAt = new Date();
     review.doc.verifiedAt = null;
+    if (review.recordType === "inquiry") {
+      review.doc.actionHistory = Array.isArray(review.doc.actionHistory) ? review.doc.actionHistory : [];
+      review.doc.actionHistory.push({
+        type: "kyc_rejected",
+        title: "KYC Rejected",
+        note: remarks || "Admin rejected the customer KYC submission.",
+        status: review.doc.status,
+        actor: "Admin",
+        createdAt: new Date(),
+      });
+    }
     await review.doc.save();
 
     return res.json({
