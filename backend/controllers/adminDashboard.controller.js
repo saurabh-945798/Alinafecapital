@@ -9,7 +9,7 @@ const toCountMap = (rows = []) =>
   }, {});
 
 export const getAdminDashboardSummary = async (req, res) => {
-  const [countsAgg, needsAction, recentApproved] = await Promise.all([
+  const [countsAgg, verifiedKycCount, needsAction, recentApproved] = await Promise.all([
     LoanInquiry.aggregate([
       {
         $match: {
@@ -25,6 +25,7 @@ export const getAdminDashboardSummary = async (req, res) => {
         },
       },
     ]),
+    LoanInquiry.countDocuments({ kycStatus: "verified" }),
     LoanInquiry.find({ status: { $in: unresolvedStatuses } })
       .sort({ createdAt: -1 })
       .limit(6)
@@ -46,6 +47,7 @@ export const getAdminDashboardSummary = async (req, res) => {
       newRequests: counts.NEW || 0,
       pendingFollowUp: counts.CONTACTED || 0,
       needsKyc: counts.KYC_SENT || 0,
+      verified: verifiedKycCount || 0,
       rejected: counts.KYC_REJECTED || 0,
       approved: counts.APPROVED || 0,
       closed: counts.CLOSED || 0,

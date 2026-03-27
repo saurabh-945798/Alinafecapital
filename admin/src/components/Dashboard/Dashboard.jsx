@@ -6,6 +6,7 @@ import {
   Clock3,
   RefreshCw,
   ShieldAlert,
+  ShieldCheck,
   XCircle,
 } from "lucide-react";
 import Badge from "../ui/Badge";
@@ -58,6 +59,7 @@ export default function Dashboard() {
     newRequests: 0,
     pendingFollowUp: 0,
     needsKyc: 0,
+    verified: 0,
     rejected: 0,
     approved: 0,
     closed: 0,
@@ -85,6 +87,7 @@ export default function Dashboard() {
           newRequests: 0,
           pendingFollowUp: 0,
           needsKyc: 0,
+          verified: 0,
           rejected: 0,
           approved: 0,
           closed: 0,
@@ -159,7 +162,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
           <OverviewCard
             icon={Clock3}
             label="Pending"
@@ -169,10 +172,17 @@ export default function Dashboard() {
           />
           <OverviewCard
             icon={ShieldAlert}
-            label="Needs KYC"
+            label="KYC"
             value={metrics.needsKyc}
             accent="indigo"
             subtitle="Waiting for customer KYC"
+          />
+          <OverviewCard
+            icon={ShieldCheck}
+            label="Verified"
+            value={metrics.verified}
+            accent="green"
+            subtitle="KYC completed and verified"
           />
           <OverviewCard
             icon={XCircle}

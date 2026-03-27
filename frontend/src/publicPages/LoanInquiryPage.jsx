@@ -265,17 +265,20 @@ export default function LoanInquiryPage() {
 
             <label>
               <span className="mb-1 block text-sm font-medium text-slate-700">Tenure (Months)</span>
-              <input
+              <select
                 required
                 name="preferredTenureMonths"
-                type="number"
-                min="1"
                 value={form.preferredTenureMonths}
                 onChange={onChange}
                 className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
-                placeholder="e.g. 12"
-                inputMode="numeric"
-              />
+              >
+                <option value="">Select tenure</option>
+                {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
+                  <option key={month} value={month}>
+                    {month} {month === 1 ? "month" : "months"}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label className="md:col-span-2">

@@ -27,7 +27,7 @@ const KYC_TONE = {
 const HUMAN_STATUS = {
   NEW: "Pending",
   CONTACTED: "Pending",
-  KYC_SENT: "Needs KYC",
+  KYC_SENT: "KYC",
   KYC_REJECTED: "KYC Rejected",
   APPROVED: "Approved",
   QUALIFIED: "Approved",
@@ -43,8 +43,9 @@ const HUMAN_KYC = {
 
 const ACTION_STATUS_LABEL = {
   CONTACTED: "Pending",
-  KYC_SENT: "Send KYC Link",
+  KYC_SENT: "KYC",
   KYC_REJECTED: "KYC Rejected",
+  VERIFIED: "Verify",
   APPROVED: "Approved",
   CLOSED: "Closed",
 };
@@ -111,6 +112,7 @@ const buildWhatsappLink = (item, nextStatus, rejectionReason = "") => {
     CONTACTED: `Hello ${customerName}, our team is now contacting you regarding your ${loanName} request. Please keep your phone available as we will guide you on the next steps shortly.`,
     KYC_SENT: kycSentMessage,
     KYC_REJECTED: kycRejectedMessage,
+    VERIFIED: `Hello ${customerName}, your KYC has been verified successfully. Our team is now continuing the review of your ${loanName} request.`,
     APPROVED: `Hello ${customerName}, your ${loanName} request has been successfully approved. Please visit the branch to continue and receive your funds.`,
     CLOSED: `Hello ${customerName}, your ${loanName} request has now been closed. Please contact Alinafe Capital if you need any clarification.`,
     QUALIFIED: `Hello ${customerName}, your ${loanName} request has been successfully approved. Please visit the branch to continue and receive your funds.`,
@@ -126,6 +128,7 @@ const buildWhatsappLink = (item, nextStatus, rejectionReason = "") => {
 const getEffectiveWhatsappStatus = (item, nextStatus) => {
   if (nextStatus) return nextStatus;
   if (item?.status === "KYC_REJECTED" || item?.kycStatus === "rejected") return "KYC_REJECTED";
+  if (item?.kycStatus === "verified" && item?.status !== "APPROVED") return "VERIFIED";
   if (item?.status === "KYC_SENT") return "KYC_SENT";
   if (item?.status === "APPROVED") return "APPROVED";
   if (item?.status === "CLOSED") return "CLOSED";
@@ -183,8 +186,18 @@ export default function LoanApplicationDetail() {
     setActionLoading(true);
     setError("");
     try {
-      if ((nextStatus === "APPROVED" || nextStatus === "KYC_REJECTED") && !hasSubmittedKyc) {
+      if ((nextStatus === "APPROVED" || nextStatus === "KYC_REJECTED" || nextStatus === "VERIFIED") && !hasSubmittedKyc) {
         throw new Error("Customer has not submitted Profile + KYC yet.");
+      }
+
+      if (nextStatus === "VERIFIED") {
+        if (item.kycStatus !== "verified") {
+          await complianceApi.verifyKyc(`inquiry:${item._id}`);
+        }
+        await loadDetail();
+        setNextStatus("");
+        toast.success("KYC verified.");
+        return;
       }
 
       if (nextStatus === "APPROVED" && item.kycStatus !== "verified") {
@@ -722,6 +735,13 @@ export default function LoanApplicationDetail() {
         tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
       };
     }
+    if (item.kycStatus === "verified") {
+      return {
+        title: "KYC Verified",
+        note: "KYC is complete and verified. The loan can now move to approval when ready.",
+        tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
+      };
+    }
     if (item.status === "CLOSED") {
       return {
         title: "Closed",
@@ -760,7 +780,7 @@ export default function LoanApplicationDetail() {
   })();
 
   const actionHistory = Array.isArray(item.actionHistory) ? item.actionHistory : [];
-  const availableStatuses = ["CONTACTED", "KYC_SENT", "KYC_REJECTED", "APPROVED", "CLOSED"].filter(
+  const availableStatuses = ["CONTACTED", "KYC_SENT", "KYC_REJECTED", "VERIFIED", "APPROVED", "CLOSED"].filter(
     (status) => status !== item.status
   );
 
@@ -1011,7 +1031,7 @@ export default function LoanApplicationDetail() {
               disabled={
                 !nextStatus ||
                 actionLoading ||
-                ((nextStatus === "APPROVED" || nextStatus === "KYC_REJECTED") && !hasSubmittedKyc) ||
+                ((nextStatus === "APPROVED" || nextStatus === "KYC_REJECTED" || nextStatus === "VERIFIED") && !hasSubmittedKyc) ||
                 (nextStatus === "KYC_REJECTED" && !String(adminNote || "").trim()) ||
                 (nextStatus === "CLOSED" && !String(closeReason || "").trim())
               }
@@ -1021,6 +1041,11 @@ export default function LoanApplicationDetail() {
             </Button>
           </div>
 
+          {nextStatus === "VERIFIED" && hasSubmittedKyc ? (
+            <p className="text-xs font-medium text-slate-600">
+              This verifies KYC only. Use `Approved` later when the loan decision is ready.
+            </p>
+          ) : null}
           {nextStatus === "APPROVED" && hasSubmittedKyc ? (
             <p className="text-xs font-medium text-slate-600">
               Approving this inquiry will also mark the submitted KYC as verified.
@@ -1028,7 +1053,7 @@ export default function LoanApplicationDetail() {
           ) : null}
           {nextStatus === "KYC_SENT" ? (
             <p className="text-xs font-medium text-slate-600">
-              Click `WP Preview` to open the WhatsApp message with the profile + KYC link, then save this status.
+              Click `WP Preview` to open the WhatsApp message with the KYC form link, then save this status.
             </p>
           ) : null}
           {nextStatus === "KYC_REJECTED" && !String(adminNote || "").trim() ? (
