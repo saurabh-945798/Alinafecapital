@@ -95,8 +95,10 @@ export default function ProfileForm({
         : String(form.bankNameOption || "").trim();
     const isGovernmentEmployee =
       String(form.employmentType || "").trim().toLowerCase() === "government employee";
+    const hasAvatar = !!String(profile?.avatarUrl || "").trim();
 
     const sectionsComplete =
+      hasAvatar &&
       !!String(form.addressLine1 || "").trim() &&
       !!String(form.city || "").trim() &&
       !!String(form.district || "").trim() &&
@@ -114,7 +116,7 @@ export default function ProfileForm({
       !!String(form.reference2Phone || "").trim();
 
     onCompletionChange?.(sectionsComplete);
-  }, [form, onCompletionChange]);
+  }, [form, onCompletionChange, profile?.avatarUrl]);
 
   const resolveAssetUrl = (path = "") => {
     if (!path) return "";
@@ -130,6 +132,7 @@ export default function ProfileForm({
     const isGovernmentEmployee =
       String(form.employmentType || "").trim().toLowerCase() === "government employee";
 
+    if (!String(profile?.avatarUrl || "").trim()) return "Please upload your profile photo.";
     if (!String(form.addressLine1 || "").trim()) return "Please enter your address line.";
     if (!String(form.city || "").trim()) return "Please enter your city or town.";
     if (!String(form.district || "").trim()) return "Please enter your district.";
@@ -253,7 +256,7 @@ export default function ProfileForm({
   return (
     <form id="profileForm" onSubmit={save} className="space-y-5 sm:space-y-6">
       <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-        <h3 className="text-base font-semibold text-slate-800">Profile Photo (Optional)</h3>
+        <h3 className="text-base font-semibold text-slate-800">Profile Photo</h3>
         <p className="mt-1 text-sm text-slate-500">JPG, PNG or WEBP. Max size 2MB.</p>
         <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
           <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full border border-slate-300 bg-slate-100">
@@ -293,6 +296,11 @@ export default function ProfileForm({
                 ? "Choose a new image to change photo instantly."
                 : "Choose an image to upload instantly."}
             </div>
+            {!profile?.avatarUrl ? (
+              <div className="text-xs font-medium text-amber-700">
+                Profile photo is required before submitting Profile + KYC.
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

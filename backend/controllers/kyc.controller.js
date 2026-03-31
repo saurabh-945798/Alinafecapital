@@ -194,7 +194,7 @@ export async function verifyKyc(req, res, next) {
         type: "kyc_verified",
         title: "KYC Verified",
         note: "Admin verified the customer KYC submission.",
-        status: review.doc.status,
+        status: "VERIFIED",
         actor: "Admin",
         createdAt: new Date(),
       });
@@ -236,7 +236,7 @@ export async function rejectKyc(req, res, next) {
         type: "kyc_rejected",
         title: "KYC Rejected",
         note: remarks || "Admin rejected the customer KYC submission.",
-        status: review.doc.status,
+        status: "KYC_REJECTED",
         actor: "Admin",
         createdAt: new Date(),
       });

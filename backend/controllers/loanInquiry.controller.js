@@ -330,6 +330,15 @@ export const loanInquiryController = {
     const inquiry = req.inquiry;
     syncInquiryCompletion(inquiry);
 
+    if (!String(inquiry.avatarUrl || "").trim()) {
+      await inquiry.save();
+      return res.status(400).json({
+        success: false,
+        message: "Profile photo is required before KYC submission",
+        code: "AVATAR_REQUIRED",
+      });
+    }
+
     if (inquiry.profileCompletion !== 100) {
       await inquiry.save();
       return res.status(400).json({
@@ -376,7 +385,12 @@ export const loanInquiryController = {
     const filter = {};
 
     if (status && status !== "ALL") {
-      filter.status = status.toUpperCase();
+      const normalizedStatus = status.toUpperCase();
+      if (normalizedStatus === "VERIFIED") {
+        filter.kycStatus = "verified";
+      } else {
+        filter.status = normalizedStatus;
+      }
     }
 
     if (q) {

@@ -44,6 +44,7 @@ export default function DashboardProfilePage() {
       { label: "Full Name", done: !!profile.fullName },
       { label: "Phone Number", done: !!profile.phone },
       { label: "Email Address", done: !!profile.email },
+      { label: "Profile Photo", done: !!profile.avatarUrl },
       {
         label: "Address (line, city, district)",
         done: !!profile.addressLine1 && !!profile.city && !!profile.district,
@@ -338,7 +339,7 @@ export default function DashboardProfilePage() {
                   form="profileForm"
                   className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 sm:w-auto"
                 >
-                  Submit Profile + KYC
+                  Submit  
                 </button>
               </div>
             ) : null}

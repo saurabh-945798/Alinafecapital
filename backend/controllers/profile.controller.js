@@ -185,6 +185,15 @@ export async function submitKyc(req, res, next) {
 
     profile.profileCompletion = calculateProfileCompletion(profile);
 
+    if (!String(profile.avatarUrl || "").trim()) {
+      await profile.save();
+      return res.status(400).json({
+        success: false,
+        message: "Profile photo is required before KYC submission",
+        code: "AVATAR_REQUIRED",
+      });
+    }
+
     if (profile.profileCompletion !== 100) {
       await profile.save();
       return res.status(400).json({

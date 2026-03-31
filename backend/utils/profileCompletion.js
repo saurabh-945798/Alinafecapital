@@ -5,7 +5,12 @@
   let score = 0;
 
   // Identity: 30
-  if (hasText(profile.fullName) && hasText(profile.email) && hasText(profile.phone)) {
+  if (
+    hasText(profile.fullName) &&
+    hasText(profile.email) &&
+    hasText(profile.phone) &&
+    hasText(profile.avatarUrl)
+  ) {
     score += 30;
   }
 

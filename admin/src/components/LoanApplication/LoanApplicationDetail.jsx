@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { ChevronDown } from "lucide-react";
 import Button from "../ui/Button";
 import Badge from "../ui/Badge";
 import { inquiriesApi } from "../../services/api/inquiries.api";
@@ -12,6 +13,7 @@ const STATUS_TONE = {
   CONTACTED: "blue",
   KYC_SENT: "blue",
   KYC_REJECTED: "red",
+  VERIFIED: "green",
   APPROVED: "green",
   QUALIFIED: "green",
   CLOSED: "gray",
@@ -29,6 +31,7 @@ const HUMAN_STATUS = {
   CONTACTED: "Pending",
   KYC_SENT: "KYC",
   KYC_REJECTED: "KYC Rejected",
+  VERIFIED: "Verified",
   APPROVED: "Approved",
   QUALIFIED: "Approved",
   CLOSED: "Closed",
@@ -42,7 +45,6 @@ const HUMAN_KYC = {
 };
 
 const ACTION_STATUS_LABEL = {
-  CONTACTED: "Pending",
   KYC_SENT: "KYC",
   KYC_REJECTED: "KYC Rejected",
   VERIFIED: "Verify",
@@ -127,13 +129,37 @@ const buildWhatsappLink = (item, nextStatus, rejectionReason = "") => {
 
 const getEffectiveWhatsappStatus = (item, nextStatus) => {
   if (nextStatus) return nextStatus;
-  if (item?.status === "KYC_REJECTED" || item?.kycStatus === "rejected") return "KYC_REJECTED";
   if (item?.kycStatus === "verified" && item?.status !== "APPROVED") return "VERIFIED";
+  if (item?.kycStatus === "pending") return "KYC_SENT";
+  if (item?.status === "KYC_REJECTED" || item?.kycStatus === "rejected") return "KYC_REJECTED";
   if (item?.status === "KYC_SENT") return "KYC_SENT";
   if (item?.status === "APPROVED") return "APPROVED";
   if (item?.status === "CLOSED") return "CLOSED";
   if (item?.status === "CONTACTED" || item?.status === "NEW") return "CONTACTED";
   return item?.status || "";
+};
+
+const getDisplayedStatusKey = (item) => {
+  if (!item) return "";
+  if (item.status === "APPROVED") return "APPROVED";
+  if (item.status === "CLOSED") return "CLOSED";
+  if (item.kycStatus === "verified") return "VERIFIED";
+  if (item.kycStatus === "pending") return "KYC_SENT";
+  if (item.kycStatus === "rejected" || item.status === "KYC_REJECTED") return "KYC_REJECTED";
+  if (item.status === "KYC_SENT") return "KYC_SENT";
+  if (item.status === "CONTACTED" || item.status === "NEW") return "CONTACTED";
+  return item.status || "";
+};
+
+const getHistoryStatusKey = (entry) => {
+  if (!entry) return "";
+  if (entry.type === "kyc_verified" || entry.status === "VERIFIED") return "VERIFIED";
+  if (entry.type === "kyc_rejected" || entry.status === "KYC_REJECTED") return "KYC_REJECTED";
+  if (entry.status === "APPROVED") return "APPROVED";
+  if (entry.status === "CLOSED") return "CLOSED";
+  if (entry.status === "KYC_SENT") return "KYC_SENT";
+  if (entry.status === "CONTACTED" || entry.status === "NEW") return "CONTACTED";
+  return entry.status || "";
 };
 
 export default function LoanApplicationDetail() {
@@ -148,6 +174,7 @@ export default function LoanApplicationDetail() {
   const [closeReason, setCloseReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [avatarBroken, setAvatarBroken] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const hasSubmittedKyc =
     item?.kycStatus === "pending" ||
     item?.kycStatus === "verified" ||
@@ -575,7 +602,7 @@ export default function LoanApplicationDetail() {
                 <div class="card">
                   <div class="label">Loan Request</div>
                   <div class="value">${escapeHtml(item.loanProductName || item.loanProductSlug || "-")}</div>
-                  <div class="subvalue">Status: ${escapeHtml(HUMAN_STATUS[item.status] || item.status || "-")}</div>
+                  <div class="subvalue">Status: ${escapeHtml(HUMAN_STATUS[getDisplayedStatusKey(item)] || getDisplayedStatusKey(item) || "-")}</div>
                   <div class="subvalue">KYC: ${escapeHtml(HUMAN_KYC[item.kycStatus] || item.kycStatus || "Not Started")}</div>
                 </div>
                 <div class="card">
@@ -727,6 +754,8 @@ export default function LoanApplicationDetail() {
     return <div className="rounded-xl border bg-white p-6 text-sm text-slate-500">Inquiry not found.</div>;
   }
 
+  const displayedStatusKey = getDisplayedStatusKey(item);
+
   const currentStage = (() => {
     if (item.status === "APPROVED") {
       return {
@@ -751,18 +780,25 @@ export default function LoanApplicationDetail() {
         tone: "border-slate-200 bg-slate-50 text-slate-700",
       };
     }
+    if (item.kycStatus === "pending") {
+      if (item.status === "KYC_REJECTED") {
+        return {
+          title: "KYC Submitted Again",
+          note: "Customer has submitted the profile and KYC again. Review the updated details and make the next decision.",
+          tone: "border-amber-200 bg-amber-50 text-amber-800",
+        };
+      }
+      return {
+        title: "KYC Under Review",
+        note: "Customer has submitted profile and KYC. Admin review is required.",
+        tone: "border-amber-200 bg-amber-50 text-amber-800",
+      };
+    }
     if (item.status === "KYC_REJECTED" || item.kycStatus === "rejected") {
       return {
         title: "KYC Correction Needed",
         note: "Customer needs to correct and resubmit profile or KYC details.",
         tone: "border-rose-200 bg-rose-50 text-rose-800",
-      };
-    }
-    if (item.kycStatus === "pending") {
-      return {
-        title: "KYC Under Review",
-        note: "Customer has submitted profile and KYC. Admin review is required.",
-        tone: "border-amber-200 bg-amber-50 text-amber-800",
       };
     }
     if (item.status === "KYC_SENT" || item.kycStatus === "not_started") {
@@ -780,9 +816,68 @@ export default function LoanApplicationDetail() {
   })();
 
   const actionHistory = Array.isArray(item.actionHistory) ? item.actionHistory : [];
-  const availableStatuses = ["CONTACTED", "KYC_SENT", "KYC_REJECTED", "VERIFIED", "APPROVED", "CLOSED"].filter(
-    (status) => status !== item.status
+  const availableStatuses = ["KYC_SENT", "KYC_REJECTED", "VERIFIED", "APPROVED", "CLOSED"].filter(
+    (status) => status !== displayedStatusKey
   );
+  const visibleHistory = actionHistory
+    .slice()
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  const nextAction = (() => {
+    if (item.status === "APPROVED") {
+      return {
+        title: "Loan already approved",
+        note: "This case is complete for approval. Only close or review history if needed.",
+        tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
+      };
+    }
+    if (item.status === "CLOSED") {
+      return {
+        title: "Case is closed",
+        note: "No more customer action is required unless you reopen the operational process manually.",
+        tone: "border-slate-200 bg-slate-50 text-slate-700",
+      };
+    }
+    if (!hasSubmittedKyc) {
+      return {
+        title: "Send KYC link",
+        note: "Customer has not submitted Profile + KYC yet. Send the KYC form link on WhatsApp first.",
+        tone: "border-blue-200 bg-blue-50 text-blue-800",
+      };
+    }
+    if (item.kycStatus === "pending") {
+      if (item.status === "KYC_REJECTED") {
+        return {
+          title: "Customer submitted KYC again",
+          note: "The customer has resubmitted the KYC form. Review the new documents and then verify or reject it again if needed.",
+          tone: "border-amber-200 bg-amber-50 text-amber-800",
+        };
+      }
+      return {
+        title: "Review submitted KYC",
+        note: "Check the uploaded documents, then verify KYC or reject it with a reason.",
+        tone: "border-amber-200 bg-amber-50 text-amber-800",
+      };
+    }
+    if (item.kycStatus === "rejected" || item.status === "KYC_REJECTED") {
+      return {
+        title: "KYC Rejected",
+        note: "KYC is currently rejected. Review the reason and wait for the next customer update.",
+        tone: "border-rose-200 bg-rose-50 text-rose-800",
+      };
+    }
+    if (item.kycStatus === "verified") {
+      return {
+        title: "Ready for loan approval",
+        note: "KYC is already verified. Approve the loan when the case is ready.",
+        tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
+      };
+    }
+    return {
+      title: "Review customer request",
+      note: "Start with the customer details, then choose the next action from the buttons below.",
+      tone: "border-amber-200 bg-amber-50 text-amber-800",
+    };
+  })();
 
   return (
     <div className="space-y-4">
@@ -851,14 +946,20 @@ export default function LoanApplicationDetail() {
         <div className="rounded-lg border bg-white p-4">
           <p className="text-xs text-slate-500">Application Status</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <Badge tone={STATUS_TONE[item.status] || "gray"}>
-              {HUMAN_STATUS[item.status] || item.status}
+            <Badge tone={STATUS_TONE[displayedStatusKey] || "gray"}>
+              {HUMAN_STATUS[displayedStatusKey] || displayedStatusKey}
             </Badge>
             <Badge tone={KYC_TONE[item.kycStatus] || "gray"}>
               KYC: {HUMAN_KYC[item.kycStatus] || item.kycStatus || "Not Started"}
             </Badge>
           </div>
         </div>
+      </div>
+
+      <div className={`rounded-xl border px-4 py-4 ${nextAction.tone}`}>
+        <p className="text-xs font-semibold uppercase tracking-wide">Needs Attention</p>
+        <h2 className="mt-1 text-lg font-semibold">{nextAction.title}</h2>
+        <p className="mt-1 text-sm">{nextAction.note}</p>
       </div>
 
       <div className="rounded-xl border bg-white p-4 space-y-4">
@@ -973,26 +1074,31 @@ export default function LoanApplicationDetail() {
         </div>
 
         <div className="rounded-lg border p-3 space-y-3">
-          <h3 className="text-sm font-semibold">Update Inquiry</h3>
+          <h3 className="text-sm font-semibold">Next Actions</h3>
           {!hasSubmittedKyc ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800">
               Customer has not submitted Profile + KYC yet. Use `Send KYC Link` to share the form, then wait for submission before approval or KYC rejection.
             </div>
           ) : null}
-          <div className="grid gap-3 md:grid-cols-2">
-            <select
-              className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
-              value={nextStatus}
-              onChange={(e) => setNextStatus(e.target.value)}
-            >
-              <option value="">Select next status</option>
-              {availableStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {ACTION_STATUS_LABEL[status] || HUMAN_STATUS[status] || status}
-                </option>
-              ))}
-            </select>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+            {availableStatuses.map((status) => (
+              <button
+                key={status}
+                type="button"
+                onClick={() => setNextStatus(status)}
+                className={[
+                  "min-h-11 rounded-xl border px-3 py-2 text-sm font-semibold transition",
+                  nextStatus === status
+                    ? "border-slate-900 bg-slate-900 text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+                ].join(" ")}
+              >
+                {ACTION_STATUS_LABEL[status] || HUMAN_STATUS[status] || status}
+              </button>
+            ))}
+          </div>
 
+          <div className="grid gap-3 md:grid-cols-2">
             <textarea
               value={adminNote}
               onChange={(e) => setAdminNote(e.target.value)}
@@ -1066,42 +1172,62 @@ export default function LoanApplicationDetail() {
               Select the close reason before saving.
             </p>
           ) : null}
-        </div>
+        <div className="rounded-lg border p-3">
+          <button
+            type="button"
+            onClick={() => setHistoryOpen((prev) => !prev)}
+            className="flex w-full items-center justify-between gap-3 rounded-lg px-1 py-1 text-left"
+          >
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Action History</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                {actionHistory.length} {actionHistory.length === 1 ? "entry" : "entries"}
+              </p>
+            </div>
+            <ChevronDown
+              className={[
+                "h-4 w-4 text-slate-500 transition-transform duration-200",
+                historyOpen ? "rotate-180" : "",
+              ].join(" ")}
+            />
+          </button>
 
-        <div className="rounded-lg border p-3 space-y-3">
-          <h3 className="text-sm font-semibold">Action History</h3>
-          {actionHistory.length === 0 ? (
-            <p className="text-sm text-slate-500">No action history recorded yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {actionHistory
-                .slice()
-                .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
-                .map((entry, index) => (
-                  <div
-                    key={`${entry.type || "entry"}-${entry.createdAt || index}`}
-                    className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{entry.title || "Update"}</p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {entry.actor || "System"} · {formatDate(entry.createdAt)}
-                        </p>
+          {historyOpen ? (
+            actionHistory.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-500">No action history recorded yet.</p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {visibleHistory.map((entry, index) => {
+                  const historyStatusKey = getHistoryStatusKey(entry);
+
+                  return (
+                    <div
+                      key={`${entry.type || "entry"}-${entry.createdAt || index}`}
+                      className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{entry.title || "Update"}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {entry.actor || "System"} � {formatDate(entry.createdAt)}
+                          </p>
+                        </div>
+                        {historyStatusKey ? (
+                          <Badge tone={STATUS_TONE[historyStatusKey] || "gray"}>
+                            {HUMAN_STATUS[historyStatusKey] || historyStatusKey}
+                          </Badge>
+                        ) : null}
                       </div>
-                      {entry.status ? (
-                        <Badge tone={STATUS_TONE[entry.status] || "gray"}>
-                          {HUMAN_STATUS[entry.status] || entry.status}
-                        </Badge>
+                      {entry.note ? (
+                        <p className="mt-2 text-sm text-slate-600">{entry.note}</p>
                       ) : null}
                     </div>
-                    {entry.note ? (
-                      <p className="mt-2 text-sm text-slate-600">{entry.note}</p>
-                    ) : null}
-                  </div>
-                ))}
-            </div>
-          )}
+                  );
+                })}
+              </div>
+            )
+          ) : null}
+        </div>
         </div>
       </div>
     </div>

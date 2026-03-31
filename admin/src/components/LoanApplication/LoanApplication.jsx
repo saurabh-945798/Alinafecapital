@@ -11,6 +11,7 @@ const STATUS_TONE = {
   CONTACTED: "blue",
   KYC_SENT: "blue",
   KYC_REJECTED: "red",
+  VERIFIED: "green",
   APPROVED: "green",
   QUALIFIED: "green",
   CLOSED: "gray",
@@ -19,7 +20,7 @@ const STATUS_TONE = {
 const SIMPLE_TABS = [
   { value: "ALL", label: "All" },
   { value: "PENDING_GROUP", label: "Pending" },
-  { value: "KYC_SENT", label: "Needs KYC" },
+  { value: "VERIFIED", label: "Verified" },
   { value: "APPROVED", label: "Approved" },
   { value: "KYC_REJECTED", label: "Rejected" },
   { value: "CLOSED", label: "Closed" },
@@ -35,8 +36,9 @@ const KYC_TONE = {
 const HUMAN_STATUS = {
   NEW: "Pending",
   CONTACTED: "Pending",
-  KYC_SENT: "Needs KYC",
+  KYC_SENT: "KYC",
   KYC_REJECTED: "KYC Rejected",
+  VERIFIED: "Verified",
   APPROVED: "Approved",
   QUALIFIED: "Approved",
   CLOSED: "Closed",
@@ -47,6 +49,51 @@ const HUMAN_KYC = {
   pending: "Pending",
   verified: "Verified",
   rejected: "Rejected",
+};
+
+const filterItemsByTab = (items = [], tab = "ALL") => {
+  if (!Array.isArray(items)) return [];
+
+  switch (tab) {
+    case "PENDING_GROUP":
+      return items.filter(
+        (item) =>
+          item &&
+          item.status !== "APPROVED" &&
+          item.status !== "CLOSED" &&
+          item.kycStatus !== "verified" &&
+          item.kycStatus !== "rejected"
+      );
+    case "VERIFIED":
+      return items.filter(
+        (item) =>
+          item &&
+          item.kycStatus === "verified" &&
+          item.status !== "APPROVED" &&
+          item.status !== "CLOSED"
+      );
+    case "KYC_REJECTED":
+      return items.filter((item) => item && item.kycStatus === "rejected");
+    case "APPROVED":
+      return items.filter((item) => item && item.status === "APPROVED");
+    case "CLOSED":
+      return items.filter((item) => item && item.status === "CLOSED");
+    case "ALL":
+    default:
+      return items;
+  }
+};
+
+const getDisplayedStatusKey = (item) => {
+  if (!item) return "";
+  if (item.status === "APPROVED") return "APPROVED";
+  if (item.status === "CLOSED") return "CLOSED";
+  if (item.kycStatus === "verified") return "VERIFIED";
+  if (item.kycStatus === "pending") return "KYC_SENT";
+  if (item.kycStatus === "rejected" || item.status === "KYC_REJECTED") return "KYC_REJECTED";
+  if (item.status === "KYC_SENT") return "KYC_SENT";
+  if (item.status === "CONTACTED" || item.status === "NEW") return "CONTACTED";
+  return item.status || "";
 };
 
 const formatDate = (value) => {
@@ -71,6 +118,7 @@ export default function LoanApplication() {
     NEW: 0,
     CONTACTED: 0,
     KYC_SENT: 0,
+    VERIFIED: 0,
     APPROVED: 0,
     KYC_REJECTED: 0,
     CLOSED: 0,
@@ -90,24 +138,24 @@ export default function LoanApplication() {
     setItems([]);
     setPagination((prev) => ({ ...prev, page, total: 0, totalPages: 1 }));
     try {
-      const effectiveStatus = status === "PENDING_GROUP" ? "ALL" : status;
+      const effectiveStatus =
+        status === "PENDING_GROUP" || status === "KYC_REJECTED" || status === "VERIFIED"
+          ? "ALL"
+          : status;
       const data = await inquiriesApi.list({ page, limit: 20, q: debouncedQuery, status: effectiveStatus });
       if (currentFetchId !== fetchIdRef.current) return;
       const rawItems = data?.items || [];
-      const filteredItems =
-        status === "PENDING_GROUP"
-          ? rawItems.filter((item) => item?.status === "NEW" || item?.status === "CONTACTED")
-          : rawItems;
+      const filteredItems = filterItemsByTab(rawItems, status);
       setItems(filteredItems);
       const nextPagination = data?.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 };
-      setPagination(
-        status === "PENDING_GROUP"
-          ? {
-              ...nextPagination,
-              total: Number(counts.NEW || 0) + Number(counts.CONTACTED || 0),
-            }
-          : nextPagination
-      );
+      const derivedTotal =
+        status === "ALL"
+          ? Number(nextPagination.total || 0)
+          : Number(counts[status] ?? filteredItems.length);
+      setPagination({
+        ...nextPagination,
+        total: derivedTotal,
+      });
     } catch (err) {
       if (currentFetchId !== fetchIdRef.current) return;
       const msg = err?.response?.data?.message || "Failed to load loan inquiries.";
@@ -122,23 +170,44 @@ export default function LoanApplication() {
 
   const fetchCounts = async () => {
     try {
-      const statuses = ["ALL", "NEW", "CONTACTED", "KYC_SENT", "APPROVED", "KYC_REJECTED", "CLOSED"];
-      const responses = await Promise.all(
-        statuses.map((value) =>
-          inquiriesApi.list({
-            status: value,
-            page: 1,
-            limit: 1,
-          })
-        )
-      );
+      const firstPage = await inquiriesApi.list({
+        status: "ALL",
+        page: 1,
+        limit: 100,
+        q: debouncedQuery,
+      });
+      const totalPages = Number(firstPage?.pagination?.totalPages || 1);
+      const otherPages =
+        totalPages > 1
+          ? await Promise.all(
+              Array.from({ length: totalPages - 1 }, (_, index) =>
+                inquiriesApi.list({
+                  status: "ALL",
+                  page: index + 2,
+                  limit: 100,
+                  q: debouncedQuery,
+                })
+              )
+            )
+          : [];
 
-      const nextCounts = statuses.reduce((acc, value, index) => {
-        acc[value] = Number(responses[index]?.pagination?.total || 0);
-        return acc;
-      }, {});
+      const allItems = [
+        ...(Array.isArray(firstPage?.items) ? firstPage.items : []),
+        ...otherPages.flatMap((pageData) => (Array.isArray(pageData?.items) ? pageData.items : [])),
+      ];
 
-      nextCounts.PENDING_GROUP = Number(nextCounts.NEW || 0) + Number(nextCounts.CONTACTED || 0);
+      const nextCounts = {
+        ALL: Number(firstPage?.pagination?.total || allItems.length || 0),
+        NEW: allItems.filter((item) => item?.status === "NEW").length,
+        CONTACTED: allItems.filter((item) => item?.status === "CONTACTED").length,
+        KYC_SENT: allItems.filter((item) => item?.status === "KYC_SENT").length,
+        VERIFIED: filterItemsByTab(allItems, "VERIFIED").length,
+        APPROVED: filterItemsByTab(allItems, "APPROVED").length,
+        KYC_REJECTED: filterItemsByTab(allItems, "KYC_REJECTED").length,
+        CLOSED: filterItemsByTab(allItems, "CLOSED").length,
+      };
+
+      nextCounts.PENDING_GROUP = filterItemsByTab(allItems, "PENDING_GROUP").length;
 
       setCounts((prev) => ({ ...prev, ...nextCounts }));
     } catch {
@@ -160,7 +229,7 @@ export default function LoanApplication() {
 
   useEffect(() => {
     fetchCounts();
-  }, []);
+  }, [debouncedQuery]);
 
   const openDetails = (item) => {
     navigate(`/admin/applications/${item._id}`);
@@ -237,11 +306,14 @@ export default function LoanApplication() {
             No loan inquiries found.
           </div>
         ) : (
-          items.map((item) => (
-            <article
-              key={item._id}
-              className="rounded-2xl border bg-white p-5 shadow-sm transition hover:shadow-md"
-            >
+          items.map((item) => {
+            const displayedStatusKey = getDisplayedStatusKey(item);
+
+            return (
+              <article
+                key={item._id}
+                className="rounded-2xl border bg-white p-5 shadow-sm transition hover:shadow-md"
+              >
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <h3 className="text-lg font-semibold text-slate-900">{item.fullName}</h3>
@@ -294,8 +366,8 @@ export default function LoanApplication() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <Badge tone={STATUS_TONE[item.status] || "gray"}>
-                  {HUMAN_STATUS[item.status] || item.status}
+                <Badge tone={STATUS_TONE[displayedStatusKey] || "gray"}>
+                  {HUMAN_STATUS[displayedStatusKey] || displayedStatusKey}
                 </Badge>
                 <Badge tone={KYC_TONE[item.kycStatus] || "gray"}>
                   KYC: {HUMAN_KYC[item.kycStatus] || item.kycStatus || "Not Started"}
@@ -307,8 +379,9 @@ export default function LoanApplication() {
                   View Details
                 </Button>
               </div>
-            </article>
-          ))
+              </article>
+            );
+          })
         )}
       </div>
 
