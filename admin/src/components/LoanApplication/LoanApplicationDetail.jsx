@@ -73,6 +73,24 @@ const formatDate = (value) => {
   return Number.isNaN(d.getTime()) ? "-" : d.toLocaleString();
 };
 
+const formatDateOnly = (value) => {
+  if (!value) return "-";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "-" : d.toLocaleDateString();
+};
+
+const formatMoney = (value) => {
+  if (value === undefined || value === null || value === "") return "-";
+  const amount = Number(value);
+  return Number.isFinite(amount) ? `MWK ${amount.toLocaleString()}` : "-";
+};
+
+const humanizeValue = (value = "") => {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "-";
+  return normalized.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
 const escapeHtml = (value = "") =>
   String(value)
     .replace(/&/g, "&amp;")
@@ -174,6 +192,7 @@ export default function LoanApplicationDetail() {
   const [closeReason, setCloseReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [avatarBroken, setAvatarBroken] = useState(false);
+  const [inquiryDetailsOpen, setInquiryDetailsOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
   const hasSubmittedKyc =
     item?.kycStatus === "pending" ||
@@ -963,14 +982,131 @@ export default function LoanApplicationDetail() {
       </div>
 
       <div className="rounded-xl border bg-white p-4 space-y-4">
-        <div className="rounded-lg border p-3">
-          <p className="text-sm font-semibold">Address</p>
-          <p className="mt-2 text-sm text-slate-700">{item.address || "-"}</p>
-        </div>
+        <div className="rounded-lg border p-4">
+          <button
+            type="button"
+            onClick={() => setInquiryDetailsOpen((prev) => !prev)}
+            className="flex w-full items-center justify-between gap-3 rounded-lg px-1 py-1 text-left"
+          >
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">Loan Inquiry Form Details</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Complete snapshot of everything submitted by the customer in the public inquiry form.
+              </p>
+            </div>
+            <ChevronDown
+              className={[
+                "h-4 w-4 text-slate-500 transition-transform duration-200",
+                inquiryDetailsOpen ? "rotate-180" : "",
+              ].join(" ")}
+            />
+          </button>
 
-        <div className="rounded-lg border p-3">
-          <p className="text-sm font-semibold">Description</p>
-          <p className="mt-2 text-sm text-slate-700">{item.notes || "-"}</p>
+          {inquiryDetailsOpen ? (
+            <div className="mt-4 space-y-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Full Name
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-900">{item.fullName || "-"}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Phone
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-900">{item.phone || "-"}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Email
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-900 break-all">{item.email || "-"}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Date of Birth
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-900">{formatDateOnly(item.dateOfBirth)}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Gender
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-900">{humanizeValue(item.gender)}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Marital Status
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-900">
+                {humanizeValue(item.maritalStatus)}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Dependants
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-900">
+                {Number.isFinite(item.dependants) ? item.dependants : "-"}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Housing Status
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-900">
+                {humanizeValue(item.housingStatus)}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Employment Status
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-900">
+                {humanizeValue(item.employmentStatus)}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Borrower Type
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-900">
+                {humanizeValue(item.borrowerType)}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Requested Amount
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-900">{formatMoney(item.requestedAmount)}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Tenure
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-900">
+                {item.preferredTenureMonths ? `${item.preferredTenureMonths} months` : "-"}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="rounded-lg border border-slate-200 bg-white px-4 py-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Address
+              </p>
+              <p className="mt-2 text-sm text-slate-700">{item.address || "-"}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white px-4 py-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Description
+              </p>
+              <p className="mt-2 text-sm text-slate-700">{item.notes || "-"}</p>
+            </div>
+          </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="rounded-lg border p-3 space-y-4">
@@ -1209,7 +1345,7 @@ export default function LoanApplicationDetail() {
                         <div>
                           <p className="text-sm font-semibold text-slate-900">{entry.title || "Update"}</p>
                           <p className="mt-1 text-xs text-slate-500">
-                            {entry.actor || "System"} � {formatDate(entry.createdAt)}
+                            {entry.actor || "System"} - {formatDate(entry.createdAt)}
                           </p>
                         </div>
                         {historyStatusKey ? (
