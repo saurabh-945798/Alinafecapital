@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -74,15 +74,6 @@ const visualByCategory = {
     iconWrapClass: "bg-white/14 text-violet-100 border-white/15",
   },
 };
-
-const CIVIL_SERVANT_LOAN_IMAGE =
-  "https://www.ubagroup.com/nigeria/wp-content/uploads/sites/2/2025/06/uba-civil-servant.webp";
-const STATUTORY_COMPANY_LOAN_IMAGE =
-  "https://www.shutterstock.com/image-photo/woman-borrows-money-female-employee-600nw-2504912177.jpg";
-const PRIVATE_COMPANY_LOAN_IMAGE =
-  "https://image.cnbcfm.com/api/v1/image/106818007-1609431383541-gettyimages-103919680-bld080949.jpeg?v=1666291938";
-const BUSINESS_LOAN_IMAGE =
-  "https://thumbs.dreamstime.com/b/businesspeople-legalize-cooperation-black-left-handed-businessman-sign-agreement-negotiations-married-couple-affirm-loan-141158782.jpg";
 
 const detailsBySlug = {
   "payday-emergency-loan": {
@@ -220,41 +211,9 @@ const getProductDetails = (product) => {
 const getProductVisual = (product) =>
   visualByCategory[product.category] || visualByCategory.Personal;
 
-const normalizeLoanKey = (value = "") =>
-  String(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-
-const getProductImage = (product) => {
-  const slug = normalizeLoanKey(product?.slug || "");
-  const loanName = normalizeLoanKey(product?.loanName || "");
-  const category = normalizeLoanKey(product?.category || "");
-
-  if (slug.includes("civil") || loanName.includes("civil servant")) {
-    return CIVIL_SERVANT_LOAN_IMAGE;
-  }
-
-  if (slug.includes("statutory") || loanName.includes("statutory company")) {
-    return STATUTORY_COMPANY_LOAN_IMAGE;
-  }
-
-  if (slug.includes("private") || loanName.includes("private company")) {
-    return PRIVATE_COMPANY_LOAN_IMAGE;
-  }
-
-  if (slug.includes("business") || loanName.includes("business") || category.includes("business")) {
-    return BUSINESS_LOAN_IMAGE;
-  }
-
-  return "";
-};
-
 const ProductHeroVisual = ({ product }) => {
   const visual = getProductVisual(product);
   const Icon = visual.icon;
-  const imageUrl = getProductImage(product);
-  const [imageFailed, setImageFailed] = useState(false);
 
   return (
     <div
@@ -266,123 +225,61 @@ const ProductHeroVisual = ({ product }) => {
         <div className="absolute bottom-0 left-1/3 h-36 w-36 rounded-full bg-black/10 blur-3xl" />
       </div>
 
-      {imageUrl && !imageFailed ? (
-        <div className="relative z-10">
-          <div className="relative overflow-hidden lg:min-h-[420px]">
-            <img
-              src={imageUrl}
-              alt={product.loanName}
-              loading="lazy"
-              className="h-60 w-full object-cover sm:h-72 lg:h-[420px]"
-              onError={() => setImageFailed(true)}
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-900/25 to-transparent" />
-
-            <div className="absolute inset-x-0 top-0 hidden p-7 lg:block">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/75">
-                    {visual.eyebrow}
-                  </p>
-                  <h3 className="mt-3 max-w-xl text-3xl font-semibold leading-tight text-white">
-                    {visual.headline}
-                  </h3>
-                </div>
-                <div
-                  className={`grid h-14 w-14 place-items-center rounded-2xl border backdrop-blur ${visual.iconWrapClass}`}
-                >
-                  <Icon size={28} />
-                </div>
-              </div>
-            </div>
-
-            <div className="absolute inset-x-0 bottom-0 p-5 sm:p-6 lg:hidden">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/75">
-                    {visual.eyebrow}
-                  </p>
-                  <h3 className="mt-3 max-w-xl text-2xl font-semibold leading-tight text-white sm:text-3xl">
-                    {visual.headline}
-                  </h3>
-                  <p className="mt-3 max-w-2xl text-sm leading-6 text-white/85 sm:text-[15px]">
-                    {visual.summary}
-                  </p>
-                </div>
-                <div
-                  className={`grid h-14 w-14 place-items-center rounded-2xl border backdrop-blur ${visual.iconWrapClass}`}
-                >
-                  <Icon size={28} />
-                </div>
-              </div>
-            </div>
+      <div className="relative z-10 p-5 sm:p-6 lg:p-7">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/75">
+              {visual.eyebrow}
+            </p>
+            <h3 className="mt-3 max-w-xl text-2xl font-semibold leading-tight sm:text-3xl">
+              {visual.headline}
+            </h3>
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-white/85 sm:text-[15px]">
+              {visual.summary}
+            </p>
           </div>
-
-          <div className="hidden lg:grid lg:grid-cols-[1fr_auto] lg:items-end lg:gap-6 lg:px-7 lg:py-6">
-            <div>
-              <p className="max-w-3xl text-[15px] leading-7 text-white/82">
-                {visual.summary}
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {visual.chips.map((chip) => (
-                  <span
-                    key={chip}
-                    className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/90"
-                  >
-                    {chip}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid min-w-[320px] gap-3 sm:grid-cols-3">
-              <div className={`rounded-2xl border p-4 backdrop-blur ${visual.cardClass}`}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">
-                  Product Type
-                </p>
-                <p className="mt-2 text-sm font-semibold">{product.category}</p>
-              </div>
-              <div className={`rounded-2xl border p-4 backdrop-blur ${visual.cardClass}`}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">
-                  Pricing View
-                </p>
-                <p className="mt-2 text-sm font-semibold">{product.interestRate}</p>
-              </div>
-              <div className={`rounded-2xl border p-4 backdrop-blur ${visual.cardClass}`}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">
-                  Repayment
-                </p>
-                <p className="mt-2 text-sm font-semibold">{product.repaymentPeriod}</p>
-              </div>
-            </div>
+          <div
+            className={`grid h-14 w-14 place-items-center rounded-2xl border backdrop-blur ${visual.iconWrapClass}`}
+          >
+            <Icon size={28} />
           </div>
         </div>
-      ) : (
-        <div className="relative z-10 p-5 sm:p-6 lg:p-7">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/75">
-                {visual.eyebrow}
-              </p>
-              <h3 className="mt-3 max-w-xl text-2xl font-semibold leading-tight sm:text-3xl">
-                {visual.headline}
-              </h3>
-              <p className="mt-4 max-w-2xl text-sm leading-6 text-white/85 sm:text-[15px]">
-                {visual.summary}
-              </p>
-            </div>
-            <div
-              className={`grid h-14 w-14 place-items-center rounded-2xl border backdrop-blur ${visual.iconWrapClass}`}
+
+        <div className="mt-6 flex flex-wrap gap-2">
+          {visual.chips.map((chip) => (
+            <span
+              key={chip}
+              className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/90"
             >
-              <Icon size={28} />
-            </div>
+              {chip}
+            </span>
+          ))}
+        </div>
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <div className={`rounded-2xl border p-4 backdrop-blur ${visual.cardClass}`}>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">
+              Product Type
+            </p>
+            <p className="mt-2 text-sm font-semibold">{product.category}</p>
+          </div>
+          <div className={`rounded-2xl border p-4 backdrop-blur ${visual.cardClass}`}>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">
+              Pricing View
+            </p>
+            <p className="mt-2 text-sm font-semibold">{product.interestRate}</p>
+          </div>
+          <div className={`rounded-2xl border p-4 backdrop-blur ${visual.cardClass}`}>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/70">
+              Repayment
+            </p>
+            <p className="mt-2 text-sm font-semibold">{product.repaymentPeriod}</p>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };
-
 const OverviewCard = ({ label, value }) => (
   <div
     className="rounded-2xl border bg-white p-4 shadow-sm sm:p-5"
@@ -618,3 +515,4 @@ const LoanProductDetailsPage = () => {
 };
 
 export default LoanProductDetailsPage;
+

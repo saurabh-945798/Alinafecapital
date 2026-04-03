@@ -11,6 +11,7 @@ const LoanProductSchema = new mongoose.Schema(
         "Private",
         "Business",
         "Agriculture",
+        "Emergency Loan",
         "Government",
         "Public",
         "Education",

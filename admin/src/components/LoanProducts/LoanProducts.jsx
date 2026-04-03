@@ -273,6 +273,7 @@ export default function LoanProductsPage() {
                 <option value="Private">Private</option>
                 <option value="Business">Business</option>
                 <option value="Agriculture">Agriculture</option>
+                <option value="Emergency Loan">Emergency Loan</option>
                 <option value="Government">Government</option>
                 <option value="Public">Public</option>
               </select>

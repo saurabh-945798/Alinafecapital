@@ -12,6 +12,7 @@ export const createLoanProductSchema = z.object({
       "Private",
       "Business",
       "Agriculture",
+      "Emergency Loan",
       "Government",
       "Public",
       "Education",

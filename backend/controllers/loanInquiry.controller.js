@@ -19,7 +19,7 @@ const PUBLIC_LOAN_TYPES = [
 const publicCreateSchema = z.object({
   fullName: z.string().trim().min(2),
   phone: z.string().trim().min(6),
-  email: z.string().trim().email().optional().or(z.literal("")),
+  email: z.string().trim().email(),
   address: z.string().trim().min(5),
   dateOfBirth: z.string().trim().min(8),
   gender: z.enum(["male", "female"]),
@@ -31,9 +31,9 @@ const publicCreateSchema = z.object({
   loanProductSlug: z.string().trim().min(2),
   loanProductName: z.string().trim().min(2).optional(),
   monthlyIncome: z.coerce.number().min(0).optional(),
-  requestedAmount: z.coerce.number().min(0).optional(),
-  preferredTenureMonths: z.coerce.number().int().min(1).optional(),
-  notes: z.string().trim().max(1000).optional(),
+  requestedAmount: z.coerce.number().gt(0),
+  preferredTenureMonths: z.coerce.number().int().min(1),
+  notes: z.string().trim().min(3).max(1000),
 });
 
 const adminListSchema = z.object({
