@@ -504,18 +504,6 @@ export default function LoanInquiryPage() {
                       </select>
                     </label>
 
-                    <label className="md:col-span-2">
-                      <span className="mb-1.5 block text-sm font-medium text-slate-700">Description</span>
-                      <textarea
-                        required
-                        name="description"
-                        value={form.description}
-                        onChange={onChange}
-                        rows={5}
-                        className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm"
-                        placeholder="Tell us briefly what type of support you need"
-                      />
-                    </label>
                   </div>
                 </section>
               </div>
@@ -614,6 +602,26 @@ export default function LoanInquiryPage() {
                     options={BORROWER_OPTIONS}
                     hint="Choose whether this is your first loan with us or a repeat request."
                   />
+                </div>
+              </section>
+
+              <section className="rounded-[24px] border border-slate-200 bg-white p-4 sm:p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  Additional Details
+                </p>
+                <div className="mt-4">
+                  <label className="block">
+                    <span className="mb-1.5 block text-sm font-medium text-slate-700">Description</span>
+                    <textarea
+                      required
+                      name="description"
+                      value={form.description}
+                      onChange={onChange}
+                      rows={5}
+                      className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm"
+                      placeholder="Tell us briefly what type of support you need"
+                    />
+                  </label>
                 </div>
               </section>
 
