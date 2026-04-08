@@ -83,7 +83,7 @@ const ApplyPage = () => {
               <FileText size={16} /> Continue Application
             </a>
             <a
-              href="tel:+265999000000"
+              href="tel:+265997031941"
               className="inline-flex items-center justify-center gap-2 rounded-xl border px-6 py-3 font-semibold"
               style={{ borderColor: BRAND_GOLD, color: BRAND_GOLD }}
             >

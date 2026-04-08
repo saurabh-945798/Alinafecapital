@@ -351,7 +351,7 @@ export default function LoanInquiryPage() {
 
             <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
               <span className="inline-flex items-center gap-1">
-                <PhoneCall size={14} /> +265 999 000 000
+                <PhoneCall size={14} /> +265 997 031 941
               </span>
             </div>
           </div>
@@ -645,3 +645,4 @@ export default function LoanInquiryPage() {
     </>
   );
 }
+

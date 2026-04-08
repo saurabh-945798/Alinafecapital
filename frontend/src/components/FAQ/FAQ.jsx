@@ -271,7 +271,7 @@ const FAQ = () => {
             <div className="flex flex-col gap-4">
 
               <a
-                href="tel:+265999000000"
+                href="tel:+265997031941"
                 className="flex items-center gap-2 px-4 py-3 rounded-lg text-white"
                 style={{ backgroundColor: BRAND_NAVY }}
               >
@@ -279,7 +279,7 @@ const FAQ = () => {
               </a>
 
               <a
-                href="https://wa.me/265999000000"
+                href="https://wa.me/265997031941"
                 className="flex items-center gap-2 px-4 py-3 rounded-lg border"
                 style={{
                   borderColor: BRAND_GOLD,

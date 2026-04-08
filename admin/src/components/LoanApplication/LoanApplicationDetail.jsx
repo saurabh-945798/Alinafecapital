@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ChevronDown } from "lucide-react";
+import { CheckCircle2, ChevronDown, PencilLine, Save, X } from "lucide-react";
 import Button from "../ui/Button";
 import Badge from "../ui/Badge";
 import { inquiriesApi } from "../../services/api/inquiries.api";
@@ -83,6 +83,93 @@ const formatMoney = (value) => {
   if (value === undefined || value === null || value === "") return "-";
   const amount = Number(value);
   return Number.isFinite(amount) ? `MWK ${amount.toLocaleString()}` : "-";
+};
+
+const resolveRepaymentConfig = (item) => {
+  const text = `${item?.loanProductName || ""} ${item?.loanProductSlug || ""}`.toLowerCase();
+  const base = {
+    monthlyRate: 0.05,
+    processingFeeRate: 0.025,
+    adminFeeRate: 0.025,
+    rateType: "reducing",
+  };
+
+  if (text.includes("business")) {
+    return { ...base, monthlyRate: 0.075 };
+  }
+
+  if (
+    text.includes("civil servant") ||
+    text.includes("private company") ||
+    text.includes("statutory company")
+  ) {
+    return base;
+  }
+
+  return base;
+};
+
+const calculateReducingInstallment = (principal, monthlyRate, months) => {
+  if (principal <= 0 || monthlyRate <= 0 || months <= 0) return 0;
+  const factor = Math.pow(1 + monthlyRate, months);
+  return (principal * monthlyRate * factor) / (factor - 1);
+};
+
+const addMonths = (dateValue, monthsToAdd) => {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "-";
+  date.setMonth(date.getMonth() + monthsToAdd);
+  return date.toISOString();
+};
+
+const buildRepaymentPlan = (item) => {
+  const principal = Number(item?.requestedAmount || 0);
+  const months = Number(item?.preferredTenureMonths || 0);
+  if (principal <= 0 || months <= 0) return null;
+
+  const config = resolveRepaymentConfig(item);
+  const emi = calculateReducingInstallment(principal, config.monthlyRate, months);
+  const processingFee = principal * config.processingFeeRate;
+  const oneTimeAdminFee = principal * config.adminFeeRate;
+  const startDate = item?.approvedAt || item?.verifiedAt || item?.createdAt || new Date().toISOString();
+
+  let balance = principal;
+  const schedule = [];
+
+  for (let month = 1; month <= months; month += 1) {
+    const openingBalance = balance;
+    const interest = openingBalance * config.monthlyRate;
+    const principalPaid = Math.max(0, emi - interest);
+    balance = Math.max(0, openingBalance - principalPaid);
+    const fees = month === 1 ? processingFee + oneTimeAdminFee : 0;
+
+    schedule.push({
+      month,
+      dueDate: addMonths(startDate, month),
+      openingBalance,
+      principalPaid,
+      interest,
+      fees,
+      installment: emi + fees,
+      closingBalance: balance,
+    });
+  }
+
+  const totalInterest = schedule.reduce((sum, row) => sum + row.interest, 0);
+  const totalFees = processingFee + oneTimeAdminFee;
+  const totalRepayment = principal + totalInterest + totalFees;
+
+  return {
+    monthlyRate: config.monthlyRate,
+    processingFee,
+    oneTimeAdminFee,
+    monthlyInstallment: emi,
+    firstInstallment: schedule[0]?.installment || emi,
+    totalInterest,
+    totalFees,
+    totalRepayment,
+    schedule,
+  };
 };
 
 const humanizeValue = (value = "") => {
@@ -180,6 +267,52 @@ const getHistoryStatusKey = (entry) => {
   return entry.status || "";
 };
 
+const getStatusNotification = (status) => {
+  const key = String(status || "").toUpperCase();
+
+  const config = {
+    KYC_SENT: {
+      title: "KYC status updated",
+      message: "The inquiry is now marked for KYC. You can use WhatsApp preview to send the KYC form link.",
+      tone: "border-blue-200 bg-blue-50 text-blue-900",
+      iconTone: "bg-blue-100 text-blue-600",
+    },
+    KYC_REJECTED: {
+      title: "KYC rejected",
+      message: "The KYC status has been rejected successfully. You can now send the rejection message to the customer.",
+      tone: "border-rose-200 bg-rose-50 text-rose-900",
+      iconTone: "bg-rose-100 text-rose-600",
+    },
+    VERIFIED: {
+      title: "KYC verified",
+      message: "The customer KYC has been verified successfully. The inquiry is now ready for loan approval.",
+      tone: "border-emerald-200 bg-emerald-50 text-emerald-900",
+      iconTone: "bg-emerald-100 text-emerald-600",
+    },
+    APPROVED: {
+      title: "Loan approved",
+      message: "The loan inquiry has been approved successfully. You can now send the approval message to the customer.",
+      tone: "border-emerald-200 bg-emerald-50 text-emerald-900",
+      iconTone: "bg-emerald-100 text-emerald-600",
+    },
+    CLOSED: {
+      title: "Inquiry closed",
+      message: "The application has been closed successfully. The case is now marked as completed or inactive.",
+      tone: "border-slate-200 bg-slate-50 text-slate-900",
+      iconTone: "bg-slate-200 text-slate-700",
+    },
+  };
+
+  return (
+    config[key] || {
+      title: "Inquiry updated",
+      message: "The application status has been updated successfully.",
+      tone: "border-slate-200 bg-slate-50 text-slate-900",
+      iconTone: "bg-slate-200 text-slate-700",
+    }
+  );
+};
+
 export default function LoanApplicationDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -190,10 +323,20 @@ export default function LoanApplicationDetail() {
   const [adminNote, setAdminNote] = useState("");
   const [nextStatus, setNextStatus] = useState("");
   const [closeReason, setCloseReason] = useState("");
+  const [verifiedBy, setVerifiedBy] = useState("");
+  const [approvedBy, setApprovedBy] = useState("");
+  const [editMode, setEditMode] = useState(false);
+  const [detailsForm, setDetailsForm] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [avatarBroken, setAvatarBroken] = useState(false);
   const [inquiryDetailsOpen, setInquiryDetailsOpen] = useState(true);
+  const [kycOpen, setKycOpen] = useState(true);
+  const [repaymentOpen, setRepaymentOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [whatsappReady, setWhatsappReady] = useState(false);
+  const [statusNotice, setStatusNotice] = useState(null);
+  const [docActionLoading, setDocActionLoading] = useState("");
+  const [addDocName, setAddDocName] = useState("");
   const hasSubmittedKyc =
     item?.kycStatus === "pending" ||
     item?.kycStatus === "verified" ||
@@ -215,7 +358,43 @@ export default function LoanApplicationDetail() {
       setItem(data || null);
       setAdminNote(data?.adminNote || "");
       setCloseReason(data?.closeReason || "");
+      setVerifiedBy(data?.verifiedBy || "");
+      setApprovedBy(data?.approvedBy || "");
+      setDetailsForm({
+        fullName: data?.fullName || "",
+        phone: String(data?.phone || "").replace(/^\+/, ""),
+        email: data?.email || "",
+        address: data?.address || "",
+        dateOfBirth: data?.dateOfBirth ? new Date(data.dateOfBirth).toISOString().slice(0, 10) : "",
+        gender: data?.gender || "",
+        maritalStatus: data?.maritalStatus || "",
+        dependants: data?.dependants ?? "",
+        housingStatus: data?.housingStatus || "",
+        employmentStatus: data?.employmentStatus || "",
+        borrowerType: data?.borrowerType || "",
+        loanProductSlug: data?.loanProductSlug || "",
+        loanProductName: data?.loanProductName || "",
+        requestedAmount: data?.requestedAmount ?? "",
+        preferredTenureMonths: data?.preferredTenureMonths ?? "",
+        notes: data?.notes || "",
+        addressLine1: data?.addressLine1 || "",
+        city: data?.city || "",
+        district: data?.district || "",
+        country: data?.country || "Malawi",
+        employmentType: data?.employmentType || "",
+        governmentId: data?.governmentId || "",
+        monthlyIncome: data?.monthlyIncome ?? "",
+        bankName: data?.bankName || "",
+        accountNumber: data?.accountNumber || "",
+        branchCode: data?.branchCode || "",
+        reference1Name: data?.reference1Name || "",
+        reference1Phone: data?.reference1Phone || "",
+        reference2Name: data?.reference2Name || "",
+        reference2Phone: data?.reference2Phone || "",
+      });
       setAvatarBroken(false);
+      setWhatsappReady(false);
+      setEditMode(false);
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to load inquiry details.");
     } finally {
@@ -227,30 +406,152 @@ export default function LoanApplicationDetail() {
     loadDetail();
   }, [id]);
 
+  const updateDetailsField = (name, value) => {
+    setDetailsForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const saveDetails = async () => {
+    if (!item?._id || !detailsForm) return;
+    setActionLoading(true);
+    setError("");
+    try {
+      const updated = await inquiriesApi.update(item._id, {
+        ...detailsForm,
+        phone: detailsForm.phone.startsWith("+") ? detailsForm.phone : `+${detailsForm.phone}`,
+        dependants: detailsForm.dependants === "" ? 0 : Number(detailsForm.dependants),
+        requestedAmount: detailsForm.requestedAmount === "" ? 0 : Number(detailsForm.requestedAmount),
+        preferredTenureMonths:
+          detailsForm.preferredTenureMonths === "" ? 1 : Number(detailsForm.preferredTenureMonths),
+        monthlyIncome: detailsForm.monthlyIncome === "" ? 0 : Number(detailsForm.monthlyIncome),
+      });
+      setItem(updated);
+      setDetailsForm({
+        fullName: updated?.fullName || "",
+        phone: String(updated?.phone || "").replace(/^\+/, ""),
+        email: updated?.email || "",
+        address: updated?.address || "",
+        dateOfBirth: updated?.dateOfBirth ? new Date(updated.dateOfBirth).toISOString().slice(0, 10) : "",
+        gender: updated?.gender || "",
+        maritalStatus: updated?.maritalStatus || "",
+        dependants: updated?.dependants ?? "",
+        housingStatus: updated?.housingStatus || "",
+        employmentStatus: updated?.employmentStatus || "",
+        borrowerType: updated?.borrowerType || "",
+        loanProductSlug: updated?.loanProductSlug || "",
+        loanProductName: updated?.loanProductName || "",
+        requestedAmount: updated?.requestedAmount ?? "",
+        preferredTenureMonths: updated?.preferredTenureMonths ?? "",
+        notes: updated?.notes || "",
+        addressLine1: updated?.addressLine1 || "",
+        city: updated?.city || "",
+        district: updated?.district || "",
+        country: updated?.country || "Malawi",
+        employmentType: updated?.employmentType || "",
+        governmentId: updated?.governmentId || "",
+        monthlyIncome: updated?.monthlyIncome ?? "",
+        bankName: updated?.bankName || "",
+        accountNumber: updated?.accountNumber || "",
+        branchCode: updated?.branchCode || "",
+        reference1Name: updated?.reference1Name || "",
+        reference1Phone: updated?.reference1Phone || "",
+        reference2Name: updated?.reference2Name || "",
+        reference2Phone: updated?.reference2Phone || "",
+      });
+      setEditMode(false);
+      setStatusNotice({
+        title: "Details updated",
+        message: "Customer and KYC details have been updated successfully.",
+        tone: "border-emerald-200 bg-emerald-50 text-emerald-900",
+        iconTone: "bg-emerald-100 text-emerald-600",
+      });
+      toast.success("Inquiry details updated.");
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || "Failed to save details.";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const uploadAdminDoc = async (type, file, displayName) => {
+    if (!item?._id || !file) return;
+    const trimmedName = String(displayName || "").trim();
+    if (!trimmedName) {
+      const msg = "Document name is required.";
+      setError(msg);
+      toast.error(msg);
+      return;
+    }
+    setDocActionLoading(`upload:${type}`);
+    setError("");
+    try {
+      const updated = await inquiriesApi.uploadDoc(item._id, type, file, trimmedName);
+      setItem(updated);
+      setAddDocName("");
+      toast.success("Document uploaded successfully.");
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || "Failed to upload document.";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setDocActionLoading("");
+    }
+  };
+
+  const removeAdminDoc = async (type) => {
+    if (!item?._id) return;
+    setDocActionLoading(`remove:${type}`);
+    setError("");
+    try {
+      const updated = await inquiriesApi.removeDoc(item._id, type);
+      setItem(updated);
+      toast.success("Document removed successfully.");
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || "Failed to remove document.";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setDocActionLoading("");
+    }
+  };
+
   const updateInquiry = async () => {
     if (!item?._id || !nextStatus) return;
     setActionLoading(true);
     setError("");
+    const actionStatus = nextStatus;
     try {
-      if ((nextStatus === "APPROVED" || nextStatus === "KYC_REJECTED" || nextStatus === "VERIFIED") && !hasSubmittedKyc) {
+      if ((actionStatus === "APPROVED" || actionStatus === "KYC_REJECTED" || actionStatus === "VERIFIED") && !hasSubmittedKyc) {
         throw new Error("Customer has not submitted Profile + KYC yet.");
       }
 
-      if (nextStatus === "VERIFIED") {
+      if (actionStatus === "VERIFIED") {
+        if (!String(verifiedBy || "").trim()) {
+          throw new Error("Verified by is required before verifying KYC.");
+        }
         if (item.kycStatus !== "verified") {
-          await complianceApi.verifyKyc(`inquiry:${item._id}`);
+          await complianceApi.verifyKyc(`inquiry:${item._id}`, verifiedBy.trim());
         }
         await loadDetail();
         setNextStatus("");
+        setWhatsappReady(true);
+        setStatusNotice(getStatusNotification("VERIFIED"));
         toast.success("KYC verified.");
         return;
       }
 
-      if (nextStatus === "APPROVED" && item.kycStatus !== "verified") {
-        await complianceApi.verifyKyc(`inquiry:${item._id}`);
+      if (actionStatus === "APPROVED" && item.kycStatus !== "verified") {
+        if (!String(verifiedBy || item.verifiedBy || "").trim()) {
+          throw new Error("Verified by is required before approving the loan.");
+        }
+        await complianceApi.verifyKyc(
+          `inquiry:${item._id}`,
+          String(verifiedBy || item.verifiedBy).trim()
+        );
       }
 
-      if (nextStatus === "KYC_REJECTED") {
+      if (actionStatus === "KYC_REJECTED") {
         const reason = String(adminNote || "").trim();
         if (!reason) {
           throw new Error("Add the KYC rejection reason before updating.");
@@ -258,19 +559,24 @@ export default function LoanApplicationDetail() {
         await complianceApi.rejectKyc(`inquiry:${item._id}`, reason);
       }
 
-      if (nextStatus === "CLOSED" && !String(closeReason || "").trim()) {
+      if (actionStatus === "CLOSED" && !String(closeReason || "").trim()) {
         throw new Error("Select the close reason before updating.");
       }
 
       const updated = await inquiriesApi.update(item._id, {
-        status: nextStatus,
+        status: actionStatus,
         adminNote,
-        closeReason: nextStatus === "CLOSED" ? closeReason : "",
+        closeReason: actionStatus === "CLOSED" ? closeReason : "",
+        approvedBy: actionStatus === "APPROVED" ? approvedBy.trim() : item?.approvedBy || "",
       });
       setItem(updated);
       setAdminNote(updated?.adminNote || "");
       setCloseReason(updated?.closeReason || "");
+      setVerifiedBy(updated?.verifiedBy || verifiedBy);
+      setApprovedBy(updated?.approvedBy || "");
       setNextStatus("");
+      setWhatsappReady(true);
+      setStatusNotice(getStatusNotification(actionStatus));
       toast.success("Loan inquiry updated.");
     } catch (err) {
       const msg =
@@ -283,9 +589,9 @@ export default function LoanApplicationDetail() {
   };
 
   const openWhatsapp = async () => {
-    const effectiveStatus = getEffectiveWhatsappStatus(item, nextStatus);
+    const effectiveStatus = getEffectiveWhatsappStatus(item, "");
     if (!effectiveStatus) {
-      toast.error("Select the inquiry status first.");
+      toast.error("Update the inquiry status first.");
       return;
     }
 
@@ -301,40 +607,6 @@ export default function LoanApplicationDetail() {
     }
 
     let effectiveItem = item;
-
-    try {
-      if (effectiveStatus === "KYC_SENT" && item?.status !== "KYC_SENT") {
-        const updated = await inquiriesApi.update(item._id, {
-          status: "KYC_SENT",
-          adminNote,
-          closeReason: "",
-        });
-        setItem(updated);
-        effectiveItem = updated;
-      }
-
-      if (effectiveStatus === "KYC_REJECTED" && (item?.status !== "KYC_REJECTED" || item?.kycStatus !== "rejected")) {
-        if (!hasSubmittedKyc) {
-          toast.error("Customer has not submitted Profile + KYC yet.");
-          return;
-        }
-        await complianceApi.rejectKyc(`inquiry:${item._id}`, rejectionReason);
-        const updated = await inquiriesApi.update(item._id, {
-          status: "KYC_REJECTED",
-          adminNote: rejectionReason,
-          closeReason: "",
-        });
-        setItem(updated);
-        setAdminNote(updated?.adminNote || rejectionReason);
-        effectiveItem = updated;
-      }
-    } catch (err) {
-      const msg =
-        err?.response?.data?.message || err?.message || "Failed to prepare WhatsApp message.";
-      setError(msg);
-      toast.error(msg);
-      return;
-    }
 
     const href = buildWhatsappLink(effectiveItem, effectiveStatus, rejectionReason);
     if (!href) {
@@ -606,6 +878,7 @@ export default function LoanApplicationDetail() {
               </div>
               <div class="meta">
                 <p><strong>Printed:</strong> ${escapeHtml(formatDate(new Date().toISOString()))}</p>
+                <p><strong>Application No:</strong> ${escapeHtml(item.applicationCode || "-")}</p>
                 <p><strong>Record ID:</strong> ${escapeHtml(item._id || "-")}</p>
               </div>
             </div>
@@ -615,6 +888,7 @@ export default function LoanApplicationDetail() {
                 <div class="card">
                   <div class="label">Customer</div>
                   <div class="value">${escapeHtml(item.fullName || "-")}</div>
+                  <div class="subvalue">Application No: ${escapeHtml(item.applicationCode || "-")}</div>
                   <div class="subvalue">${escapeHtml(item.phone || "-")}</div>
                   <div class="subvalue">${escapeHtml(item.email || "-")}</div>
                 </div>
@@ -629,6 +903,8 @@ export default function LoanApplicationDetail() {
                   <div class="value">${escapeHtml(String(item.profileCompletion ?? 0))}% Complete</div>
                   <div class="subvalue">Submitted: ${escapeHtml(formatDate(item.submittedAt))}</div>
                   <div class="subvalue">Verified: ${escapeHtml(formatDate(item.verifiedAt))}</div>
+                  <div class="subvalue">Verified By: ${escapeHtml(item.verifiedBy || "-")}</div>
+                  <div class="subvalue">Approved By: ${escapeHtml(item.approvedBy || "-")}</div>
                 </div>
               </div>
               <div class="photo-card">
@@ -693,6 +969,28 @@ export default function LoanApplicationDetail() {
             </div>
 
             <div class="section">
+              <h2>Approval Details</h2>
+              <div class="grid-2">
+                <div class="field">
+                  <div class="label">Verified By</div>
+                  <div class="field-value">${escapeHtml(item.verifiedBy || "-")}</div>
+                </div>
+                <div class="field">
+                  <div class="label">Verified At</div>
+                  <div class="field-value">${escapeHtml(formatDate(item.verifiedAt))}</div>
+                </div>
+                <div class="field">
+                  <div class="label">Approved By</div>
+                  <div class="field-value">${escapeHtml(item.approvedBy || "-")}</div>
+                </div>
+                <div class="field">
+                  <div class="label">Approved At</div>
+                  <div class="field-value">${escapeHtml(formatDate(item.approvedAt))}</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="section">
               <h2>KYC Documents</h2>
               <table>
                 <thead>
@@ -747,6 +1045,131 @@ export default function LoanApplicationDetail() {
     if (!doc) {
       document.body.removeChild(iframe);
       toast.error("Unable to open print preview.");
+      return;
+    }
+
+    doc.open();
+    doc.write(html);
+    doc.close();
+
+    iframe.onload = () => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 1000);
+    };
+  };
+
+  const handleSchedulePrint = () => {
+    if (!item || !repaymentPlan) return;
+
+    const scheduleRows = repaymentPlan.schedule
+      .map(
+        (row) => `
+          <tr>
+            <td>${row.month}</td>
+            <td>${escapeHtml(formatDateOnly(row.dueDate))}</td>
+            <td>${escapeHtml(formatMoney(row.openingBalance))}</td>
+            <td>${escapeHtml(formatMoney(row.principalPaid))}</td>
+            <td>${escapeHtml(formatMoney(row.interest))}</td>
+            <td>${escapeHtml(formatMoney(row.fees))}</td>
+            <td>${escapeHtml(formatMoney(row.installment))}</td>
+            <td>${escapeHtml(formatMoney(row.closingBalance))}</td>
+          </tr>
+        `
+      )
+      .join("");
+
+    const html = `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Repayment Schedule</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; color: #0f172a; margin: 24px; }
+            h1, h2, p { margin: 0; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 24px; }
+            .title { font-size: 24px; font-weight: 700; }
+            .sub { font-size: 12px; color: #475569; margin-top: 6px; }
+            .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
+            .card { border: 1px solid #cbd5e1; border-radius: 12px; padding: 12px; background: #f8fafc; }
+            .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; margin-bottom: 6px; font-weight: 700; }
+            .value { font-size: 16px; font-weight: 700; color: #0f172a; }
+            .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 20px; }
+            .meta-item { border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #cbd5e1; padding: 9px 10px; font-size: 12px; text-align: left; }
+            th { background: #f8fafc; font-weight: 700; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <h1 class="title">Repayment Schedule</h1>
+              <p class="sub">Application No: ${escapeHtml(item.applicationCode || "-")}</p>
+              <p class="sub">Generated: ${escapeHtml(formatDate(new Date().toISOString()))}</p>
+            </div>
+            <div>
+              <p class="sub"><strong>Customer:</strong> ${escapeHtml(item.fullName || "-")}</p>
+              <p class="sub"><strong>Loan:</strong> ${escapeHtml(item.loanProductName || item.loanProductSlug || "-")}</p>
+            </div>
+          </div>
+
+          <div class="grid">
+            <div class="card"><div class="label">Approved Amount</div><div class="value">${escapeHtml(formatMoney(item.requestedAmount))}</div></div>
+            <div class="card"><div class="label">Monthly Rate</div><div class="value">${(repaymentPlan.monthlyRate * 100).toFixed(1)}%</div></div>
+            <div class="card"><div class="label">First Payment</div><div class="value">${escapeHtml(formatMoney(repaymentPlan.firstInstallment))}</div></div>
+            <div class="card"><div class="label">Total Repayment</div><div class="value">${escapeHtml(formatMoney(repaymentPlan.totalRepayment))}</div></div>
+          </div>
+
+          <div class="meta">
+            <div class="meta-item"><strong>Monthly Installment:</strong> ${escapeHtml(formatMoney(repaymentPlan.monthlyInstallment))}</div>
+            <div class="meta-item"><strong>Tenure:</strong> ${escapeHtml(`${item.preferredTenureMonths || "-"} months`)}</div>
+            <div class="meta-item"><strong>Processing Fee:</strong> ${escapeHtml(formatMoney(repaymentPlan.processingFee))}</div>
+            <div class="meta-item"><strong>Admin Fee:</strong> ${escapeHtml(formatMoney(repaymentPlan.oneTimeAdminFee))}</div>
+            <div class="meta-item"><strong>Verified By:</strong> ${escapeHtml(item.verifiedBy || "-")}</div>
+            <div class="meta-item"><strong>Approved By:</strong> ${escapeHtml(item.approvedBy || "-")}</div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Due Date</th>
+                <th>Opening Balance</th>
+                <th>Principal</th>
+                <th>Interest</th>
+                <th>Fees</th>
+                <th>Installment</th>
+                <th>Closing Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${scheduleRows}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      document.body.removeChild(iframe);
+      toast.error("Unable to open schedule preview.");
       return;
     }
 
@@ -838,6 +1261,8 @@ export default function LoanApplicationDetail() {
   const availableStatuses = ["KYC_SENT", "KYC_REJECTED", "VERIFIED", "APPROVED", "CLOSED"].filter(
     (status) => status !== displayedStatusKey
   );
+  const repaymentPlan =
+    item?.kycStatus === "verified" || item?.status === "APPROVED" ? buildRepaymentPlan(item) : null;
   const visibleHistory = actionHistory
     .slice()
     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
@@ -877,18 +1302,18 @@ export default function LoanApplicationDetail() {
         tone: "border-amber-200 bg-amber-50 text-amber-800",
       };
     }
-    if (item.kycStatus === "rejected" || item.status === "KYC_REJECTED") {
-      return {
-        title: "KYC Rejected",
-        note: "KYC is currently rejected. Review the reason and wait for the next customer update.",
-        tone: "border-rose-200 bg-rose-50 text-rose-800",
-      };
-    }
     if (item.kycStatus === "verified") {
       return {
         title: "Ready for loan approval",
         note: "KYC is already verified. Approve the loan when the case is ready.",
         tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
+      };
+    }
+    if (item.kycStatus === "rejected" || item.status === "KYC_REJECTED") {
+      return {
+        title: "KYC Rejected",
+        note: "KYC is currently rejected. Review the reason and wait for the next customer update.",
+        tone: "border-rose-200 bg-rose-50 text-rose-800",
       };
     }
     return {
@@ -899,13 +1324,64 @@ export default function LoanApplicationDetail() {
   })();
 
   return (
+    <>
+      {statusNotice ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
+          <div className={`w-full max-w-lg rounded-[28px] border p-6 shadow-[0_30px_90px_rgba(15,23,42,0.22)] ${statusNotice.tone}`}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${statusNotice.iconTone}`}>
+                  <CheckCircle2 size={28} />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em]">Application Update</p>
+                  <h2 className="mt-2 text-2xl font-bold">{statusNotice.title}</h2>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStatusNotice(null)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-current/15 bg-white/60 text-current transition hover:bg-white/80"
+                aria-label="Close status notification"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <p className="mt-5 text-sm leading-7">{statusNotice.message}</p>
+            <div className="mt-6 flex justify-end">
+              <Button onClick={() => setStatusNotice(null)}>Close</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Loan Inquiry Details</h1>
           <p className="text-sm text-slate-500">Review the full customer request and update the next step.</p>
+          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Application No: {item.applicationCode || "-"}
+          </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={() => setEditMode((prev) => !prev)}>
+            {editMode ? (
+              <>
+                <X size={16} /> Cancel Edit
+              </>
+            ) : (
+              <>
+                <PencilLine size={16} /> Edit Details
+              </>
+            )}
+          </Button>
+          {editMode ? (
+            <Button variant="outline" onClick={saveDetails} disabled={actionLoading}>
+              <Save size={16} />
+              {actionLoading ? "Saving..." : "Save Details"}
+            </Button>
+          ) : null}
           <Button variant="outline" onClick={handlePrint}>
             Print Form
           </Button>
@@ -1009,85 +1485,143 @@ export default function LoanApplicationDetail() {
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Full Name
               </p>
-              <p className="mt-1 text-sm font-medium text-slate-900">{item.fullName || "-"}</p>
+              {editMode ? (
+                <input className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.fullName || ""} onChange={(e) => updateDetailsField("fullName", e.target.value)} />
+              ) : (
+                <p className="mt-1 text-sm font-medium text-slate-900">{item.fullName || "-"}</p>
+              )}
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Phone
               </p>
-              <p className="mt-1 text-sm font-medium text-slate-900">{item.phone || "-"}</p>
+              {editMode ? (
+                <input className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.phone || ""} onChange={(e) => updateDetailsField("phone", e.target.value)} />
+              ) : (
+                <p className="mt-1 text-sm font-medium text-slate-900">{item.phone || "-"}</p>
+              )}
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Email
               </p>
-              <p className="mt-1 text-sm font-medium text-slate-900 break-all">{item.email || "-"}</p>
+              {editMode ? (
+                <input className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.email || ""} onChange={(e) => updateDetailsField("email", e.target.value)} />
+              ) : (
+                <p className="mt-1 text-sm font-medium text-slate-900 break-all">{item.email || "-"}</p>
+              )}
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Date of Birth
               </p>
-              <p className="mt-1 text-sm font-medium text-slate-900">{formatDateOnly(item.dateOfBirth)}</p>
+              {editMode ? (
+                <input type="date" className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.dateOfBirth || ""} onChange={(e) => updateDetailsField("dateOfBirth", e.target.value)} />
+              ) : (
+                <p className="mt-1 text-sm font-medium text-slate-900">{formatDateOnly(item.dateOfBirth)}</p>
+              )}
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Gender
               </p>
-              <p className="mt-1 text-sm font-medium text-slate-900">{humanizeValue(item.gender)}</p>
+              {editMode ? (
+                <select className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.gender || ""} onChange={(e) => updateDetailsField("gender", e.target.value)}>
+                  <option value="">Select gender</option><option value="male">Male</option><option value="female">Female</option>
+                </select>
+              ) : (
+                <p className="mt-1 text-sm font-medium text-slate-900">{humanizeValue(item.gender)}</p>
+              )}
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Marital Status
               </p>
-              <p className="mt-1 text-sm font-medium text-slate-900">
-                {humanizeValue(item.maritalStatus)}
-              </p>
+              {editMode ? (
+                <select className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.maritalStatus || ""} onChange={(e) => updateDetailsField("maritalStatus", e.target.value)}>
+                  <option value="">Select marital status</option><option value="single">Single</option><option value="married">Married</option><option value="divorced">Divorced</option><option value="widowed">Widowed</option>
+                </select>
+              ) : (
+                <p className="mt-1 text-sm font-medium text-slate-900">
+                  {humanizeValue(item.maritalStatus)}
+                </p>
+              )}
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Dependants
               </p>
-              <p className="mt-1 text-sm font-medium text-slate-900">
-                {Number.isFinite(item.dependants) ? item.dependants : "-"}
-              </p>
+              {editMode ? (
+                <input type="number" className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.dependants ?? ""} onChange={(e) => updateDetailsField("dependants", e.target.value)} />
+              ) : (
+                <p className="mt-1 text-sm font-medium text-slate-900">
+                  {Number.isFinite(item.dependants) ? item.dependants : "-"}
+                </p>
+              )}
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Housing Status
               </p>
-              <p className="mt-1 text-sm font-medium text-slate-900">
-                {humanizeValue(item.housingStatus)}
-              </p>
+              {editMode ? (
+                <select className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.housingStatus || ""} onChange={(e) => updateDetailsField("housingStatus", e.target.value)}>
+                  <option value="">Select housing status</option><option value="tenant">Tenant</option><option value="home_owner">Home Owner</option>
+                </select>
+              ) : (
+                <p className="mt-1 text-sm font-medium text-slate-900">
+                  {humanizeValue(item.housingStatus)}
+                </p>
+              )}
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Employment Status
               </p>
-              <p className="mt-1 text-sm font-medium text-slate-900">
-                {humanizeValue(item.employmentStatus)}
-              </p>
+              {editMode ? (
+                <select className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.employmentStatus || ""} onChange={(e) => updateDetailsField("employmentStatus", e.target.value)}>
+                  <option value="">Select employment status</option><option value="employed">Employed</option><option value="not_employed">Not Employed</option>
+                </select>
+              ) : (
+                <p className="mt-1 text-sm font-medium text-slate-900">
+                  {humanizeValue(item.employmentStatus)}
+                </p>
+              )}
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Borrower Type
               </p>
-              <p className="mt-1 text-sm font-medium text-slate-900">
-                {humanizeValue(item.borrowerType)}
-              </p>
+              {editMode ? (
+                <select className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.borrowerType || ""} onChange={(e) => updateDetailsField("borrowerType", e.target.value)}>
+                  <option value="">Select borrower type</option><option value="first_time">First Time</option><option value="repeat">Repeat</option>
+                </select>
+              ) : (
+                <p className="mt-1 text-sm font-medium text-slate-900">
+                  {humanizeValue(item.borrowerType)}
+                </p>
+              )}
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Requested Amount
               </p>
-              <p className="mt-1 text-sm font-medium text-slate-900">{formatMoney(item.requestedAmount)}</p>
+              {editMode ? (
+                <input type="number" className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.requestedAmount ?? ""} onChange={(e) => updateDetailsField("requestedAmount", e.target.value)} />
+              ) : (
+                <p className="mt-1 text-sm font-medium text-slate-900">{formatMoney(item.requestedAmount)}</p>
+              )}
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Tenure
               </p>
-              <p className="mt-1 text-sm font-medium text-slate-900">
-                {item.preferredTenureMonths ? `${item.preferredTenureMonths} months` : "-"}
-              </p>
+              {editMode ? (
+                <input type="number" className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.preferredTenureMonths ?? ""} onChange={(e) => updateDetailsField("preferredTenureMonths", e.target.value)} />
+              ) : (
+                <p className="mt-1 text-sm font-medium text-slate-900">
+                  {item.preferredTenureMonths ? `${item.preferredTenureMonths} months` : "-"}
+                </p>
+              )}
             </div>
           </div>
 
@@ -1096,59 +1630,101 @@ export default function LoanApplicationDetail() {
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Address
               </p>
-              <p className="mt-2 text-sm text-slate-700">{item.address || "-"}</p>
+              {editMode ? (
+                <textarea className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" rows={3} value={detailsForm?.address || ""} onChange={(e) => updateDetailsField("address", e.target.value)} />
+              ) : (
+                <p className="mt-2 text-sm text-slate-700">{item.address || "-"}</p>
+              )}
             </div>
             <div className="rounded-lg border border-slate-200 bg-white px-4 py-4">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Description
               </p>
-              <p className="mt-2 text-sm text-slate-700">{item.notes || "-"}</p>
+              {editMode ? (
+                <textarea className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" rows={3} value={detailsForm?.notes || ""} onChange={(e) => updateDetailsField("notes", e.target.value)} />
+              ) : (
+                <p className="mt-2 text-sm text-slate-700">{item.notes || "-"}</p>
+              )}
             </div>
           </div>
             </div>
           ) : null}
         </div>
 
-        <div className="rounded-lg border p-3 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="rounded-lg border p-3">
+          <button
+            type="button"
+            onClick={() => setKycOpen((prev) => !prev)}
+            className="flex w-full items-center justify-between gap-3 rounded-lg px-1 py-1 text-left"
+          >
             <div>
-              <h3 className="text-sm font-semibold">KYC Overview</h3>
-              <p className="text-xs text-slate-500">
+              <h3 className="text-sm font-semibold text-slate-900">KYC Overview</h3>
+              <p className="mt-1 text-xs text-slate-500">
                 Review documents and take KYC action from this page.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex items-center gap-2">
               <Badge tone={KYC_TONE[item.kycStatus] || "gray"}>
                 {HUMAN_KYC[item.kycStatus] || item.kycStatus || "Not Started"}
               </Badge>
               <Badge tone={(item.profileCompletion || 0) >= 100 ? "green" : "amber"}>
                 Profile: {item.profileCompletion ?? 0}%
               </Badge>
+              <ChevronDown
+                className={[
+                  "h-4 w-4 text-slate-500 transition-transform duration-200",
+                  kycOpen ? "rotate-180" : "",
+                ].join(" ")}
+              />
             </div>
-          </div>
+          </button>
 
+          {kycOpen ? (
+            <div className="mt-4 space-y-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Employment
               </p>
-              <p className="mt-1 text-sm font-medium text-slate-900">{item.employmentType || "-"}</p>
-              {String(item.employmentType || "").trim().toLowerCase() === "government employee" ? (
-                <p className="mt-1 text-sm text-slate-600">
-                  Government ID: {item.governmentId || "-"}
-                </p>
-              ) : null}
-              <p className="mt-1 text-sm text-slate-600">
-                Income: {item.monthlyIncome ? `MWK ${Number(item.monthlyIncome).toLocaleString()}` : "-"}
-              </p>
+              {editMode ? (
+                <div className="mt-2 space-y-2">
+                  <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.employmentType || ""} onChange={(e) => updateDetailsField("employmentType", e.target.value)} placeholder="Employment type" />
+                  {String(detailsForm?.employmentType || "").trim().toLowerCase() === "government employee" ? (
+                    <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.governmentId || ""} onChange={(e) => updateDetailsField("governmentId", e.target.value)} placeholder="Government ID" />
+                  ) : null}
+                  <input type="number" className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.monthlyIncome ?? ""} onChange={(e) => updateDetailsField("monthlyIncome", e.target.value)} placeholder="Monthly income" />
+                </div>
+              ) : (
+                <>
+                  <p className="mt-1 text-sm font-medium text-slate-900">{item.employmentType || "-"}</p>
+                  {String(item.employmentType || "").trim().toLowerCase() === "government employee" ? (
+                    <p className="mt-1 text-sm text-slate-600">
+                      Government ID: {item.governmentId || "-"}
+                    </p>
+                  ) : null}
+                  <p className="mt-1 text-sm text-slate-600">
+                    Income: {item.monthlyIncome ? `MWK ${Number(item.monthlyIncome).toLocaleString()}` : "-"}
+                  </p>
+                </>
+              )}
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Bank Details
               </p>
-              <p className="mt-1 text-sm font-medium text-slate-900">{item.bankName || "-"}</p>
-              <p className="mt-1 text-sm text-slate-600">{item.accountNumber || "-"}</p>
-              <p className="mt-1 text-sm text-slate-600">{item.branchCode || "-"}</p>
+              {editMode ? (
+                <div className="mt-2 space-y-2">
+                  <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.bankName || ""} onChange={(e) => updateDetailsField("bankName", e.target.value)} placeholder="Bank name" />
+                  <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.accountNumber || ""} onChange={(e) => updateDetailsField("accountNumber", e.target.value)} placeholder="Account number" />
+                  <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.branchCode || ""} onChange={(e) => updateDetailsField("branchCode", e.target.value)} placeholder="Branch code" />
+                </div>
+              ) : (
+                <>
+                  <p className="mt-1 text-sm font-medium text-slate-900">{item.bankName || "-"}</p>
+                  <p className="mt-1 text-sm text-slate-600">{item.accountNumber || "-"}</p>
+                  <p className="mt-1 text-sm text-slate-600">{item.branchCode || "-"}</p>
+                </>
+              )}
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
@@ -1156,22 +1732,33 @@ export default function LoanApplicationDetail() {
               </p>
               <p className="mt-1 text-sm text-slate-600">Submitted: {formatDate(item.submittedAt)}</p>
               <p className="mt-1 text-sm text-slate-600">Verified: {formatDate(item.verifiedAt)}</p>
+              <p className="mt-1 text-sm text-slate-600">Verified By: {item.verifiedBy || "-"}</p>
               <p className="mt-1 text-sm text-slate-600">Rejected: {formatDate(item.rejectedAt)}</p>
+              <p className="mt-1 text-sm text-slate-600">Approved By: {item.approvedBy || "-"}</p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 References
               </p>
-              <div className="mt-1 space-y-2 text-sm text-slate-600">
-                <div>
-                  <p className="font-medium text-slate-900">{item.reference1Name || "-"}</p>
-                  <p>{item.reference1Phone || "-"}</p>
+              {editMode ? (
+                <div className="mt-2 space-y-2">
+                  <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.reference1Name || ""} onChange={(e) => updateDetailsField("reference1Name", e.target.value)} placeholder="Reference 1 name" />
+                  <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.reference1Phone || ""} onChange={(e) => updateDetailsField("reference1Phone", e.target.value)} placeholder="Reference 1 phone" />
+                  <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.reference2Name || ""} onChange={(e) => updateDetailsField("reference2Name", e.target.value)} placeholder="Reference 2 name" />
+                  <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.reference2Phone || ""} onChange={(e) => updateDetailsField("reference2Phone", e.target.value)} placeholder="Reference 2 phone" />
                 </div>
-                <div>
-                  <p className="font-medium text-slate-900">{item.reference2Name || "-"}</p>
-                  <p>{item.reference2Phone || "-"}</p>
+              ) : (
+                <div className="mt-1 space-y-2 text-sm text-slate-600">
+                  <div>
+                    <p className="font-medium text-slate-900">{item.reference1Name || "-"}</p>
+                    <p>{item.reference1Phone || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="font-medium text-slate-900">{item.reference2Name || "-"}</p>
+                    <p>{item.reference2Phone || "-"}</p>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -1180,32 +1767,240 @@ export default function LoanApplicationDetail() {
             {(item.documents || []).length === 0 ? (
               <p className="mt-2 text-sm text-slate-500">No documents uploaded yet.</p>
             ) : (
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                {(item.documents || []).map((doc, index) => (
-                  <div
-                    key={`${doc.type}-${index}`}
-                    className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"
-                  >
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                      {DOC_LABEL[doc.type] || doc.type}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-700">{doc.mime || "-"}</p>
-                    <p className="mt-1 text-xs text-slate-500">{formatDate(doc.uploadedAt)}</p>
-                    {doc.fileUrl ? (
-                      <a
-                        href={resolveAssetUrl(doc.fileUrl)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-2 inline-flex text-sm font-medium text-slate-900 underline"
-                      >
-                        Preview Document
-                      </a>
-                    ) : null}
-                  </div>
-                ))}
+              <div className="mt-3 overflow-hidden rounded-lg border border-slate-200">
+                <div className="hidden grid-cols-[1.3fr_0.9fr_1.4fr] gap-3 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 md:grid">
+                  <span>Document</span>
+                  <span>Uploaded</span>
+                  <span>Actions</span>
+                </div>
+                <div className="divide-y divide-slate-200">
+                  {(item.documents || []).map((doc, index) => (
+                    <div
+                      key={`${doc.type}-${index}`}
+                      className="grid gap-3 px-4 py-4 md:grid-cols-[1.3fr_0.9fr_1.4fr] md:items-center"
+                    >
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:hidden">
+                          Document
+                        </p>
+                        <p className="text-sm font-medium text-slate-900">
+                          {String(doc.displayName || "").trim() || DOC_LABEL[doc.type] || humanizeValue(doc.type)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:hidden">
+                          Uploaded
+                        </p>
+                        <p className="text-sm text-slate-600">{formatDate(doc.uploadedAt)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:hidden">
+                          Actions
+                        </p>
+                        {doc.fileUrl ? (
+                          editMode ? (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <a
+                                href={resolveAssetUrl(doc.fileUrl)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                              >
+                                Preview
+                              </a>
+                              <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50">
+                                Replace
+                                <input
+                                  type="file"
+                                  className="hidden"
+                                  accept=".pdf,.png,.jpg,.jpeg"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) uploadAdminDoc(doc.type, file, doc.displayName || DOC_LABEL[doc.type] || humanizeValue(doc.type));
+                                    e.target.value = "";
+                                  }}
+                                />
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => removeAdminDoc(doc.type)}
+                                disabled={docActionLoading === `remove:${doc.type}`}
+                                className="inline-flex items-center rounded-lg border border-rose-200 px-3 py-2 text-xs font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-60"
+                              >
+                                {docActionLoading === `remove:${doc.type}` ? "Removing..." : "Remove"}
+                              </button>
+                            </div>
+                          ) : (
+                            <a
+                              href={resolveAssetUrl(doc.fileUrl)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                            >
+                              Preview
+                            </a>
+                          )
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
+            {editMode ? (
+              <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                  Add Document
+                </p>
+                <div className="mt-3">
+                  <div>
+                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      Document Name
+                    </label>
+                    <input
+                      value={addDocName}
+                      onChange={(e) => setAddDocName(e.target.value)}
+                      className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800"
+                      placeholder="Enter document name"
+                    />
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <label className="flex min-h-11 cursor-pointer items-center justify-between rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 transition hover:bg-slate-50">
+                    <span>Add document</span>
+                    <span className="text-xs font-medium text-slate-500">Choose file</span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.png,.jpg,.jpeg"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) uploadAdminDoc("", file, addDocName);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Admin can write the document name directly and then upload the file.
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </div>
+
+          {repaymentPlan ? (
+            <div className="rounded-lg border border-slate-200 p-3">
+              <button
+                type="button"
+                onClick={() => setRepaymentOpen((prev) => !prev)}
+                className="flex w-full items-center justify-between gap-3 rounded-lg px-1 py-1 text-left"
+              >
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Repayment Schedule</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Preview the verified repayment plan before sending or saving as PDF.
+                  </p>
+                </div>
+                <ChevronDown
+                  className={[
+                    "h-4 w-4 text-slate-500 transition-transform duration-200",
+                    repaymentOpen ? "rotate-180" : "",
+                  ].join(" ")}
+                />
+              </button>
+
+              {repaymentOpen ? (
+                <div className="mt-4 space-y-4">
+                  <div className="flex flex-wrap items-center justify-end gap-3">
+                    <Button variant="outline" onClick={handleSchedulePrint}>
+                      Download Schedule
+                    </Button>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Monthly Rate</p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {(repaymentPlan.monthlyRate * 100).toFixed(1)}%
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">First Payment</p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {formatMoney(repaymentPlan.firstInstallment)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Processing Fee</p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {formatMoney(repaymentPlan.processingFee)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Admin Fee</p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {formatMoney(repaymentPlan.oneTimeAdminFee)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Monthly Installment</p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {formatMoney(repaymentPlan.monthlyInstallment)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total Interest</p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {formatMoney(repaymentPlan.totalInterest)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total Repayment</p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {formatMoney(repaymentPlan.totalRepayment)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="min-w-full divide-y divide-slate-200 text-sm">
+                      <thead className="bg-slate-50">
+                        <tr className="text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                          <th className="px-3 py-3">Month</th>
+                          <th className="px-3 py-3">Due Date</th>
+                          <th className="px-3 py-3">Opening</th>
+                          <th className="px-3 py-3">Principal</th>
+                          <th className="px-3 py-3">Interest</th>
+                          <th className="px-3 py-3">Fees</th>
+                          <th className="px-3 py-3">Installment</th>
+                          <th className="px-3 py-3">Closing</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200 bg-white">
+                        {repaymentPlan.schedule.map((row) => (
+                          <tr key={row.month}>
+                            <td className="px-3 py-3 text-slate-900">{row.month}</td>
+                            <td className="px-3 py-3 text-slate-700">{formatDateOnly(row.dueDate)}</td>
+                            <td className="px-3 py-3 text-slate-700">{formatMoney(row.openingBalance)}</td>
+                            <td className="px-3 py-3 text-slate-700">{formatMoney(row.principalPaid)}</td>
+                            <td className="px-3 py-3 text-slate-700">{formatMoney(row.interest)}</td>
+                            <td className="px-3 py-3 text-slate-700">{formatMoney(row.fees)}</td>
+                            <td className="px-3 py-3 font-medium text-slate-900">{formatMoney(row.installment)}</td>
+                            <td className="px-3 py-3 text-slate-700">{formatMoney(row.closingBalance)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+            </div>
+          ) : null}
 
         </div>
 
@@ -1221,7 +2016,10 @@ export default function LoanApplicationDetail() {
               <button
                 key={status}
                 type="button"
-                onClick={() => setNextStatus(status)}
+                onClick={() => {
+                  setNextStatus(status);
+                  setWhatsappReady(false);
+                }}
                 className={[
                   "min-h-11 rounded-xl border px-3 py-2 text-sm font-semibold transition",
                   nextStatus === status
@@ -1263,39 +2061,73 @@ export default function LoanApplicationDetail() {
                 ))}
               </select>
             ) : null}
+
+            {(nextStatus === "VERIFIED" || nextStatus === "APPROVED") ? (
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Verified By
+                </label>
+                <input
+                  className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                  value={verifiedBy}
+                  onChange={(e) => setVerifiedBy(e.target.value)}
+                  placeholder="Enter verifier name"
+                />
+              </div>
+            ) : null}
+
+            {nextStatus === "APPROVED" ? (
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Approved By
+                </label>
+                <input
+                  className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                  value={approvedBy}
+                  onChange={(e) => setApprovedBy(e.target.value)}
+                  placeholder="Enter approver name"
+                />
+              </div>
+            ) : null}
           </div>
 
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="outline" onClick={openWhatsapp}>
-              {nextStatus ? "WP Preview" : "Send WP"}
-            </Button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
             <Button
               disabled={
                 !nextStatus ||
                 actionLoading ||
                 ((nextStatus === "APPROVED" || nextStatus === "KYC_REJECTED" || nextStatus === "VERIFIED") && !hasSubmittedKyc) ||
                 (nextStatus === "KYC_REJECTED" && !String(adminNote || "").trim()) ||
-                (nextStatus === "CLOSED" && !String(closeReason || "").trim())
+                (nextStatus === "CLOSED" && !String(closeReason || "").trim()) ||
+                ((nextStatus === "VERIFIED" || nextStatus === "APPROVED") && !String(verifiedBy || "").trim()) ||
+                (nextStatus === "APPROVED" && !String(approvedBy || "").trim())
               }
               onClick={updateInquiry}
             >
               {actionLoading ? "Updating..." : "Update Inquiry"}
             </Button>
+            <Button
+              variant="outline"
+              onClick={openWhatsapp}
+              disabled={actionLoading || !whatsappReady}
+            >
+              WP Preview
+            </Button>
           </div>
 
           {nextStatus === "VERIFIED" && hasSubmittedKyc ? (
             <p className="text-xs font-medium text-slate-600">
-              This verifies KYC only. Use `Approved` later when the loan decision is ready.
+              This verifies KYC only. Add the verifier name before saving.
             </p>
           ) : null}
           {nextStatus === "APPROVED" && hasSubmittedKyc ? (
             <p className="text-xs font-medium text-slate-600">
-              Approving this inquiry will also mark the submitted KYC as verified.
+              Add both verifier and approver names. Approving this inquiry will also mark the submitted KYC as verified.
             </p>
           ) : null}
           {nextStatus === "KYC_SENT" ? (
             <p className="text-xs font-medium text-slate-600">
-              Click `WP Preview` to open the WhatsApp message with the KYC form link, then save this status.
+              Save the inquiry first. After that, `WP Preview` will open the WhatsApp message with the KYC form link.
             </p>
           ) : null}
           {nextStatus === "KYC_REJECTED" && !String(adminNote || "").trim() ? (
@@ -1308,6 +2140,19 @@ export default function LoanApplicationDetail() {
               Select the close reason before saving.
             </p>
           ) : null}
+          {nextStatus ? (
+            <p className="text-xs font-medium text-slate-600">
+              Update the inquiry first. WhatsApp preview is enabled only after the status is saved.
+            </p>
+          ) : whatsappReady ? (
+            <p className="text-xs font-medium text-slate-600">
+              Status saved. You can now use `WP Preview` to send the WhatsApp message.
+            </p>
+          ) : (
+            <p className="text-xs font-medium text-slate-600">
+              Select a status first. After saving it, `WP Preview` will become available.
+            </p>
+          )}
         <div className="rounded-lg border p-3">
           <button
             type="button"
@@ -1367,5 +2212,6 @@ export default function LoanApplicationDetail() {
         </div>
       </div>
     </div>
+    </>
   );
 }

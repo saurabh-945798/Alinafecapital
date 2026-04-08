@@ -760,7 +760,7 @@ const RepaymentCalculator = () => {
                 Apply with this plan
               </button>
 
-              <a href="tel:+265999000000" className="px-6 py-3 rounded-lg border font-semibold flex items-center gap-2">
+              <a href="tel:+265997031941" className="px-6 py-3 rounded-lg border font-semibold flex items-center gap-2">
                 <Phone size={16} /> Talk to Loan Officer
               </a>
             </div>

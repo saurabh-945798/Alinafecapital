@@ -35,24 +35,21 @@ const resolveValue = (lang, key) => {
 };
 
 export function LanguageProvider({ children }) {
-  const [lang, setLang] = useState(() => {
-    if (typeof window === "undefined") return DEFAULT_LANGUAGE;
-    return window.localStorage.getItem(STORAGE_KEY) || DEFAULT_LANGUAGE;
-  });
+  const [lang] = useState(DEFAULT_LANGUAGE);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      window.localStorage.setItem(STORAGE_KEY, lang);
+      window.localStorage.removeItem(STORAGE_KEY);
     }
     if (typeof document !== "undefined") {
-      document.documentElement.lang = lang === "ny" ? "ny" : "en";
+      document.documentElement.lang = "en";
     }
   }, [lang]);
 
   const value = useMemo(
     () => ({
       lang,
-      setLanguage: setLang,
+      setLanguage: () => {},
       t: (key) => resolveValue(lang, key),
     }),
     [lang]

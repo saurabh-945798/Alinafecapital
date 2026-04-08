@@ -322,7 +322,7 @@ const ApplyLoanPage = () => {
 
           <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-slate-600 md:mt-0">
             <span className="inline-flex items-center gap-1">
-              <PhoneCall size={14} /> +265 999 000 000
+              <PhoneCall size={14} /> +265 997 031 941
             </span>
             <span className="inline-flex items-center gap-1">
               <CircleHelp size={14} /> Need help?
@@ -640,3 +640,4 @@ const ApplyLoanPage = () => {
 
 export default ApplyLoanPage;
 export { ApplyLoanPage };
+

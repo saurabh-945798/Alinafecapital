@@ -322,7 +322,7 @@ const HowItWorks = () => {
           </div>
 
           <a
-            href="tel:+265999000000"
+            href="tel:+265997031941"
             className="inline-flex items-center justify-center gap-2 font-semibold px-5 py-3 rounded-xl focus:outline-none focus:ring-4"
             style={{
               backgroundColor: BRAND_NAVY,

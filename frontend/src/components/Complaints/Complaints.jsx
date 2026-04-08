@@ -1,8 +1,8 @@
-const Complaints = () => {
+﻿const Complaints = () => {
   const channels = [
     {
       title: "Phone Support",
-      detail: "+265 999 000 000",
+      detail: "+265 997 031 941",
     },
     {
       title: "Email",

@@ -317,6 +317,9 @@ export default function LoanApplication() {
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
                   <h3 className="text-lg font-semibold text-slate-900">{item.fullName}</h3>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    {item.applicationCode || "-"}
+                  </p>
                   <p className="text-sm text-slate-500">{item.phone}</p>
                   <p className="text-sm text-slate-500">{item.email || "No email provided"}</p>
                 </div>

@@ -72,6 +72,30 @@ function MobileSection({ title, children }) {
   );
 }
 
+function WhatsAppSupportBadge() {
+  return (
+    <a
+      href="https://wa.me/265997031941"
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+    >
+      <div className="relative h-6 w-9 overflow-hidden rounded-full border border-slate-200 bg-white">
+        <div className="absolute inset-x-0 top-0 h-1/3 bg-black" />
+        <div className="absolute inset-x-0 top-1/3 h-1/3 bg-[#d62828]" />
+        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-[#0b3d91]" />
+        <div className="absolute left-1/2 top-[2px] h-3 w-3 -translate-x-1/2 rounded-full border-2 border-[#f59e0b] border-b-0" />
+      </div>
+      <div className="flex flex-col leading-none">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+          Malawi
+        </span>
+        <span className="mt-1 text-sm font-semibold text-slate-800">Customer Support</span>
+      </div>
+    </a>
+  );
+}
+
 function DropdownMenu({ label, sections, pathname, t, isDesktop }) {
   const [hoverOpen, setHoverOpen] = useState(false);
   const [clickOpen, setClickOpen] = useState(false);
@@ -305,12 +329,13 @@ export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated, user, logout } = useAuth();
-  const { lang, setLanguage, t } = useLanguage();
+  const { t } = useLanguage();
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() =>
     typeof window === "undefined" ? true : window.innerWidth >= DESKTOP_BREAKPOINT
   );
+  const [navVisible, setNavVisible] = useState(true);
 
   useEffect(() => {
     const updateViewport = () => {
@@ -321,6 +346,35 @@ export default function Navbar() {
     window.addEventListener("resize", updateViewport);
     return () => window.removeEventListener("resize", updateViewport);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    let lastY = window.scrollY;
+
+    const handleScroll = () => {
+      const currentY = window.scrollY;
+
+      if (mobileOpen) {
+        setNavVisible(true);
+        lastY = currentY;
+        return;
+      }
+
+      if (currentY <= 24) {
+        setNavVisible(true);
+      } else if (currentY > lastY + 8) {
+        setNavVisible(false);
+      } else if (currentY < lastY - 8) {
+        setNavVisible(true);
+      }
+
+      lastY = currentY;
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [mobileOpen]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -354,145 +408,151 @@ export default function Navbar() {
 
   const navLinkClass = ({ isActive }) =>
     [
-      "rounded-full px-3 py-2 text-sm font-semibold transition-colors",
+      "rounded-full px-5 py-2.5 text-sm font-semibold transition-colors",
       isActive ? "text-slate-950" : "text-slate-700 hover:text-slate-950",
     ].join(" ");
 
-  const languageButtonClass = (code) =>
-    [
-      "rounded-full px-3 py-1.5 text-xs font-semibold transition",
-      lang === code
-        ? "bg-white text-slate-950 shadow-sm ring-1 ring-slate-200"
-        : "text-slate-600 hover:bg-slate-100 hover:text-slate-950",
-    ].join(" ");
-
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
-      <div className="border-b border-slate-100 bg-slate-50/90">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2 text-xs text-slate-600 sm:px-6 lg:px-8">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-            <p className="truncate font-medium">{t("navbar.licensed")}</p>
-          </div>
-
-          <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white p-1 md:inline-flex lg:hidden">
-            <button
-              type="button"
-              onClick={() => setLanguage("en")}
-              className={languageButtonClass("en")}
-            >
-              {t("navbar.languageEnglish")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setLanguage("ny")}
-              className={languageButtonClass("ny")}
-            >
-              {t("navbar.languageChichewa")}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-        <Link
-          to="/"
-          className="shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
-          aria-label="Alinafe Capital home"
-        >
-          <AlinafeLogo className="h-[4.2rem] w-auto sm:h-20 lg:h-24" showTagline={false} />
-        </Link>
-
-        <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary navigation">
-          {MAIN_LINKS.map((item) => (
-            <NavLink key={item.to} to={item.to} className={navLinkClass} end={item.to === "/"}>
-              {t(item.labelKey)}
-            </NavLink>
-          ))}
-
-          <DropdownMenu
-            label={t("navbar.more")}
-            sections={MORE_SECTIONS}
-            pathname={location.pathname}
-            t={t}
-            isDesktop={isDesktop}
-          />
-        </nav>
-
-        <div className="hidden items-center gap-3 lg:flex">
-          <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setLanguage("en")}
-              className={languageButtonClass("en")}
-              aria-pressed={lang === "en"}
-            >
-              {t("navbar.languageEnglish")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setLanguage("ny")}
-              className={languageButtonClass("ny")}
-              aria-pressed={lang === "ny"}
-            >
-              {t("navbar.languageChichewa")}
-            </button>
-          </div>
-
-          {isAuthenticated && firstName ? (
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-              <span className="text-slate-500">
-                {t("navbar.hi")}, {firstName}
-              </span>
+    <header
+      className={[
+        "sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur transition-transform duration-300 ease-out",
+        navVisible ? "translate-y-0" : "-translate-y-full",
+      ].join(" ")}
+    >
+      <div className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8 lg:py-4">
+          <Link
+            to="/"
+            className="flex min-w-0 items-center gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+            aria-label="Alinafe Capital home"
+          >
+            <div className="shrink-0 bg-white">
+              <AlinafeLogo className="h-[3.2rem] w-auto sm:h-[4rem] lg:h-[4.4rem]" showTagline={false} />
             </div>
-          ) : null}
+            <div className="hidden min-w-0 lg:block">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">
+                Alinafe Capital
+              </p>
+              <div className="mt-2 h-[2px] w-56 overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className="h-full w-full animate-[brandDividerShift_3.4s_ease-in-out_infinite]"
+                  style={{
+                    background: `linear-gradient(90deg, ${BRAND_NAVY} 0%, ${BRAND_GOLD} 48%, ${BRAND_NAVY} 100%)`,
+                    backgroundSize: "180% 100%",
+                  }}
+                />
+              </div>
+              <p className="mt-0.5 text-base font-semibold text-slate-900">
+                Financial Services
+              </p>
+            </div>
+          </Link>
 
-          {isAuthenticated ? (
-            <>
-              <Link
-                to="/dashboard"
-                className="rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
-              >
-                {t("navbar.dashboard")}
-              </Link>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
-              >
-                {t("navbar.logout")}
-              </button>
-            </>
-          ) : null}
+          <div className="hidden items-center gap-3 lg:flex">
+            <WhatsAppSupportBadge />
+
+            {isAuthenticated && firstName ? (
+              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                <span className="text-slate-500">
+                  {t("navbar.hi")}, {firstName}
+                </span>
+              </div>
+            ) : null}
+
+            {isAuthenticated ? (
+              <>
+                <Link
+                  to="/dashboard"
+                  className="rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
+                >
+                  {t("navbar.dashboard")}
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
+                >
+                  {t("navbar.logout")}
+                </button>
+              </>
+            ) : null}
+
+          </div>
 
           <button
             type="button"
-            onClick={handleApply}
-            className="rounded-2xl border px-5 py-3 text-sm font-semibold shadow-sm transition hover:-translate-y-0.5"
-            style={{
-              backgroundColor: "#eef5ff",
-              borderColor: "#b7c9e6",
-              color: BRAND_NAVY,
-            }}
+            onClick={() => setMobileOpen((prev) => !prev)}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 text-slate-800 lg:hidden"
+            aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
+            aria-expanded={mobileOpen}
           >
-            {t("navbar.applyLoan")}
+            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setMobileOpen((prev) => !prev)}
-          className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 text-slate-800 lg:hidden"
-          aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
-          aria-expanded={mobileOpen}
-        >
-          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
       </div>
+
+      <div className="hidden border-b border-slate-200 bg-white lg:block">
+        <div className="mx-auto grid max-w-7xl grid-cols-[1fr_auto_1fr] items-center gap-8 px-4 py-3 sm:px-6 lg:px-8">
+          <div />
+
+          <nav className="flex items-center justify-center gap-4" aria-label="Primary navigation">
+            {MAIN_LINKS.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) =>
+                  [
+                    "rounded-full px-5 py-2.5 text-sm font-semibold transition-colors",
+                    isActive
+                      ? "bg-slate-900 text-white"
+                      : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
+                  ].join(" ")
+                }
+                end={item.to === "/"}
+              >
+                {t(item.labelKey)}
+              </NavLink>
+            ))}
+
+            <DropdownMenu
+              label={t("navbar.more")}
+              sections={MORE_SECTIONS}
+              pathname={location.pathname}
+              t={t}
+              isDesktop={isDesktop}
+            />
+          </nav>
+
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={handleApply}
+              className="rounded-2xl px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5"
+              style={{
+                background: `linear-gradient(135deg, ${BRAND_NAVY}, #13427b 70%, ${BRAND_GOLD})`,
+              }}
+            >
+              {t("navbar.applyLoan")}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes brandDividerShift {
+          0% { transform: translateX(-6%); opacity: 0.92; }
+          50% { transform: translateX(6%); opacity: 1; }
+          100% { transform: translateX(-6%); opacity: 0.92; }
+        }
+      `}</style>
 
       {mobileOpen ? (
         <div className="border-t border-slate-200 bg-white/95 backdrop-blur lg:hidden">
           <div className="mx-auto max-h-[calc(100vh-7rem)] max-w-7xl space-y-4 overflow-y-auto px-4 py-5 sm:px-6">
+            <div className="flex justify-start">
+              <WhatsAppSupportBadge />
+            </div>
+
             <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-500">
@@ -502,23 +562,6 @@ export default function Navbar() {
                   {t("navbar.licensed")}
                 </p>
               </div>
-            </div>
-
-            <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 p-1">
-              <button
-                type="button"
-                onClick={() => setLanguage("en")}
-                className={[languageButtonClass("en"), "flex-1"].join(" ")}
-              >
-                {t("navbar.languageEnglish")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setLanguage("ny")}
-                className={[languageButtonClass("ny"), "flex-1"].join(" ")}
-              >
-                {t("navbar.languageChichewa")}
-              </button>
             </div>
 
             <div className="grid gap-4">

@@ -8,8 +8,8 @@ export const complianceApi = {
     return normalize(data);
   },
 
-  async verifyKyc(userId) {
-    const { data } = await api.post(`/admin/kyc/${userId}/verify`);
+  async verifyKyc(userId, verifiedBy) {
+    const { data } = await api.post(`/admin/kyc/${userId}/verify`, { verifiedBy });
     return normalize(data);
   },
 
@@ -18,4 +18,3 @@ export const complianceApi = {
     return normalize(data);
   },
 };
-

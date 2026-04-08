@@ -113,7 +113,7 @@ const TrustSection = () => {
             <ShieldCheck size={28} className="mx-auto mb-3" />
             <p className="font-semibold">Licensed Institution</p>
             <p className="text-xs text-gray-500 mt-2">
-              License No: MFI-2024-001
+              License No: MFI
             </p>
             <a
               href="/compliance"
@@ -262,7 +262,7 @@ const TrustSection = () => {
           <div className="flex gap-4 flex-wrap">
 
             <a
-              href="tel:+265999000000"
+              href="tel:+265997031941"
               className="flex items-center gap-2 px-6 py-3 rounded-lg text-white"
               style={{ backgroundColor: BRAND_NAVY }}
             >
@@ -270,7 +270,7 @@ const TrustSection = () => {
             </a>
 
             <a
-              href="https://wa.me/265999000000"
+              href="https://wa.me/265997031941"
               className="flex items-center gap-2 px-6 py-3 rounded-lg border"
               style={{
                 borderColor: BRAND_GOLD,

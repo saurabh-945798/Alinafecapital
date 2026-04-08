@@ -4,6 +4,7 @@ import crypto from "crypto";
 import fs from "fs";
 import { LoanInquiry } from "../models/LoanInquiry.model.js";
 import { LoanProduct } from "../models/LoanProduct.model.js";
+import { SystemCounter } from "../models/SystemCounter.model.js";
 import { normalizePhone } from "../utils/normalize.js";
 import { calculateProfileCompletion } from "../utils/profileCompletion.js";
 
@@ -47,6 +48,37 @@ const adminUpdateSchema = z.object({
   status: z.enum(["NEW", "CONTACTED", "KYC_SENT", "KYC_REJECTED", "APPROVED", "CLOSED", "QUALIFIED"]).optional(),
   adminNote: z.string().trim().max(1000).optional(),
   closeReason: z.string().trim().max(200).optional(),
+  approvedBy: z.string().trim().max(120).optional(),
+  fullName: z.string().trim().min(2).max(120).optional(),
+  phone: z.string().trim().min(6).max(30).optional(),
+  email: z.string().trim().email().optional().or(z.literal("")),
+  address: z.string().trim().min(3).max(300).optional(),
+  dateOfBirth: z.string().trim().optional().or(z.literal("")),
+  gender: z.enum(["male", "female"]).optional(),
+  maritalStatus: z.enum(["single", "married", "divorced", "widowed"]).optional(),
+  dependants: z.coerce.number().int().min(0).max(20).optional(),
+  housingStatus: z.enum(["tenant", "home_owner"]).optional(),
+  employmentStatus: z.enum(["employed", "not_employed"]).optional(),
+  borrowerType: z.enum(["first_time", "repeat"]).optional(),
+  loanProductSlug: z.string().trim().min(2).max(120).optional(),
+  loanProductName: z.string().trim().min(2).max(160).optional(),
+  requestedAmount: z.coerce.number().min(0).optional(),
+  preferredTenureMonths: z.coerce.number().int().min(1).max(120).optional(),
+  notes: z.string().trim().max(1000).optional(),
+  addressLine1: z.string().trim().max(300).optional(),
+  city: z.string().trim().max(120).optional(),
+  district: z.string().trim().max(120).optional(),
+  country: z.string().trim().max(120).optional(),
+  employmentType: z.string().trim().max(120).optional(),
+  governmentId: z.string().trim().max(120).optional().or(z.literal("")),
+  monthlyIncome: z.coerce.number().min(0).optional(),
+  bankName: z.string().trim().max(120).optional(),
+  accountNumber: z.string().trim().max(120).optional(),
+  branchCode: z.string().trim().max(120).optional(),
+  reference1Name: z.string().trim().max(120).optional(),
+  reference1Phone: z.string().trim().max(30).optional(),
+  reference2Name: z.string().trim().max(120).optional(),
+  reference2Phone: z.string().trim().max(30).optional(),
 });
 
 const publicProfileUpdateSchema = z.object({
@@ -80,6 +112,13 @@ const ALLOWED_DOC_TYPES = new Set([
   "bank_statement_3_months",
   "payslip_or_business_proof",
 ]);
+
+const toDocumentKey = (value = "") =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "document";
 
 const toPublicFileUrl = (filePath = "") => {
   const normalized = String(filePath).replace(/\\/g, "/");
@@ -139,6 +178,30 @@ const syncInquiryCompletion = (inquiry) => {
 
 const generatePublicAccessToken = () => crypto.randomBytes(24).toString("hex");
 
+const resolveApplicationCodeYear = (value) => {
+  const source = value ? new Date(value) : new Date();
+  const year = Number.isNaN(source.getTime()) ? new Date().getFullYear() : source.getFullYear();
+  return String(year);
+};
+
+const nextInquiryApplicationCode = async (dateValue) => {
+  const year = resolveApplicationCodeYear(dateValue);
+  const counter = await SystemCounter.findOneAndUpdate(
+    { key: `loan_inquiry_application_code_${year}` },
+    { $inc: { value: 1 } },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
+
+  return `ACL${String(counter.value).padStart(3, "0")}${year}`;
+};
+
+const ensureInquiryApplicationCode = async (inquiry) => {
+  if (!inquiry || String(inquiry.applicationCode || "").trim()) return inquiry;
+  inquiry.applicationCode = await nextInquiryApplicationCode(inquiry.createdAt);
+  await inquiry.save({ validateBeforeSave: false });
+  return inquiry;
+};
+
 const pushActionHistory = (inquiry, entry) => {
   inquiry.actionHistory = Array.isArray(inquiry.actionHistory) ? inquiry.actionHistory : [];
   inquiry.actionHistory.push({
@@ -176,6 +239,7 @@ export const loanInquiryController = {
     }
 
     const inquiry = await LoanInquiry.create({
+      applicationCode: await nextInquiryApplicationCode(new Date()),
       fullName: payload.fullName,
       phone: normalizePhone(payload.phone),
       email: payload.email || "",
@@ -223,7 +287,7 @@ export const loanInquiryController = {
   },
 
   publicProfile: async (req, res) => {
-    const inquiry = await sanitizeInquiryAssets(req.inquiry);
+    const inquiry = await ensureInquiryApplicationCode(await sanitizeInquiryAssets(req.inquiry));
 
     return res.json({
       success: true,
@@ -242,7 +306,7 @@ export const loanInquiryController = {
       });
     }
 
-    const inquiry = req.inquiry;
+    const inquiry = await ensureInquiryApplicationCode(req.inquiry);
     const payload = parsed.data;
 
     inquiry.addressLine1 = payload.addressLine1;
@@ -271,7 +335,7 @@ export const loanInquiryController = {
   },
 
   publicDocUpload: async (req, res) => {
-    const inquiry = req.inquiry;
+    const inquiry = await ensureInquiryApplicationCode(req.inquiry);
     const type = String(req.body.type || "").trim();
 
     if (!ALLOWED_DOC_TYPES.has(type)) {
@@ -310,7 +374,7 @@ export const loanInquiryController = {
   },
 
   publicAvatarUpload: async (req, res) => {
-    const inquiry = req.inquiry;
+    const inquiry = await ensureInquiryApplicationCode(req.inquiry);
 
     if (!req.file) {
       return res.status(400).json({
@@ -341,7 +405,7 @@ export const loanInquiryController = {
   },
 
   publicSubmitKyc: async (req, res) => {
-    const inquiry = req.inquiry;
+    const inquiry = await ensureInquiryApplicationCode(req.inquiry);
     syncInquiryCompletion(inquiry);
 
     if (!String(inquiry.avatarUrl || "").trim()) {
@@ -447,13 +511,20 @@ export const loanInquiryController = {
         if (!item.publicAccessToken) {
           updates.publicAccessToken = nextToken;
         }
+        if (!item.applicationCode) {
+          updates.applicationCode = await nextInquiryApplicationCode(item.createdAt);
+        }
         if (Object.keys(updates).length > 0) {
           const refreshed = await LoanInquiry.findByIdAndUpdate(
             item._id,
             { $set: updates },
             { new: true, lean: true }
           );
-          return refreshed || { ...item, ...updates, publicAccessToken: updates.publicAccessToken || item.publicAccessToken };
+          return refreshed || {
+            ...item,
+            ...updates,
+            publicAccessToken: updates.publicAccessToken || item.publicAccessToken,
+          };
         }
         return item;
       })
@@ -495,11 +566,117 @@ export const loanInquiryController = {
       doc.publicAccessToken = generatePublicAccessToken();
     }
     await sanitizeInquiryAssets(doc);
+    await ensureInquiryApplicationCode(doc);
 
     return res.json({
       success: true,
       data: doc.toObject(),
     });
+  },
+
+  adminUploadDoc: async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid inquiry id",
+        code: "VALIDATION_ERROR",
+      });
+    }
+
+    const doc = await LoanInquiry.findById(req.params.id);
+    if (!doc) {
+      return res.status(404).json({
+        success: false,
+        message: "Inquiry not found",
+        code: "NOT_FOUND",
+      });
+    }
+
+    const displayName = String(req.body.displayName || "").trim();
+    if (!displayName) {
+      return res.status(400).json({
+        success: false,
+        message: "Document name is required",
+        code: "VALIDATION_ERROR",
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Document file is required",
+        code: "VALIDATION_ERROR",
+      });
+    }
+
+    const type = String(req.body.type || "").trim() || toDocumentKey(displayName);
+
+    const previousDoc = (doc.documents || []).find((entry) => entry.type === type);
+    doc.documents = (doc.documents || []).filter((entry) => entry.type !== type);
+    doc.documents.push({
+      type,
+      displayName,
+      fileUrl: toPublicFileUrl(req.file.path),
+      filePath: req.file.path,
+      mime: req.file.mimetype,
+      uploadedAt: new Date(),
+    });
+
+    syncInquiryCompletion(doc);
+    await doc.save();
+
+    if (previousDoc?.filePath && fs.existsSync(previousDoc.filePath)) {
+      try {
+        fs.unlinkSync(previousDoc.filePath);
+      } catch {
+        // ignore cleanup failure
+      }
+    }
+
+    return res.json({ success: true, data: doc.toObject() });
+  },
+
+  adminRemoveDoc: async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid inquiry id",
+        code: "VALIDATION_ERROR",
+      });
+    }
+
+    const type = String(req.params.type || "").trim();
+    if (!ALLOWED_DOC_TYPES.has(type)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid document type",
+        code: "VALIDATION_ERROR",
+      });
+    }
+
+    const doc = await LoanInquiry.findById(req.params.id);
+    if (!doc) {
+      return res.status(404).json({
+        success: false,
+        message: "Inquiry not found",
+        code: "NOT_FOUND",
+      });
+    }
+
+    const previousDoc = (doc.documents || []).find((entry) => entry.type === type);
+    doc.documents = (doc.documents || []).filter((entry) => entry.type !== type);
+    syncInquiryCompletion(doc);
+    await doc.save();
+
+    if (previousDoc?.filePath && fs.existsSync(previousDoc.filePath)) {
+      try {
+        fs.unlinkSync(previousDoc.filePath);
+      } catch {
+        // ignore cleanup failure
+      }
+    }
+
+    return res.json({ success: true, data: doc.toObject() });
   },
 
   adminUpdate: async (req, res) => {
@@ -559,7 +736,15 @@ export const loanInquiryController = {
         doc.kycRemarks = String(parsed.data.adminNote || doc.adminNote || "").trim();
       }
       if (parsed.data.status === "APPROVED") {
+        if (!String(parsed.data.approvedBy || doc.approvedBy || "").trim()) {
+          return res.status(400).json({
+            success: false,
+            message: "Approved by is required before approving the inquiry.",
+            code: "APPROVED_BY_REQUIRED",
+          });
+        }
         doc.approvedAt = new Date();
+        doc.approvedBy = String(parsed.data.approvedBy || doc.approvedBy || "").trim();
       }
       if (parsed.data.status === "CLOSED") {
         doc.closedAt = new Date();
@@ -571,6 +756,46 @@ export const loanInquiryController = {
     if (parsed.data.closeReason !== undefined) {
       doc.closeReason = parsed.data.closeReason;
     }
+    if (parsed.data.approvedBy !== undefined) {
+      doc.approvedBy = parsed.data.approvedBy;
+    }
+    if (parsed.data.fullName !== undefined) doc.fullName = parsed.data.fullName;
+    if (parsed.data.phone !== undefined) doc.phone = normalizePhone(parsed.data.phone);
+    if (parsed.data.email !== undefined) doc.email = parsed.data.email;
+    if (parsed.data.address !== undefined) doc.address = parsed.data.address;
+    if (parsed.data.dateOfBirth !== undefined) {
+      doc.dateOfBirth = parsed.data.dateOfBirth ? new Date(parsed.data.dateOfBirth) : null;
+    }
+    if (parsed.data.gender !== undefined) doc.gender = parsed.data.gender;
+    if (parsed.data.maritalStatus !== undefined) doc.maritalStatus = parsed.data.maritalStatus;
+    if (parsed.data.dependants !== undefined) doc.dependants = parsed.data.dependants;
+    if (parsed.data.housingStatus !== undefined) doc.housingStatus = parsed.data.housingStatus;
+    if (parsed.data.employmentStatus !== undefined) doc.employmentStatus = parsed.data.employmentStatus;
+    if (parsed.data.borrowerType !== undefined) doc.borrowerType = parsed.data.borrowerType;
+    if (parsed.data.loanProductSlug !== undefined) doc.loanProductSlug = parsed.data.loanProductSlug;
+    if (parsed.data.loanProductName !== undefined) doc.loanProductName = parsed.data.loanProductName;
+    if (parsed.data.requestedAmount !== undefined) doc.requestedAmount = parsed.data.requestedAmount;
+    if (parsed.data.preferredTenureMonths !== undefined) doc.preferredTenureMonths = parsed.data.preferredTenureMonths;
+    if (parsed.data.notes !== undefined) doc.notes = parsed.data.notes;
+    if (parsed.data.addressLine1 !== undefined) {
+      doc.addressLine1 = parsed.data.addressLine1;
+      if (!parsed.data.address && parsed.data.addressLine1) {
+        doc.address = parsed.data.addressLine1;
+      }
+    }
+    if (parsed.data.city !== undefined) doc.city = parsed.data.city;
+    if (parsed.data.district !== undefined) doc.district = parsed.data.district;
+    if (parsed.data.country !== undefined) doc.country = parsed.data.country;
+    if (parsed.data.employmentType !== undefined) doc.employmentType = parsed.data.employmentType;
+    if (parsed.data.governmentId !== undefined) doc.governmentId = parsed.data.governmentId;
+    if (parsed.data.monthlyIncome !== undefined) doc.monthlyIncome = parsed.data.monthlyIncome;
+    if (parsed.data.bankName !== undefined) doc.bankName = parsed.data.bankName;
+    if (parsed.data.accountNumber !== undefined) doc.accountNumber = parsed.data.accountNumber;
+    if (parsed.data.branchCode !== undefined) doc.branchCode = parsed.data.branchCode;
+    if (parsed.data.reference1Name !== undefined) doc.reference1Name = parsed.data.reference1Name;
+    if (parsed.data.reference1Phone !== undefined) doc.reference1Phone = parsed.data.reference1Phone;
+    if (parsed.data.reference2Name !== undefined) doc.reference2Name = parsed.data.reference2Name;
+    if (parsed.data.reference2Phone !== undefined) doc.reference2Phone = parsed.data.reference2Phone;
 
     if (doc.status === "CLOSED" && !String(doc.closeReason || "").trim()) {
       return res.status(400).json({

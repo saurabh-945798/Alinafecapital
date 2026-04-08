@@ -1,4 +1,4 @@
-ï»¿import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { buildSidebarGroups } from "./sidebar/config";
 import { Icons } from "./sidebar/icons";
 import { Badge, KycChip, ProgressRing, SkeletonNav, SkeletonWidgets, StatusBadge } from "./sidebar/ui";
@@ -56,7 +56,7 @@ export default function DashboardSidebar({
 
   // trust panel
   verifiedAt = "", // e.g. "2026-02-10"
-  supportPhone = "+265 999 000 000",
+  supportPhone = "+265 997 031 941",
   policyLinks = [
     { label: "Privacy", href: "/privacy" },
     { label: "Terms", href: "/terms" },
@@ -345,7 +345,7 @@ export default function DashboardSidebar({
                   <KycChip status={kycStatus} />
                 </div>
                 <p className="mt-2 text-xs text-gray-600 truncate">
-                  <span className="font-medium">Next:</span> {nextRequiredAction || "â€”"}
+                  <span className="font-medium">Next:</span> {nextRequiredAction || "—"}
                 </p>
               </div>
             </div>
@@ -492,10 +492,10 @@ export default function DashboardSidebar({
             <div className="mt-2 space-y-1 text-xs text-gray-600">
               <p>
                 <span className="font-medium text-gray-800">Verified:</span>{" "}
-                {verifiedAt ? formatDateLoose(verifiedAt) : "â€”"}
+                {verifiedAt ? formatDateLoose(verifiedAt) : "—"}
               </p>
               <p>
-                <span className="font-medium text-gray-800">Support:</span> {supportPhone || "â€”"}
+                <span className="font-medium text-gray-800">Support:</span> {supportPhone || "—"}
               </p>
               <div className="pt-1 flex flex-wrap gap-2">
                 {Array.isArray(policyLinks) &&
@@ -581,7 +581,7 @@ export default function DashboardSidebar({
             <div className="min-w-0">
               <p className="text-sm font-semibold truncate">{userName || "Welcome"}</p>
               <p className="text-xs text-gray-500 truncate">
-                {userEmail || `${brandName} â€¢ ${userRole}`}
+                {userEmail || `${brandName} • ${userRole}`}
               </p>
             </div>
           </div>
@@ -686,5 +686,6 @@ export default function DashboardSidebar({
     </Shell>
   );
 }
+
 
 

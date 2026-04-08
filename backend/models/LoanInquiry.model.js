@@ -4,14 +4,9 @@ const InquiryDocumentSchema = new mongoose.Schema(
   {
     type: {
       type: String,
-      enum: [
-        "national_id",
-        "bank_statement_3_months",
-        "payslip_or_business_proof",
-        "address_proof",
-      ],
       required: true,
     },
+    displayName: { type: String, trim: true, default: "" },
     fileUrl: { type: String, required: true },
     filePath: { type: String, required: true },
     mime: { type: String, required: true },
@@ -34,6 +29,7 @@ const InquiryActionSchema = new mongoose.Schema(
 
 const LoanInquirySchema = new mongoose.Schema(
   {
+    applicationCode: { type: String, trim: true, unique: true, sparse: true, index: true },
     fullName: { type: String, required: true, trim: true },
     phone: { type: String, required: true, trim: true },
     email: { type: String, trim: true, lowercase: true },
@@ -73,6 +69,7 @@ const LoanInquirySchema = new mongoose.Schema(
     submittedAt: { type: Date, default: null },
     verifiedAt: { type: Date, default: null },
     rejectedAt: { type: Date, default: null },
+    verifiedBy: { type: String, trim: true, default: "" },
     publicAccessToken: { type: String, required: true, unique: true, index: true },
     loanProductSlug: { type: String, required: true, trim: true },
     loanProductName: { type: String, required: true, trim: true },
@@ -90,6 +87,7 @@ const LoanInquirySchema = new mongoose.Schema(
     contactedAt: { type: Date, default: null },
     kycSentAt: { type: Date, default: null },
     approvedAt: { type: Date, default: null },
+    approvedBy: { type: String, trim: true, default: "" },
     closedAt: { type: Date, default: null },
     actionHistory: { type: [InquiryActionSchema], default: [] },
     source: { type: String, trim: true, default: "website" },

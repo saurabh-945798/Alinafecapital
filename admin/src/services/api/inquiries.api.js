@@ -17,4 +17,18 @@ export const inquiriesApi = {
     const { data } = await api.patch(`/admin/inquiries/${id}`, payload);
     return normalize(data);
   },
+
+  async uploadDoc(id, type, file, displayName = "") {
+    const payload = new FormData();
+    payload.append("type", type);
+    payload.append("displayName", displayName);
+    payload.append("file", file);
+    const { data } = await api.post(`/admin/inquiries/${id}/doc`, payload);
+    return normalize(data);
+  },
+
+  async removeDoc(id, type) {
+    const { data } = await api.delete(`/admin/inquiries/${id}/doc/${type}`);
+    return normalize(data);
+  },
 };

@@ -94,7 +94,7 @@ const FinalCTA = () => {
 
               {/* Secondary CTA */}
               <a
-                href="tel:+265999000000"
+                href="tel:+265997031941"
                 onClick={() => trackClick("Talk Loan Officer")}
                 className="w-full py-4 rounded-xl border border-white text-white font-semibold text-center hover:bg-white/10 transition"
               >
@@ -127,14 +127,14 @@ const FinalCTA = () => {
               <div className="flex flex-wrap gap-4 justify-center lg:justify-start mt-4">
 
                 <a
-                  href="tel:+265999000000"
+                  href="tel:+265997031941"
                   className="flex items-center gap-2 text-white text-sm"
                 >
-                  <Phone size={16}/> +265 999 000 000
+                  <Phone size={16}/> +265 997 031 941
                 </a>
 
                 <a
-                  href="https://wa.me/265999000000"
+                  href="https://wa.me/265997031941"
                   className="flex items-center gap-2 text-white text-sm"
                 >
                   <MessageCircle size={16}/> WhatsApp
@@ -160,3 +160,5 @@ const FinalCTA = () => {
 };
 
 export default FinalCTA;
+
+

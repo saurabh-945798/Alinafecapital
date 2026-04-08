@@ -174,6 +174,7 @@ export async function listKyc(req, res, next) {
 
 export async function verifyKyc(req, res, next) {
   try {
+    const verifiedBy = String(req.body.verifiedBy || "").trim().slice(0, 120);
     const review = await findReviewRecord(req.params.userId);
 
     if (!review?.doc) {
@@ -184,16 +185,25 @@ export async function verifyKyc(req, res, next) {
       });
     }
 
+    if (!verifiedBy) {
+      return res.status(400).json({
+        success: false,
+        message: "Verified by is required",
+        code: "VERIFIED_BY_REQUIRED",
+      });
+    }
+
     review.doc.kycStatus = "verified";
     review.doc.kycRemarks = "";
     review.doc.verifiedAt = new Date();
     review.doc.rejectedAt = null;
     if (review.recordType === "inquiry") {
+      review.doc.verifiedBy = verifiedBy;
       review.doc.actionHistory = Array.isArray(review.doc.actionHistory) ? review.doc.actionHistory : [];
       review.doc.actionHistory.push({
         type: "kyc_verified",
         title: "KYC Verified",
-        note: "Admin verified the customer KYC submission.",
+        note: `Verified by: ${verifiedBy}`,
         status: "VERIFIED",
         actor: "Admin",
         createdAt: new Date(),
@@ -231,6 +241,7 @@ export async function rejectKyc(req, res, next) {
     review.doc.rejectedAt = new Date();
     review.doc.verifiedAt = null;
     if (review.recordType === "inquiry") {
+      review.doc.verifiedBy = "";
       review.doc.actionHistory = Array.isArray(review.doc.actionHistory) ? review.doc.actionHistory : [];
       review.doc.actionHistory.push({
         type: "kyc_rejected",
