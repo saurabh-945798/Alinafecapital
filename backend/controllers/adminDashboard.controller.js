@@ -14,7 +14,7 @@ export const getAdminDashboardSummary = async (req, res) => {
       {
         $match: {
           status: {
-            $in: ["NEW", "CONTACTED", "KYC_SENT", "KYC_REJECTED", "APPROVED", "CLOSED"],
+            $in: ["NEW", "CONTACTED", "KYC_SENT", "KYC_REJECTED", "APPROVED", "DISBURSED", "CLOSED"],
           },
         },
       },
@@ -50,6 +50,7 @@ export const getAdminDashboardSummary = async (req, res) => {
       verified: verifiedKycCount || 0,
       rejected: counts.KYC_REJECTED || 0,
       approved: counts.APPROVED || 0,
+      disbursed: counts.DISBURSED || 0,
       closed: counts.CLOSED || 0,
       actionRequired:
         (counts.NEW || 0) +

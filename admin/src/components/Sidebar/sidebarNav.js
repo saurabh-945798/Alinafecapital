@@ -3,6 +3,7 @@ import {
   FileText,
   Settings,
   Package,
+  Wallet,
 } from "lucide-react";
 
 export const sidebarNav = [
@@ -16,6 +17,7 @@ export const sidebarNav = [
   {
     section: "Operations",
     items: [
+      { label: "Accounts", to: "/admin/accounts", icon: Wallet },
       { label: "Loan Products", to: "/admin/loan-products", icon: Package },
     ],
   },

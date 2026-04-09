@@ -4,6 +4,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock3,
+  Landmark,
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
@@ -19,6 +20,7 @@ const STATUS_TONE = {
   KYC_SENT: "blue",
   KYC_REJECTED: "red",
   APPROVED: "green",
+  DISBURSED: "blue",
   CLOSED: "gray",
 };
 
@@ -35,6 +37,7 @@ const HUMAN_STATUS = {
   KYC_SENT: "Needs KYC",
   KYC_REJECTED: "Rejected",
   APPROVED: "Approved",
+  DISBURSED: "Disbursed",
   CLOSED: "Closed",
 };
 
@@ -62,6 +65,7 @@ export default function Dashboard() {
     verified: 0,
     rejected: 0,
     approved: 0,
+    disbursed: 0,
     closed: 0,
     actionRequired: 0,
   });
@@ -90,6 +94,7 @@ export default function Dashboard() {
           verified: 0,
           rejected: 0,
           approved: 0,
+          disbursed: 0,
           closed: 0,
           actionRequired: 0,
         }
@@ -162,7 +167,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
           <OverviewCard
             icon={Clock3}
             label="Pending"
@@ -197,6 +202,13 @@ export default function Dashboard() {
             value={metrics.approved}
             accent="green"
             subtitle="Ready for branch follow-up"
+          />
+          <OverviewCard
+            icon={Landmark}
+            label="Disbursed"
+            value={metrics.disbursed}
+            accent="blue"
+            subtitle="Moved into accounts"
           />
           <OverviewCard
             icon={ArrowRight}

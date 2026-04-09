@@ -13,6 +13,7 @@ const STATUS_TONE = {
   KYC_REJECTED: "red",
   VERIFIED: "green",
   APPROVED: "green",
+  DISBURSED: "blue",
   QUALIFIED: "green",
   CLOSED: "gray",
 };
@@ -22,6 +23,7 @@ const SIMPLE_TABS = [
   { value: "PENDING_GROUP", label: "Pending" },
   { value: "VERIFIED", label: "Verified" },
   { value: "APPROVED", label: "Approved" },
+  { value: "DISBURSED", label: "Disbursed" },
   { value: "KYC_REJECTED", label: "Rejected" },
   { value: "CLOSED", label: "Closed" },
 ];
@@ -40,6 +42,7 @@ const HUMAN_STATUS = {
   KYC_REJECTED: "KYC Rejected",
   VERIFIED: "Verified",
   APPROVED: "Approved",
+  DISBURSED: "Disbursed",
   QUALIFIED: "Approved",
   CLOSED: "Closed",
 };
@@ -60,6 +63,7 @@ const filterItemsByTab = (items = [], tab = "ALL") => {
         (item) =>
           item &&
           item.status !== "APPROVED" &&
+          item.status !== "DISBURSED" &&
           item.status !== "CLOSED" &&
           item.kycStatus !== "verified" &&
           item.kycStatus !== "rejected"
@@ -70,12 +74,15 @@ const filterItemsByTab = (items = [], tab = "ALL") => {
           item &&
           item.kycStatus === "verified" &&
           item.status !== "APPROVED" &&
+          item.status !== "DISBURSED" &&
           item.status !== "CLOSED"
       );
     case "KYC_REJECTED":
       return items.filter((item) => item && item.kycStatus === "rejected");
     case "APPROVED":
       return items.filter((item) => item && item.status === "APPROVED");
+    case "DISBURSED":
+      return items.filter((item) => item && item.status === "DISBURSED");
     case "CLOSED":
       return items.filter((item) => item && item.status === "CLOSED");
     case "ALL":
@@ -86,6 +93,7 @@ const filterItemsByTab = (items = [], tab = "ALL") => {
 
 const getDisplayedStatusKey = (item) => {
   if (!item) return "";
+  if (item.status === "DISBURSED") return "DISBURSED";
   if (item.status === "APPROVED") return "APPROVED";
   if (item.status === "CLOSED") return "CLOSED";
   if (item.kycStatus === "verified") return "VERIFIED";
@@ -120,6 +128,7 @@ export default function LoanApplication() {
     KYC_SENT: 0,
     VERIFIED: 0,
     APPROVED: 0,
+    DISBURSED: 0,
     KYC_REJECTED: 0,
     CLOSED: 0,
   });
@@ -203,6 +212,7 @@ export default function LoanApplication() {
         KYC_SENT: allItems.filter((item) => item?.status === "KYC_SENT").length,
         VERIFIED: filterItemsByTab(allItems, "VERIFIED").length,
         APPROVED: filterItemsByTab(allItems, "APPROVED").length,
+        DISBURSED: filterItemsByTab(allItems, "DISBURSED").length,
         KYC_REJECTED: filterItemsByTab(allItems, "KYC_REJECTED").length,
         CLOSED: filterItemsByTab(allItems, "CLOSED").length,
       };

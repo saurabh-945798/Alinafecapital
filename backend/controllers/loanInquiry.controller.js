@@ -4,6 +4,7 @@ import crypto from "crypto";
 import fs from "fs";
 import { LoanInquiry } from "../models/LoanInquiry.model.js";
 import { LoanProduct } from "../models/LoanProduct.model.js";
+import { LoanAccount } from "../models/LoanAccount.model.js";
 import { SystemCounter } from "../models/SystemCounter.model.js";
 import { normalizePhone } from "../utils/normalize.js";
 import { calculateProfileCompletion } from "../utils/profileCompletion.js";
@@ -45,10 +46,20 @@ const adminListSchema = z.object({
 });
 
 const adminUpdateSchema = z.object({
-  status: z.enum(["NEW", "CONTACTED", "KYC_SENT", "KYC_REJECTED", "APPROVED", "CLOSED", "QUALIFIED"]).optional(),
+  status: z.enum(["NEW", "CONTACTED", "KYC_SENT", "KYC_REJECTED", "APPROVED", "DISBURSED", "CLOSED", "QUALIFIED"]).optional(),
   adminNote: z.string().trim().max(1000).optional(),
   closeReason: z.string().trim().max(200).optional(),
   approvedBy: z.string().trim().max(120).optional(),
+  disbursedBy: z.string().trim().max(120).optional(),
+  disbursementAmount: z.coerce.number().min(0).optional(),
+  disbursementMethod: z.enum(["cash", "bank_transfer", "mobile_money"]).optional().or(z.literal("")),
+  disbursementBankName: z.string().trim().max(120).optional(),
+  disbursementAccountName: z.string().trim().max(120).optional(),
+  disbursementAccountNumber: z.string().trim().max(120).optional(),
+  disbursementMobileProvider: z.string().trim().max(120).optional(),
+  disbursementMobileNumber: z.string().trim().max(30).optional(),
+  transactionReference: z.string().trim().max(120).optional(),
+  disbursementNote: z.string().trim().max(1000).optional(),
   fullName: z.string().trim().min(2).max(120).optional(),
   phone: z.string().trim().min(6).max(30).optional(),
   email: z.string().trim().email().optional().or(z.literal("")),
@@ -193,6 +204,90 @@ const nextInquiryApplicationCode = async (dateValue) => {
   );
 
   return `ACL${String(counter.value).padStart(3, "0")}${year}`;
+};
+
+const nextLoanAccountNumber = async (dateValue) => {
+  const year = resolveApplicationCodeYear(dateValue);
+  const counter = await SystemCounter.findOneAndUpdate(
+    { key: `loan_account_number_${year}` },
+    { $inc: { value: 1 } },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
+
+  return `ACC${String(counter.value).padStart(3, "0")}${year}`;
+};
+
+const resolveMonthlyRate = (inquiry) => {
+  const text = `${inquiry?.loanProductName || ""} ${inquiry?.loanProductSlug || ""}`.toLowerCase();
+  return text.includes("business") ? 0.075 : 0.05;
+};
+
+const addMonths = (value, monthsToAdd) => {
+  const date = new Date(value || new Date());
+  if (Number.isNaN(date.getTime())) return null;
+  date.setMonth(date.getMonth() + monthsToAdd);
+  return date;
+};
+
+const ensureLoanAccountForInquiry = async (inquiry) => {
+  if (!inquiry) return null;
+
+  const monthlyRate = resolveMonthlyRate(inquiry);
+  const disbursedAt = inquiry.disbursedAt || new Date();
+  const nextDueDate = addMonths(disbursedAt, 1);
+  const approvedAmount = Number(inquiry.requestedAmount || 0);
+  const disbursedAmount = Number(inquiry.disbursementAmount || approvedAmount || 0);
+
+  let account = null;
+  if (inquiry.loanAccountId) {
+    account = await LoanAccount.findById(inquiry.loanAccountId);
+  }
+  if (!account) {
+    account = await LoanAccount.findOne({ inquiryId: inquiry._id });
+  }
+
+  if (!account) {
+    account = new LoanAccount({
+      accountNumber: await nextLoanAccountNumber(disbursedAt),
+      inquiryId: inquiry._id,
+    });
+  }
+
+  account.applicationCode = inquiry.applicationCode || "";
+  account.customerName = inquiry.fullName || "";
+  account.phone = inquiry.phone || "";
+  account.email = inquiry.email || "";
+  account.loanProductSlug = inquiry.loanProductSlug || "";
+  account.loanProductName = inquiry.loanProductName || "";
+  account.approvedAmount = approvedAmount;
+  account.disbursedAmount = disbursedAmount;
+  account.tenureMonths = Number(inquiry.preferredTenureMonths || 1);
+  account.monthlyRate = monthlyRate;
+  account.processingFeeRate = 0.025;
+  account.adminFeeRate = 0.025;
+  account.verifiedBy = inquiry.verifiedBy || "";
+  account.approvedBy = inquiry.approvedBy || "";
+  account.disbursedBy = inquiry.disbursedBy || "";
+  account.disbursementMethod = inquiry.disbursementMethod || "";
+  account.disbursementBankName = inquiry.disbursementBankName || "";
+  account.disbursementAccountName = inquiry.disbursementAccountName || "";
+  account.disbursementAccountNumber = inquiry.disbursementAccountNumber || "";
+  account.disbursementMobileProvider = inquiry.disbursementMobileProvider || "";
+  account.disbursementMobileNumber = inquiry.disbursementMobileNumber || "";
+  account.transactionReference = inquiry.transactionReference || "";
+  account.disbursementNote = inquiry.disbursementNote || "";
+  account.approvedAt = inquiry.approvedAt || null;
+  account.disbursedAt = inquiry.disbursedAt || null;
+  account.nextDueDate = nextDueDate;
+  account.outstandingBalance = disbursedAmount;
+  account.status = "ACTIVE";
+  await account.save();
+
+  if (!inquiry.loanAccountId || String(inquiry.loanAccountId) !== String(account._id)) {
+    inquiry.loanAccountId = account._id;
+  }
+
+  return account;
 };
 
 const ensureInquiryApplicationCode = async (inquiry) => {
@@ -646,7 +741,7 @@ export const loanInquiryController = {
     }
 
     const type = String(req.params.type || "").trim();
-    if (!ALLOWED_DOC_TYPES.has(type)) {
+    if (!type) {
       return res.status(400).json({
         success: false,
         message: "Invalid document type",
@@ -709,6 +804,9 @@ export const loanInquiryController = {
 
     const previousStatus = doc.status;
     const previousAdminNote = doc.adminNote || "";
+    const selectedDisbursementMethod = String(
+      parsed.data.disbursementMethod ?? doc.disbursementMethod ?? ""
+    ).trim();
 
     if (parsed.data.status) {
       if (parsed.data.status === "APPROVED" && doc.kycStatus !== "verified") {
@@ -716,6 +814,13 @@ export const loanInquiryController = {
           success: false,
           message: "KYC must be verified before the inquiry can be approved.",
           code: "KYC_NOT_VERIFIED",
+        });
+      }
+      if (parsed.data.status === "DISBURSED" && doc.status !== "APPROVED") {
+        return res.status(400).json({
+          success: false,
+          message: "The inquiry must be approved before loan disbursement.",
+          code: "APPROVAL_REQUIRED",
         });
       }
 
@@ -746,6 +851,89 @@ export const loanInquiryController = {
         doc.approvedAt = new Date();
         doc.approvedBy = String(parsed.data.approvedBy || doc.approvedBy || "").trim();
       }
+      if (parsed.data.status === "DISBURSED") {
+        if (!String(parsed.data.disbursedBy || doc.disbursedBy || "").trim()) {
+          return res.status(400).json({
+            success: false,
+            message: "Disbursed by is required before disbursing the loan.",
+            code: "DISBURSED_BY_REQUIRED",
+          });
+        }
+        const amount = Number(parsed.data.disbursementAmount ?? doc.disbursementAmount ?? doc.requestedAmount ?? 0);
+        if (!amount || amount <= 0) {
+          return res.status(400).json({
+            success: false,
+            message: "Disbursement amount is required before disbursing the loan.",
+            code: "DISBURSEMENT_AMOUNT_REQUIRED",
+          });
+        }
+        if (!selectedDisbursementMethod) {
+          return res.status(400).json({
+            success: false,
+            message: "Disbursement method is required before disbursing the loan.",
+            code: "DISBURSEMENT_METHOD_REQUIRED",
+          });
+        }
+        if (selectedDisbursementMethod === "bank_transfer") {
+          if (!String(parsed.data.disbursementBankName || doc.disbursementBankName || "").trim()) {
+            return res.status(400).json({
+              success: false,
+              message: "Bank name is required for bank transfer disbursement.",
+              code: "DISBURSEMENT_BANK_NAME_REQUIRED",
+            });
+          }
+          if (!String(parsed.data.disbursementAccountName || doc.disbursementAccountName || "").trim()) {
+            return res.status(400).json({
+              success: false,
+              message: "Account name is required for bank transfer disbursement.",
+              code: "DISBURSEMENT_ACCOUNT_NAME_REQUIRED",
+            });
+          }
+          if (!String(parsed.data.disbursementAccountNumber || doc.disbursementAccountNumber || "").trim()) {
+            return res.status(400).json({
+              success: false,
+              message: "Account number is required for bank transfer disbursement.",
+              code: "DISBURSEMENT_ACCOUNT_NUMBER_REQUIRED",
+            });
+          }
+        }
+        if (selectedDisbursementMethod === "mobile_money") {
+          if (!String(parsed.data.disbursementMobileProvider || doc.disbursementMobileProvider || "").trim()) {
+            return res.status(400).json({
+              success: false,
+              message: "Mobile money provider is required for mobile money disbursement.",
+              code: "DISBURSEMENT_MOBILE_PROVIDER_REQUIRED",
+            });
+          }
+          if (!String(parsed.data.disbursementMobileNumber || doc.disbursementMobileNumber || "").trim()) {
+            return res.status(400).json({
+              success: false,
+              message: "Mobile money number is required for mobile money disbursement.",
+              code: "DISBURSEMENT_MOBILE_NUMBER_REQUIRED",
+            });
+          }
+        }
+        doc.disbursedAt = new Date();
+        doc.disbursedBy = String(parsed.data.disbursedBy || doc.disbursedBy || "").trim();
+        doc.disbursementAmount = amount;
+        doc.disbursementMethod = selectedDisbursementMethod;
+        doc.disbursementBankName = String(parsed.data.disbursementBankName || doc.disbursementBankName || "").trim();
+        doc.disbursementAccountName = String(parsed.data.disbursementAccountName || doc.disbursementAccountName || "").trim();
+        doc.disbursementAccountNumber = String(parsed.data.disbursementAccountNumber || doc.disbursementAccountNumber || "").trim();
+        doc.disbursementMobileProvider = String(parsed.data.disbursementMobileProvider || doc.disbursementMobileProvider || "").trim();
+        doc.disbursementMobileNumber = String(parsed.data.disbursementMobileNumber || doc.disbursementMobileNumber || "").trim();
+        if (selectedDisbursementMethod !== "bank_transfer") {
+          doc.disbursementBankName = "";
+          doc.disbursementAccountName = "";
+          doc.disbursementAccountNumber = "";
+        }
+        if (selectedDisbursementMethod !== "mobile_money") {
+          doc.disbursementMobileProvider = "";
+          doc.disbursementMobileNumber = "";
+        }
+        doc.transactionReference = String(parsed.data.transactionReference || doc.transactionReference || "").trim();
+        doc.disbursementNote = String(parsed.data.disbursementNote || doc.disbursementNote || "").trim();
+      }
       if (parsed.data.status === "CLOSED") {
         doc.closedAt = new Date();
       }
@@ -759,6 +947,16 @@ export const loanInquiryController = {
     if (parsed.data.approvedBy !== undefined) {
       doc.approvedBy = parsed.data.approvedBy;
     }
+    if (parsed.data.disbursedBy !== undefined) doc.disbursedBy = parsed.data.disbursedBy;
+    if (parsed.data.disbursementAmount !== undefined) doc.disbursementAmount = parsed.data.disbursementAmount;
+    if (parsed.data.disbursementMethod !== undefined) doc.disbursementMethod = parsed.data.disbursementMethod;
+    if (parsed.data.disbursementBankName !== undefined) doc.disbursementBankName = parsed.data.disbursementBankName;
+    if (parsed.data.disbursementAccountName !== undefined) doc.disbursementAccountName = parsed.data.disbursementAccountName;
+    if (parsed.data.disbursementAccountNumber !== undefined) doc.disbursementAccountNumber = parsed.data.disbursementAccountNumber;
+    if (parsed.data.disbursementMobileProvider !== undefined) doc.disbursementMobileProvider = parsed.data.disbursementMobileProvider;
+    if (parsed.data.disbursementMobileNumber !== undefined) doc.disbursementMobileNumber = parsed.data.disbursementMobileNumber;
+    if (parsed.data.transactionReference !== undefined) doc.transactionReference = parsed.data.transactionReference;
+    if (parsed.data.disbursementNote !== undefined) doc.disbursementNote = parsed.data.disbursementNote;
     if (parsed.data.fullName !== undefined) doc.fullName = parsed.data.fullName;
     if (parsed.data.phone !== undefined) doc.phone = normalizePhone(parsed.data.phone);
     if (parsed.data.email !== undefined) doc.email = parsed.data.email;
@@ -808,9 +1006,14 @@ export const loanInquiryController = {
     if (parsed.data.status && parsed.data.status !== previousStatus) {
       pushActionHistory(doc, {
         type: "status_updated",
-        title: `Status changed to ${parsed.data.status}`,
+          title:
+          parsed.data.status === "DISBURSED"
+            ? "Loan Disbursed"
+            : `Status changed to ${parsed.data.status}`,
         note:
-          parsed.data.status === "CLOSED" && doc.closeReason
+          parsed.data.status === "DISBURSED"
+            ? `Disbursed by: ${doc.disbursedBy}${doc.disbursementMethod ? `, Method: ${doc.disbursementMethod}` : ""}${doc.transactionReference ? `, Ref: ${doc.transactionReference}` : ""}`
+            : parsed.data.status === "CLOSED" && doc.closeReason
             ? `Close reason: ${doc.closeReason}`
             : String(parsed.data.adminNote || "").trim(),
         status: parsed.data.status,
@@ -827,6 +1030,10 @@ export const loanInquiryController = {
         status: doc.status,
         actor: "Admin",
       });
+    }
+
+    if (doc.status === "DISBURSED") {
+      await ensureLoanAccountForInquiry(doc);
     }
 
     await doc.save();

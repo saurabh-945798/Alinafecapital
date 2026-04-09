@@ -15,6 +15,7 @@ const STATUS_TONE = {
   KYC_REJECTED: "red",
   VERIFIED: "green",
   APPROVED: "green",
+  DISBURSED: "blue",
   QUALIFIED: "green",
   CLOSED: "gray",
 };
@@ -33,6 +34,7 @@ const HUMAN_STATUS = {
   KYC_REJECTED: "KYC Rejected",
   VERIFIED: "Verified",
   APPROVED: "Approved",
+  DISBURSED: "Disbursed",
   QUALIFIED: "Approved",
   CLOSED: "Closed",
 };
@@ -49,6 +51,7 @@ const ACTION_STATUS_LABEL = {
   KYC_REJECTED: "KYC Rejected",
   VERIFIED: "Verify",
   APPROVED: "Approved",
+  DISBURSED: "Disburse",
   CLOSED: "Closed",
 };
 
@@ -58,6 +61,12 @@ const CLOSE_REASONS = [
   { value: "duplicate", label: "Duplicate Inquiry" },
   { value: "not_eligible", label: "Not Eligible" },
   { value: "other", label: "Other" },
+];
+
+const DISBURSEMENT_METHODS = [
+  { value: "cash", label: "Cash" },
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "mobile_money", label: "Mobile Money" },
 ];
 
 const DOC_LABEL = {
@@ -131,7 +140,8 @@ const buildRepaymentPlan = (item) => {
   const emi = calculateReducingInstallment(principal, config.monthlyRate, months);
   const processingFee = principal * config.processingFeeRate;
   const oneTimeAdminFee = principal * config.adminFeeRate;
-  const startDate = item?.approvedAt || item?.verifiedAt || item?.createdAt || new Date().toISOString();
+  const startDate =
+    item?.disbursedAt || item?.approvedAt || item?.verifiedAt || item?.createdAt || new Date().toISOString();
 
   let balance = principal;
   const schedule = [];
@@ -221,6 +231,7 @@ const buildWhatsappLink = (item, nextStatus, rejectionReason = "") => {
     KYC_REJECTED: kycRejectedMessage,
     VERIFIED: `Hello ${customerName}, your KYC has been verified successfully. Our team is now continuing the review of your ${loanName} request.`,
     APPROVED: `Hello ${customerName}, your ${loanName} request has been successfully approved. Please visit the branch to continue and receive your funds.`,
+    DISBURSED: `Hello ${customerName}, your ${loanName} has now been disbursed successfully. Please keep your repayment schedule and branch communication for the next steps.`,
     CLOSED: `Hello ${customerName}, your ${loanName} request has now been closed. Please contact Alinafe Capital if you need any clarification.`,
     QUALIFIED: `Hello ${customerName}, your ${loanName} request has been successfully approved. Please visit the branch to continue and receive your funds.`,
   };
@@ -234,7 +245,8 @@ const buildWhatsappLink = (item, nextStatus, rejectionReason = "") => {
 
 const getEffectiveWhatsappStatus = (item, nextStatus) => {
   if (nextStatus) return nextStatus;
-  if (item?.kycStatus === "verified" && item?.status !== "APPROVED") return "VERIFIED";
+  if (item?.status === "DISBURSED") return "DISBURSED";
+  if (item?.kycStatus === "verified" && item?.status !== "APPROVED" && item?.status !== "DISBURSED") return "VERIFIED";
   if (item?.kycStatus === "pending") return "KYC_SENT";
   if (item?.status === "KYC_REJECTED" || item?.kycStatus === "rejected") return "KYC_REJECTED";
   if (item?.status === "KYC_SENT") return "KYC_SENT";
@@ -246,6 +258,7 @@ const getEffectiveWhatsappStatus = (item, nextStatus) => {
 
 const getDisplayedStatusKey = (item) => {
   if (!item) return "";
+  if (item.status === "DISBURSED") return "DISBURSED";
   if (item.status === "APPROVED") return "APPROVED";
   if (item.status === "CLOSED") return "CLOSED";
   if (item.kycStatus === "verified") return "VERIFIED";
@@ -261,6 +274,7 @@ const getHistoryStatusKey = (entry) => {
   if (entry.type === "kyc_verified" || entry.status === "VERIFIED") return "VERIFIED";
   if (entry.type === "kyc_rejected" || entry.status === "KYC_REJECTED") return "KYC_REJECTED";
   if (entry.status === "APPROVED") return "APPROVED";
+  if (entry.status === "DISBURSED") return "DISBURSED";
   if (entry.status === "CLOSED") return "CLOSED";
   if (entry.status === "KYC_SENT") return "KYC_SENT";
   if (entry.status === "CONTACTED" || entry.status === "NEW") return "CONTACTED";
@@ -295,6 +309,12 @@ const getStatusNotification = (status) => {
       tone: "border-emerald-200 bg-emerald-50 text-emerald-900",
       iconTone: "bg-emerald-100 text-emerald-600",
     },
+    DISBURSED: {
+      title: "Loan disbursed",
+      message: "The approved loan has been marked as disbursed and moved into the accounts stage.",
+      tone: "border-blue-200 bg-blue-50 text-blue-900",
+      iconTone: "bg-blue-100 text-blue-600",
+    },
     CLOSED: {
       title: "Inquiry closed",
       message: "The application has been closed successfully. The case is now marked as completed or inactive.",
@@ -325,6 +345,16 @@ export default function LoanApplicationDetail() {
   const [closeReason, setCloseReason] = useState("");
   const [verifiedBy, setVerifiedBy] = useState("");
   const [approvedBy, setApprovedBy] = useState("");
+  const [disbursedBy, setDisbursedBy] = useState("");
+  const [disbursementAmount, setDisbursementAmount] = useState("");
+  const [disbursementMethod, setDisbursementMethod] = useState("");
+  const [disbursementBankName, setDisbursementBankName] = useState("");
+  const [disbursementAccountName, setDisbursementAccountName] = useState("");
+  const [disbursementAccountNumber, setDisbursementAccountNumber] = useState("");
+  const [disbursementMobileProvider, setDisbursementMobileProvider] = useState("");
+  const [disbursementMobileNumber, setDisbursementMobileNumber] = useState("");
+  const [transactionReference, setTransactionReference] = useState("");
+  const [disbursementNote, setDisbursementNote] = useState("");
   const [editMode, setEditMode] = useState(false);
   const [detailsForm, setDetailsForm] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -360,6 +390,16 @@ export default function LoanApplicationDetail() {
       setCloseReason(data?.closeReason || "");
       setVerifiedBy(data?.verifiedBy || "");
       setApprovedBy(data?.approvedBy || "");
+      setDisbursedBy(data?.disbursedBy || "");
+      setDisbursementAmount(data?.disbursementAmount ?? data?.requestedAmount ?? "");
+      setDisbursementMethod(data?.disbursementMethod || "");
+      setDisbursementBankName(data?.disbursementBankName || "");
+      setDisbursementAccountName(data?.disbursementAccountName || "");
+      setDisbursementAccountNumber(data?.disbursementAccountNumber || "");
+      setDisbursementMobileProvider(data?.disbursementMobileProvider || "");
+      setDisbursementMobileNumber(data?.disbursementMobileNumber || "");
+      setTransactionReference(data?.transactionReference || "");
+      setDisbursementNote(data?.disbursementNote || "");
       setDetailsForm({
         fullName: data?.fullName || "",
         phone: String(data?.phone || "").replace(/^\+/, ""),
@@ -563,17 +603,82 @@ export default function LoanApplicationDetail() {
         throw new Error("Select the close reason before updating.");
       }
 
+      if (actionStatus === "DISBURSED") {
+        if (item.status !== "APPROVED") {
+          throw new Error("Approve the loan before disbursement.");
+        }
+        if (!String(disbursedBy || "").trim()) {
+          throw new Error("Disbursed by is required before disbursing the loan.");
+        }
+        if (!Number(disbursementAmount || 0)) {
+          throw new Error("Disbursement amount is required before disbursing the loan.");
+        }
+        if (!String(disbursementMethod || "").trim()) {
+          throw new Error("Disbursement method is required before disbursing the loan.");
+        }
+        if (disbursementMethod === "bank_transfer") {
+          if (!String(disbursementBankName || "").trim()) {
+            throw new Error("Bank name is required for bank transfer disbursement.");
+          }
+          if (!String(disbursementAccountName || "").trim()) {
+            throw new Error("Account name is required for bank transfer disbursement.");
+          }
+          if (!String(disbursementAccountNumber || "").trim()) {
+            throw new Error("Account number is required for bank transfer disbursement.");
+          }
+        }
+        if (disbursementMethod === "mobile_money") {
+          if (!String(disbursementMobileProvider || "").trim()) {
+            throw new Error("Mobile money provider is required for mobile money disbursement.");
+          }
+          if (!String(disbursementMobileNumber || "").trim()) {
+            throw new Error("Mobile money number is required for mobile money disbursement.");
+          }
+        }
+      }
+
       const updated = await inquiriesApi.update(item._id, {
         status: actionStatus,
         adminNote,
         closeReason: actionStatus === "CLOSED" ? closeReason : "",
         approvedBy: actionStatus === "APPROVED" ? approvedBy.trim() : item?.approvedBy || "",
+        disbursedBy: actionStatus === "DISBURSED" ? disbursedBy.trim() : item?.disbursedBy || "",
+        disbursementAmount:
+          actionStatus === "DISBURSED"
+            ? Number(disbursementAmount || 0)
+            : item?.disbursementAmount || 0,
+        disbursementMethod:
+          actionStatus === "DISBURSED" ? String(disbursementMethod || "").trim() : item?.disbursementMethod || "",
+        disbursementBankName:
+          actionStatus === "DISBURSED" ? String(disbursementBankName || "").trim() : item?.disbursementBankName || "",
+        disbursementAccountName:
+          actionStatus === "DISBURSED" ? String(disbursementAccountName || "").trim() : item?.disbursementAccountName || "",
+        disbursementAccountNumber:
+          actionStatus === "DISBURSED" ? String(disbursementAccountNumber || "").trim() : item?.disbursementAccountNumber || "",
+        disbursementMobileProvider:
+          actionStatus === "DISBURSED" ? String(disbursementMobileProvider || "").trim() : item?.disbursementMobileProvider || "",
+        disbursementMobileNumber:
+          actionStatus === "DISBURSED" ? String(disbursementMobileNumber || "").trim() : item?.disbursementMobileNumber || "",
+        transactionReference:
+          actionStatus === "DISBURSED" ? String(transactionReference || "").trim() : item?.transactionReference || "",
+        disbursementNote:
+          actionStatus === "DISBURSED" ? String(disbursementNote || "").trim() : item?.disbursementNote || "",
       });
       setItem(updated);
       setAdminNote(updated?.adminNote || "");
       setCloseReason(updated?.closeReason || "");
       setVerifiedBy(updated?.verifiedBy || verifiedBy);
       setApprovedBy(updated?.approvedBy || "");
+      setDisbursedBy(updated?.disbursedBy || "");
+      setDisbursementAmount(updated?.disbursementAmount ?? updated?.requestedAmount ?? "");
+      setDisbursementMethod(updated?.disbursementMethod || "");
+      setDisbursementBankName(updated?.disbursementBankName || "");
+      setDisbursementAccountName(updated?.disbursementAccountName || "");
+      setDisbursementAccountNumber(updated?.disbursementAccountNumber || "");
+      setDisbursementMobileProvider(updated?.disbursementMobileProvider || "");
+      setDisbursementMobileNumber(updated?.disbursementMobileNumber || "");
+      setTransactionReference(updated?.transactionReference || "");
+      setDisbursementNote(updated?.disbursementNote || "");
       setNextStatus("");
       setWhatsappReady(true);
       setStatusNotice(getStatusNotification(actionStatus));
@@ -905,6 +1010,8 @@ export default function LoanApplicationDetail() {
                   <div class="subvalue">Verified: ${escapeHtml(formatDate(item.verifiedAt))}</div>
                   <div class="subvalue">Verified By: ${escapeHtml(item.verifiedBy || "-")}</div>
                   <div class="subvalue">Approved By: ${escapeHtml(item.approvedBy || "-")}</div>
+                  <div class="subvalue">Disbursed By: ${escapeHtml(item.disbursedBy || "-")}</div>
+                  <div class="subvalue">Method: ${escapeHtml(humanizeValue(item.disbursementMethod || "-"))}</div>
                 </div>
               </div>
               <div class="photo-card">
@@ -987,7 +1094,54 @@ export default function LoanApplicationDetail() {
                   <div class="label">Approved At</div>
                   <div class="field-value">${escapeHtml(formatDate(item.approvedAt))}</div>
                 </div>
+                <div class="field">
+                  <div class="label">Disbursed By</div>
+                  <div class="field-value">${escapeHtml(item.disbursedBy || "-")}</div>
+                </div>
+                <div class="field">
+                  <div class="label">Disbursement Method</div>
+                  <div class="field-value">${escapeHtml(humanizeValue(item.disbursementMethod || "-"))}</div>
+                </div>
+                <div class="field">
+                  <div class="label">Disbursed At</div>
+                  <div class="field-value">${escapeHtml(formatDate(item.disbursedAt))}</div>
+                </div>
+                <div class="field">
+                  <div class="label">Transaction Reference</div>
+                  <div class="field-value">${escapeHtml(item.transactionReference || "-")}</div>
+                </div>
               </div>
+              ${
+                item.disbursementMethod === "bank_transfer"
+                  ? `
+              <div class="grid two-col" style="margin-top: 12px;">
+                <div class="field">
+                  <div class="label">Bank Name</div>
+                  <div class="field-value">${escapeHtml(item.disbursementBankName || "-")}</div>
+                </div>
+                <div class="field">
+                  <div class="label">Account Name</div>
+                  <div class="field-value">${escapeHtml(item.disbursementAccountName || "-")}</div>
+                </div>
+                <div class="field">
+                  <div class="label">Account Number</div>
+                  <div class="field-value">${escapeHtml(item.disbursementAccountNumber || "-")}</div>
+                </div>
+              </div>`
+                  : item.disbursementMethod === "mobile_money"
+                  ? `
+              <div class="grid two-col" style="margin-top: 12px;">
+                <div class="field">
+                  <div class="label">Mobile Provider</div>
+                  <div class="field-value">${escapeHtml(item.disbursementMobileProvider || "-")}</div>
+                </div>
+                <div class="field">
+                  <div class="label">Mobile Number</div>
+                  <div class="field-value">${escapeHtml(item.disbursementMobileNumber || "-")}</div>
+                </div>
+              </div>`
+                  : ""
+              }
             </div>
 
             <div class="section">
@@ -1134,6 +1288,8 @@ export default function LoanApplicationDetail() {
             <div class="meta-item"><strong>Admin Fee:</strong> ${escapeHtml(formatMoney(repaymentPlan.oneTimeAdminFee))}</div>
             <div class="meta-item"><strong>Verified By:</strong> ${escapeHtml(item.verifiedBy || "-")}</div>
             <div class="meta-item"><strong>Approved By:</strong> ${escapeHtml(item.approvedBy || "-")}</div>
+            <div class="meta-item"><strong>Disbursed By:</strong> ${escapeHtml(item.disbursedBy || "-")}</div>
+            <div class="meta-item"><strong>Method:</strong> ${escapeHtml(humanizeValue(item.disbursementMethod || "-"))}</div>
           </div>
 
           <table>
@@ -1199,10 +1355,17 @@ export default function LoanApplicationDetail() {
   const displayedStatusKey = getDisplayedStatusKey(item);
 
   const currentStage = (() => {
+    if (item.status === "DISBURSED") {
+      return {
+        title: "Disbursed",
+        note: "Funds have been released and this case has moved into the accounts stage.",
+        tone: "border-blue-200 bg-blue-50 text-blue-800",
+      };
+    }
     if (item.status === "APPROVED") {
       return {
         title: "Approved",
-        note: "Customer request is approved and ready for branch follow-up.",
+        note: "Customer request is approved and ready for loan disbursement.",
         tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
       };
     }
@@ -1258,19 +1421,34 @@ export default function LoanApplicationDetail() {
   })();
 
   const actionHistory = Array.isArray(item.actionHistory) ? item.actionHistory : [];
-  const availableStatuses = ["KYC_SENT", "KYC_REJECTED", "VERIFIED", "APPROVED", "CLOSED"].filter(
-    (status) => status !== displayedStatusKey
-  );
+  const availableStatuses = (() => {
+    if (item?.status === "DISBURSED") return ["CLOSED"];
+    if (item?.status === "APPROVED") return ["DISBURSED", "CLOSED"];
+    if (item?.status === "CLOSED") return [];
+    if (item?.kycStatus === "verified") return ["APPROVED", "CLOSED"];
+    if (item?.kycStatus === "pending") return ["KYC_REJECTED", "VERIFIED", "CLOSED"];
+    if (item?.kycStatus === "rejected") return ["KYC_SENT", "CLOSED"];
+    return ["KYC_SENT", "CLOSED"];
+  })();
   const repaymentPlan =
-    item?.kycStatus === "verified" || item?.status === "APPROVED" ? buildRepaymentPlan(item) : null;
+    item?.kycStatus === "verified" || item?.status === "APPROVED" || item?.status === "DISBURSED"
+      ? buildRepaymentPlan(item)
+      : null;
   const visibleHistory = actionHistory
     .slice()
     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
   const nextAction = (() => {
+    if (item.status === "DISBURSED") {
+      return {
+        title: "Moved to Accounts",
+        note: "This loan is already disbursed. Use the Accounts section for repayment and portfolio tracking.",
+        tone: "border-blue-200 bg-blue-50 text-blue-800",
+      };
+    }
     if (item.status === "APPROVED") {
       return {
-        title: "Loan already approved",
-        note: "This case is complete for approval. Only close or review history if needed.",
+        title: "Ready for loan disbursement",
+        note: "Approval is complete. Capture disbursement details next to move this case into Accounts.",
         tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
       };
     }
@@ -1735,6 +1913,26 @@ export default function LoanApplicationDetail() {
               <p className="mt-1 text-sm text-slate-600">Verified By: {item.verifiedBy || "-"}</p>
               <p className="mt-1 text-sm text-slate-600">Rejected: {formatDate(item.rejectedAt)}</p>
               <p className="mt-1 text-sm text-slate-600">Approved By: {item.approvedBy || "-"}</p>
+              <p className="mt-1 text-sm text-slate-600">Disbursed By: {item.disbursedBy || "-"}</p>
+              <p className="mt-1 text-sm text-slate-600">
+                Method: {humanizeValue(item.disbursementMethod || "-")}
+              </p>
+              {item.disbursementMethod === "bank_transfer" ? (
+                <>
+                  <p className="mt-1 text-sm text-slate-600">Bank: {item.disbursementBankName || "-"}</p>
+                  <p className="mt-1 text-sm text-slate-600">Account Name: {item.disbursementAccountName || "-"}</p>
+                  <p className="mt-1 text-sm text-slate-600">Account Number: {item.disbursementAccountNumber || "-"}</p>
+                </>
+              ) : null}
+              {item.disbursementMethod === "mobile_money" ? (
+                <>
+                  <p className="mt-1 text-sm text-slate-600">Provider: {item.disbursementMobileProvider || "-"}</p>
+                  <p className="mt-1 text-sm text-slate-600">Mobile Number: {item.disbursementMobileNumber || "-"}</p>
+                </>
+              ) : null}
+              <p className="mt-1 text-sm text-slate-600">
+                Transaction Ref: {item.transactionReference || "-"}
+              </p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
@@ -2089,6 +2287,150 @@ export default function LoanApplicationDetail() {
                 />
               </div>
             ) : null}
+
+            {nextStatus === "DISBURSED" ? (
+              <>
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Disbursed By
+                  </label>
+                  <input
+                    className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                    value={disbursedBy}
+                    onChange={(e) => setDisbursedBy(e.target.value)}
+                    placeholder="Enter disbursement officer name"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Disbursement Amount
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                    value={disbursementAmount}
+                    onChange={(e) => setDisbursementAmount(e.target.value)}
+                    placeholder="Enter amount"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Disbursement Method
+                  </label>
+                  <select
+                    className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                    value={disbursementMethod}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setDisbursementMethod(value);
+                      if (value !== "bank_transfer") {
+                        setDisbursementBankName("");
+                        setDisbursementAccountName("");
+                        setDisbursementAccountNumber("");
+                      }
+                      if (value !== "mobile_money") {
+                        setDisbursementMobileProvider("");
+                        setDisbursementMobileNumber("");
+                      }
+                    }}
+                  >
+                    <option value="">Select method</option>
+                    {DISBURSEMENT_METHODS.map((method) => (
+                      <option key={method.value} value={method.value}>
+                        {method.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {disbursementMethod === "bank_transfer" ? (
+                  <>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Bank Name
+                      </label>
+                      <input
+                        className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                        value={disbursementBankName}
+                        onChange={(e) => setDisbursementBankName(e.target.value)}
+                        placeholder="Enter bank name"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Account Name
+                      </label>
+                      <input
+                        className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                        value={disbursementAccountName}
+                        onChange={(e) => setDisbursementAccountName(e.target.value)}
+                        placeholder="Enter account name"
+                      />
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Account Number
+                      </label>
+                      <input
+                        className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                        value={disbursementAccountNumber}
+                        onChange={(e) => setDisbursementAccountNumber(e.target.value)}
+                        placeholder="Enter account number"
+                      />
+                    </div>
+                  </>
+                ) : null}
+                {disbursementMethod === "mobile_money" ? (
+                  <>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Provider
+                      </label>
+                      <input
+                        className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                        value={disbursementMobileProvider}
+                        onChange={(e) => setDisbursementMobileProvider(e.target.value)}
+                        placeholder="Airtel Money / TNM Mpamba"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Mobile Number
+                      </label>
+                      <input
+                        className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                        value={disbursementMobileNumber}
+                        onChange={(e) => setDisbursementMobileNumber(e.target.value)}
+                        placeholder="Enter mobile money number"
+                      />
+                    </div>
+                  </>
+                ) : null}
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Transaction Reference
+                  </label>
+                  <input
+                    className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                    value={transactionReference}
+                    onChange={(e) => setTransactionReference(e.target.value)}
+                    placeholder="Optional reference"
+                  />
+                </div>
+                <div className="space-y-1 md:col-span-2">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Disbursement Note
+                  </label>
+                  <textarea
+                    rows={2}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    value={disbursementNote}
+                    onChange={(e) => setDisbursementNote(e.target.value)}
+                    placeholder="Optional note for accounts or branch follow-up"
+                  />
+                </div>
+              </>
+            ) : null}
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
@@ -2100,7 +2442,20 @@ export default function LoanApplicationDetail() {
                 (nextStatus === "KYC_REJECTED" && !String(adminNote || "").trim()) ||
                 (nextStatus === "CLOSED" && !String(closeReason || "").trim()) ||
                 ((nextStatus === "VERIFIED" || nextStatus === "APPROVED") && !String(verifiedBy || "").trim()) ||
-                (nextStatus === "APPROVED" && !String(approvedBy || "").trim())
+                (nextStatus === "APPROVED" && !String(approvedBy || "").trim()) ||
+                (nextStatus === "DISBURSED" && item?.status !== "APPROVED") ||
+                (nextStatus === "DISBURSED" && !String(disbursedBy || "").trim()) ||
+                (nextStatus === "DISBURSED" && !Number(disbursementAmount || 0)) ||
+                (nextStatus === "DISBURSED" && !String(disbursementMethod || "").trim()) ||
+                (nextStatus === "DISBURSED" &&
+                  disbursementMethod === "bank_transfer" &&
+                  (!String(disbursementBankName || "").trim() ||
+                    !String(disbursementAccountName || "").trim() ||
+                    !String(disbursementAccountNumber || "").trim())) ||
+                (nextStatus === "DISBURSED" &&
+                  disbursementMethod === "mobile_money" &&
+                  (!String(disbursementMobileProvider || "").trim() ||
+                    !String(disbursementMobileNumber || "").trim()))
               }
               onClick={updateInquiry}
             >
@@ -2123,6 +2478,11 @@ export default function LoanApplicationDetail() {
           {nextStatus === "APPROVED" && hasSubmittedKyc ? (
             <p className="text-xs font-medium text-slate-600">
               Add both verifier and approver names. Approving this inquiry will also mark the submitted KYC as verified.
+            </p>
+          ) : null}
+          {nextStatus === "DISBURSED" ? (
+            <p className="text-xs font-medium text-slate-600">
+              Capture the method details correctly. Bank transfer requires account details, while mobile money requires provider and number.
             </p>
           ) : null}
           {nextStatus === "KYC_SENT" ? (

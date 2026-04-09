@@ -20,6 +20,7 @@ import adminCustomerRoutes from "./routes/admin.customer.routes.js";
 import inquiryRoutes from "./routes/inquiry.routes.js";
 import adminInquiryRoutes from "./routes/admin.inquiry.routes.js";
 import adminDashboardRoutes from "./routes/admin.dashboard.routes.js";
+import adminAccountRoutes from "./routes/admin.account.routes.js";
 import { UPLOAD_ROOT } from "./config/upload.js";
 import { notFound } from "./middlewares/notFound.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
@@ -92,6 +93,7 @@ app.use("/api/v1/admin", adminKycRoutes);
 app.use("/api/v1/admin", adminCustomerRoutes);
 app.use("/api/v1/admin", adminInquiryRoutes);
 app.use("/api/v1/admin", adminDashboardRoutes);
+app.use("/api/v1/admin", adminAccountRoutes);
 
 app.use("/api/v1/profile", profileRoutes);
 

@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ShieldCheck,
-  FileText,
   CheckCircle,
   Phone,
   MessageCircle,
@@ -13,17 +12,14 @@ import {
 
 const BRAND_NAVY = "#002D5B";
 const BRAND_GOLD = "#B38E46";
-
-/* ===========================================
-   TESTIMONIAL DATA (Replace with real ones)
-=========================================== */
+const TRUST_IMAGE = "https://cdn.betakit.com/wp-content/uploads/2021/02/Kampus-Production-770x513.png";
 
 const testimonials = [
   {
     name: "Grace M.",
     location: "Lilongwe",
     purpose: "SME Business Loan",
-    text: "AlinafeCapital helped me expand my grocery shop within weeks. The process was simple and clear.",
+    text: "Alinafe Capital helped me expand my grocery shop within weeks. The process was simple and clear.",
   },
   {
     name: "James K.",
@@ -38,10 +34,6 @@ const testimonials = [
     text: "Quick approval and friendly staff. I received funds within 24 hours.",
   },
 ];
-
-/* ===========================================
-   COUNTER COMPONENT
-=========================================== */
 
 const Counter = ({ end, suffix }) => {
   const [count, setCount] = useState(0);
@@ -72,225 +64,170 @@ const Counter = ({ end, suffix }) => {
   );
 };
 
-/* ===========================================
-   MAIN COMPONENT
-=========================================== */
+const stats = [
+  { value: 20000, suffix: "+", label: "Clients Served" },
+  { value: 15, suffix: "+", label: "Branches Nationwide" },
+  { value: 10, suffix: "+", label: "Years in Operation" },
+];
 
 const TrustSection = () => {
   const [activeTestimonial, setActiveTestimonial] = useState(0);
 
-  const nextTestimonial = () =>
-    setActiveTestimonial((prev) =>
-      prev === testimonials.length - 1 ? 0 : prev + 1
-    );
-
   useEffect(() => {
-    const interval = setInterval(nextTestimonial, 5000);
+    const interval = setInterval(() => {
+      setActiveTestimonial((prev) =>
+        prev === testimonials.length - 1 ? 0 : prev + 1
+      );
+    }, 5000);
+
     return () => clearInterval(interval);
   }, []);
 
+  const currentTestimonial = testimonials[activeTestimonial];
+
   return (
-    <section className="relative py-24 bg-white">
-      <div className="max-w-7xl mx-auto px-6">
+    <section className="relative overflow-hidden bg-white py-24">
+      <div className="absolute inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_top_left,_rgba(179,142,70,0.14),_transparent_38%),radial-gradient(circle_at_top_right,_rgba(0,45,91,0.08),_transparent_42%)]" />
 
-        {/* ================= HEADER ================= */}
-        <div className="text-center max-w-3xl mx-auto">
-          <h2
-            className="text-4xl font-bold"
-            style={{ color: BRAND_NAVY }}
-          >
-            Trusted by Communities Across Malawi
-          </h2>
-          <p className="mt-4 text-gray-600">
-            Transparent lending. Responsible support. Real outcomes.
-          </p>
+      <div className="relative mx-auto max-w-7xl px-6">
+        <div className="grid items-center gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:gap-14">
+          <div>
+            <span className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.28em] text-slate-600">
+              Trust & Support
+            </span>
+            <h2 className="mt-5 text-4xl font-bold leading-tight text-slate-950 md:text-5xl" style={{ color: BRAND_NAVY }}>
+              Trusted by Communities Across Malawi
+            </h2>
+            <p className="mt-5 max-w-xl text-base leading-8 text-slate-600 sm:text-lg">
+              Transparent lending. Responsible support. Real outcomes built around customer confidence.
+            </p>
+
+            <div className="mt-8 grid gap-4 sm:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm sm:col-span-1">
+                <ShieldCheck className="h-6 w-6" style={{ color: BRAND_GOLD }} />
+                <p className="mt-4 text-base font-semibold text-slate-900">Licensed Institution</p>
+                <p className="mt-2 text-sm text-slate-500">License No: MFI</p>
+              </div>
+
+              {stats.map((stat) => (
+                <div key={stat.label} className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                  <p className="text-3xl font-bold text-slate-950" style={{ color: BRAND_NAVY }}>
+                    <Counter end={stat.value} suffix={stat.suffix} />
+                  </p>
+                  <p className="mt-2 text-sm text-slate-600">{stat.label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-3 shadow-[0_28px_70px_rgba(15,23,42,0.10)]">
+              <div className="overflow-hidden rounded-[1.5rem] bg-[linear-gradient(180deg,#f8fafc_0%,#f1f5f9_100%)]">
+                <img
+                  src={TRUST_IMAGE}
+                  alt="Customer trust and lending support"
+                  className="h-[280px] w-full object-cover sm:h-[340px] lg:h-[390px]"
+                  loading="lazy"
+                />
+              </div>
+
+              <div className="grid gap-3 p-4 sm:grid-cols-3">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                  <p className="font-semibold text-slate-900">Clear process</p>
+                  <p className="mt-1 text-slate-600">Transparent review and direct communication.</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                  <p className="font-semibold text-slate-900">Secure handling</p>
+                  <p className="mt-1 text-slate-600">Protected data and guided document checks.</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                  <p className="font-semibold text-slate-900">Customer focus</p>
+                  <p className="mt-1 text-slate-600">Built for Malawi households and businesses.</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* ================= TRUST BADGES + STATS ================= */}
-        <div className="mt-16 grid md:grid-cols-4 gap-8 text-center">
-
-          <div className="bg-gray-50 p-6 rounded-2xl shadow-sm">
-            <ShieldCheck size={28} className="mx-auto mb-3" />
-            <p className="font-semibold">Licensed Institution</p>
-            <p className="text-xs text-gray-500 mt-2">
-              License No: MFI
+        <div className="mt-20 grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-[2rem] border border-slate-200 bg-slate-50 p-7 shadow-sm sm:p-8">
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">
+              Client Voice
             </p>
-            <a
-              href="/compliance"
-              className="text-xs mt-2 inline-block"
-              style={{ color: BRAND_GOLD }}
-            >
-              View compliance details →
-            </a>
-          </div>
+            <h3 className="mt-3 text-2xl font-bold" style={{ color: BRAND_NAVY }}>
+              What our clients say
+            </h3>
 
-          <div className="bg-gray-50 p-6 rounded-2xl shadow-sm">
-            <p className="text-3xl font-bold" style={{ color: BRAND_NAVY }}>
-              <Counter end={20000} suffix="+" />
-            </p>
-            <p className="text-sm text-gray-600">Clients Served</p>
-          </div>
-
-          <div className="bg-gray-50 p-6 rounded-2xl shadow-sm">
-            <p className="text-3xl font-bold" style={{ color: BRAND_NAVY }}>
-              <Counter end={15} suffix="+" />
-            </p>
-            <p className="text-sm text-gray-600">Branches Nationwide</p>
-          </div>
-
-          <div className="bg-gray-50 p-6 rounded-2xl shadow-sm">
-            <p className="text-3xl font-bold" style={{ color: BRAND_NAVY }}>
-              <Counter end={10} suffix="+" />
-            </p>
-            <p className="text-sm text-gray-600">Years in Operation</p>
-          </div>
-
-        </div>
-
-        {/* ================= TESTIMONIALS ================= */}
-        <div className="mt-20">
-          <h3
-            className="text-2xl font-bold text-center mb-10"
-            style={{ color: BRAND_NAVY }}
-          >
-            What Our Clients Say
-          </h3>
-
-          <div className="relative max-w-3xl mx-auto bg-gray-50 p-8 rounded-2xl shadow-md">
             <motion.p
               key={activeTestimonial}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.6 }}
-              className="text-gray-700 text-lg"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.45 }}
+              className="mt-6 text-lg leading-8 text-slate-700"
             >
-              “{testimonials[activeTestimonial].text}”
+              "{currentTestimonial.text}"
             </motion.p>
 
-            <div className="mt-6 text-sm text-gray-600">
-              <strong>
-                {testimonials[activeTestimonial].name}
-              </strong>{" "}
-              – {testimonials[activeTestimonial].location} (
-              {testimonials[activeTestimonial].purpose})
-            </div>
-          </div>
-        </div>
-
-        {/* ================= TRANSPARENCY ================= */}
-        <div className="mt-24 grid md:grid-cols-2 gap-12">
-
-          <div>
-            <h4 className="text-xl font-bold mb-4">
-              Transparency & Legal
-            </h4>
-
-            <ul className="space-y-3 text-sm">
-              <li className="flex gap-2">
-                <CheckCircle size={16}/> Interest Rates clearly disclosed
-              </li>
-              <li className="flex gap-2">
-                <CheckCircle size={16}/> No hidden charges
-              </li>
-              <li className="flex gap-2">
-                <CheckCircle size={16}/> Transparent repayment terms
-              </li>
-            </ul>
-
-            <div className="mt-4 text-sm flex gap-4 flex-wrap">
-              <a href="/interest-rates">Rates</a>
-              <a href="/terms">Terms</a>
-              <a href="/privacy">Privacy</a>
-              <a href="/complaints">Complaints</a>
-            </div>
-
-            <p className="text-xs text-gray-400 mt-4">
-              Rates last updated: January 2026
-            </p>
-          </div>
-
-          <div>
-            <h4 className="text-xl font-bold mb-4">
-              Security & Data Protection
-            </h4>
-
-            <p className="text-sm text-gray-600">
-              We protect your data and ensure secure transactions across all repayment channels.
-            </p>
-
-            <div className="mt-4 space-y-2 text-sm">
-              <div className="flex gap-2">
-                <Lock size={16}/> Encrypted digital forms
-              </div>
-              <div className="flex gap-2">
-                <ShieldCheck size={16}/> Safe repayment methods
-              </div>
-              <div className="flex gap-2">
-                <AlertTriangle size={16}/> Report fraud via official hotline
-              </div>
+            <div className="mt-6 text-sm text-slate-600">
+              <strong className="text-slate-900">{currentTestimonial.name}</strong> - {currentTestimonial.location} ({currentTestimonial.purpose})
             </div>
           </div>
 
-        </div>
+          <div className="grid gap-5">
+            <div className="rounded-[2rem] border border-slate-200 bg-white p-7 shadow-sm">
+              <h4 className="text-xl font-bold text-slate-900">Transparency & Legal</h4>
+              <ul className="mt-5 space-y-3 text-sm text-slate-600">
+                <li className="flex gap-2"><CheckCircle size={16} className="mt-0.5" />Interest rates clearly disclosed</li>
+                <li className="flex gap-2"><CheckCircle size={16} className="mt-0.5" />No hidden charges</li>
+                <li className="flex gap-2"><CheckCircle size={16} className="mt-0.5" />Transparent repayment terms</li>
+              </ul>
+              <div className="mt-5 flex flex-wrap gap-4 text-sm" style={{ color: BRAND_GOLD }}>
+                <a href="/interest-rates">Rates</a>
+                <a href="/terms">Terms</a>
+                <a href="/privacy">Privacy</a>
+                <a href="/complaints">Complaints</a>
+              </div>
+            </div>
 
-        {/* ================= PARTNER LOGOS ================= */}
-        <div className="mt-20 text-center">
-          <h4 className="text-lg font-semibold mb-6">
-            Our Community & Payment Partners
-          </h4>
-
-          <div className="flex flex-wrap justify-center gap-10 opacity-70 text-gray-500 text-sm">
-            <div>Bank Partner</div>
-            <div>Mobile Money</div>
-            <div>Community Org</div>
-            <div>Agent Network</div>
+            <div className="rounded-[2rem] border border-slate-200 bg-white p-7 shadow-sm">
+              <h4 className="text-xl font-bold text-slate-900">Security & Data Protection</h4>
+              <div className="mt-5 space-y-3 text-sm text-slate-600">
+                <div className="flex gap-2"><Lock size={16} className="mt-0.5" />Encrypted digital forms</div>
+                <div className="flex gap-2"><ShieldCheck size={16} className="mt-0.5" />Safe repayment methods</div>
+                <div className="flex gap-2"><AlertTriangle size={16} className="mt-0.5" />Report fraud via official hotline</div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* ================= SUPPORT CTA ================= */}
-        <div className="mt-24 bg-gray-100 p-8 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-6">
+        <div className="mt-16 rounded-[2rem] border border-slate-200 bg-slate-50 p-6 shadow-sm sm:p-8">
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h4 className="text-xl font-bold text-slate-900">Need Assistance?</h4>
+              <p className="mt-2 text-sm text-slate-600">Speak to a loan officer today.</p>
+            </div>
 
-          <div>
-            <h4 className="font-semibold text-lg">
-              Need Assistance?
-            </h4>
-            <p className="text-sm text-gray-600">
-              Speak to a loan officer today.
-            </p>
+            <div className="flex flex-wrap gap-3">
+              <a
+                href="tel:+265997031941"
+                className="flex items-center gap-2 rounded-xl px-5 py-3 text-white"
+                style={{ backgroundColor: BRAND_NAVY }}
+              >
+                <Phone size={16} /> Call Now
+              </a>
+              <a
+                href="https://wa.me/265997031941"
+                className="flex items-center gap-2 rounded-xl border px-5 py-3"
+                style={{ borderColor: BRAND_GOLD, color: BRAND_GOLD }}
+              >
+                <MessageCircle size={16} /> WhatsApp
+              </a>
+              <a href="/branches" className="flex items-center gap-2 rounded-xl border border-slate-300 px-5 py-3 text-slate-700">
+                <MapPin size={16} /> Find Branch
+              </a>
+            </div>
           </div>
-
-          <div className="flex gap-4 flex-wrap">
-
-            <a
-              href="tel:+265997031941"
-              className="flex items-center gap-2 px-6 py-3 rounded-lg text-white"
-              style={{ backgroundColor: BRAND_NAVY }}
-            >
-              <Phone size={16}/> Call Now
-            </a>
-
-            <a
-              href="https://wa.me/265997031941"
-              className="flex items-center gap-2 px-6 py-3 rounded-lg border"
-              style={{
-                borderColor: BRAND_GOLD,
-                color: BRAND_GOLD,
-              }}
-            >
-              <MessageCircle size={16}/> WhatsApp
-            </a>
-
-            <a
-              href="/branches"
-              className="flex items-center gap-2 px-6 py-3 rounded-lg border"
-            >
-              <MapPin size={16}/> Find Branch
-            </a>
-
-          </div>
-
         </div>
-
       </div>
     </section>
   );
