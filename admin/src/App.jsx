@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AdminAccessPage from "./components/Auth/AdminAccess.jsx";
 import AdminProtectedRoute from "./components/Auth/AdminProtectedRoute.jsx";
 import CompliancePage from "./components/Compliance/Compliance.jsx";
+import ComplaintsPage from "./components/Complaints/Complaints.jsx";
 import AccountsPage from "./components/Accounts/Accounts.jsx";
 import AccountDetailPage from "./components/Accounts/AccountDetail.jsx";
 import Dashboard from "./components/Dashboard/Dashboard.jsx";
@@ -28,6 +29,7 @@ export default function AppRoutes() {
           <Route path="accounts/:id" element={<AccountDetailPage />} />
           <Route path="inquiries" element={<InquiriesPage />} />
           <Route path="loan-products" element={<LoanProductsPage />} />
+          <Route path="complaints" element={<ComplaintsPage />} />
           <Route path="customers" element={<Navigate to="/admin" replace />} />
           <Route path="compliance" element={<CompliancePage />} />
           <Route path="settings" element={<SettingsPage />} />

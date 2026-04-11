@@ -160,6 +160,7 @@ export default function ProfileForm({
     e.preventDefault();
     setError("");
     setSuccess("");
+    const action = e?.nativeEvent?.submitter?.value || "save";
 
     const resolvedBankName =
       form.bankNameOption === "Other"
@@ -172,7 +173,7 @@ export default function ProfileForm({
       return;
     }
 
-    if (!documentsComplete) {
+    if (action === "submit" && !documentsComplete) {
       setError("Please upload all required KYC documents before submitting.");
       return;
     }
@@ -200,11 +201,17 @@ export default function ProfileForm({
       const nextCompletion = Number(savedProfile?.profileCompletion || 0);
       if (previousCompletion < 100 && nextCompletion === 100) setShowCongratsModal(true);
 
-      const submitResponse = await api.post(submitUrl);
-      const submittedProfile = submitResponse?.data?.item ?? submitResponse?.data?.data ?? savedProfile;
+      if (action === "submit") {
+        const submitResponse = await api.post(submitUrl);
+        const submittedProfile =
+          submitResponse?.data?.item ?? submitResponse?.data?.data ?? savedProfile;
+        setSuccess("Profile submitted successfully.");
+        onSaved?.(submittedProfile, "submit");
+        return;
+      }
 
-      setSuccess("Profile submitted successfully.");
-      onSaved?.(submittedProfile);
+      setSuccess("Profile saved successfully.");
+      onSaved?.(savedProfile, "save");
     } catch (err) {
       if (err?.response?.status === 401) {
         setError("Session expired. Please login again.");
@@ -524,7 +531,7 @@ export default function ProfileForm({
         </div>
       </div>
 
-      <button className="sr-only" type="submit">
+      <button className="sr-only" type="submit" value="save">
         Save Profile
       </button>
 

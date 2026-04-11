@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 const BRAND_NAVY = "#002D5B";
 const BRAND_GOLD = "#B38E46";
-const AUTOPLAY_INTERVAL = 3000;
+const AUTOPLAY_INTERVAL = 1800;
 
 const slides = [
   {
@@ -60,38 +59,42 @@ const trustPoints = [
 ];
 
 const stats = [
-  { value: "10+", label: "Years serving Malawi" },
-  { value: "15+", label: "Branches nationwide" },
-  { value: "20,000+", label: "Clients supported" },
+  { value: "06+", label: "Years serving Malawi" },
+  { value: "01+", label: "Branches nationwide" },
 ];
 
 const Hero = () => {
   const [current, setCurrent] = useState(0);
-  const [isHovered, setIsHovered] = useState(false);
+  const [isPageVisible, setIsPageVisible] = useState(
+    typeof document === "undefined" ? true : !document.hidden
+  );
   const prefersReducedMotion = useReducedMotion();
   const touchStartX = useRef(null);
-  const intervalRef = useRef(null);
+  const timeoutRef = useRef(null);
 
   const nextSlide = () => setCurrent((prev) => (prev + 1) % slides.length);
   const prevSlide = () => setCurrent((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
 
   useEffect(() => {
-    if (prefersReducedMotion || isHovered) return undefined;
+    if (prefersReducedMotion || !isPageVisible) return undefined;
 
-    intervalRef.current = window.setInterval(nextSlide, AUTOPLAY_INTERVAL);
+    timeoutRef.current = window.setTimeout(nextSlide, AUTOPLAY_INTERVAL);
 
     return () => {
-      window.clearInterval(intervalRef.current);
+      window.clearTimeout(timeoutRef.current);
     };
-  }, [isHovered, prefersReducedMotion]);
+  }, [current, isPageVisible, prefersReducedMotion]);
 
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.hidden) window.clearInterval(intervalRef.current);
+      setIsPageVisible(!document.hidden);
     };
 
     document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.clearTimeout(timeoutRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -126,8 +129,6 @@ const Hero = () => {
         background:
           "linear-gradient(135deg, rgba(0,45,91,0.06) 0%, rgba(0,45,91,0.03) 40%, rgba(255,255,255,1) 100%)",
       }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       aria-label="Alinafe Capital Hero"
@@ -221,7 +222,7 @@ const Hero = () => {
                 </AnimatePresence>
               </div>
 
-              <div className="mt-4 flex items-center justify-between gap-4">
+              <div className="mt-4 flex items-center justify-center">
                 <div className="flex items-center gap-2">
                   {slides.map((item, index) => (
                     <button
@@ -232,25 +233,6 @@ const Hero = () => {
                       className={`rounded-full transition-all duration-200 ${current === index ? "h-2.5 w-8 bg-slate-900" : "h-2.5 w-2.5 bg-slate-300 hover:bg-slate-400"}`}
                     />
                   ))}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={prevSlide}
-                    aria-label="Previous slide"
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-                  >
-                    <ChevronLeft className="h-5 w-5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={nextSlide}
-                    aria-label="Next slide"
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-                  >
-                    <ChevronRight className="h-5 w-5" />
-                  </button>
                 </div>
               </div>
             </div>

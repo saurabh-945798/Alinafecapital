@@ -17,6 +17,7 @@ export default function DashboardProfilePage() {
   const [saveState, setSaveState] = useState(""); // "", "saving", "saved", "error"
   const [selectedEmploymentType, setSelectedEmploymentType] = useState("");
   const [showSavedModal, setShowSavedModal] = useState(false);
+  const [savedModalMode, setSavedModalMode] = useState("save");
   const [profileSectionsComplete, setProfileSectionsComplete] = useState(false);
   const [latestDocuments, setLatestDocuments] = useState(
     Array.isArray(profile?.documents) ? profile.documents : []
@@ -267,8 +268,9 @@ export default function DashboardProfilePage() {
               onEmploymentTypeChange={setSelectedEmploymentType}
               onCompletionChange={setProfileSectionsComplete}
               documentsComplete={documentsComplete}
-              onSaved={() => {
+              onSaved={(_, mode = "save") => {
                 setSaveState("saved");
+                setSavedModalMode(mode);
                 setShowSavedModal(true);
                 refresh();
                 setTimeout(() => {
@@ -325,24 +327,34 @@ export default function DashboardProfilePage() {
           <div className="sticky bottom-0 z-10 flex flex-col items-stretch justify-between gap-3 rounded-xl border border-slate-200 bg-white/95 px-3 py-3 backdrop-blur sm:px-4 sm:flex-row sm:items-center">
             <div className="text-xs font-medium leading-5 text-slate-500">
               {saveState === "saving" && "Saving..."}
-              {saveState === "saved" && "Saved just now"}
+              {saveState === "saved" &&
+                (savedModalMode === "submit" ? "Submitted just now" : "Saved just now")}
               {saveState === "error" && "Error saving changes"}
               {!canSubmitWholeProfile &&
                 saveState === "" &&
                 "Complete all profile details and required KYC documents first"}
             </div>
 
-            {canSubmitWholeProfile ? (
-              <div className="flex w-full sm:w-auto">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <button
+                type="submit"
+                form="profileForm"
+                value="save"
+                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:w-auto"
+              >
+                Save
+              </button>
+              {canSubmitWholeProfile ? (
                 <button
                   type="submit"
                   form="profileForm"
+                  value="submit"
                   className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 sm:w-auto"
                 >
                   Submit  
                 </button>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
@@ -380,9 +392,13 @@ export default function DashboardProfilePage() {
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
               <CheckCircle2 size={30} className="text-emerald-700" />
             </div>
-            <h3 className="mt-4 text-2xl font-semibold text-slate-900">Details Saved</h3>
+            <h3 className="mt-4 text-2xl font-semibold text-slate-900">
+              {savedModalMode === "submit" ? "Profile Submitted" : "Details Saved"}
+            </h3>
             <p className="mt-2 text-sm text-slate-600">
-              Your profile and KYC have been submitted successfully. They are now under review.
+              {savedModalMode === "submit"
+                ? "Your profile and KYC have been submitted successfully. They are now under review."
+                : "Your profile details have been saved successfully. You can continue and submit KYC when ready."}
             </p>
           </div>
         </div>

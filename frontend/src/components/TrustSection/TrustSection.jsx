@@ -65,9 +65,8 @@ const Counter = ({ end, suffix }) => {
 };
 
 const stats = [
-  { value: 20000, suffix: "+", label: "Clients Served" },
-  { value: 15, suffix: "+", label: "Branches Nationwide" },
-  { value: 10, suffix: "+", label: "Years in Operation" },
+  { value: 1, suffix: "+", label: "Branches Nationwide" },
+  { value: 6, suffix: "+", label: "Years in Operation" },
 ];
 
 const TrustSection = () => {

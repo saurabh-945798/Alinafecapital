@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Menu, X } from "lucide-react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import AlinafeLogo from "./AlinafeLogo.jsx";
+import logoImage from "../../../images/logo.png";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useLanguage } from "../../context/LanguageContext.jsx";
 
@@ -69,30 +69,6 @@ function MobileSection({ title, children }) {
       </p>
       <div className="mt-3 space-y-2">{children}</div>
     </section>
-  );
-}
-
-function WhatsAppSupportBadge() {
-  return (
-    <a
-      href="https://wa.me/265997031941"
-      target="_blank"
-      rel="noreferrer"
-      className="inline-flex items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-    >
-      <div className="relative h-6 w-9 overflow-hidden rounded-full border border-slate-200 bg-white">
-        <div className="absolute inset-x-0 top-0 h-1/3 bg-black" />
-        <div className="absolute inset-x-0 top-1/3 h-1/3 bg-[#d62828]" />
-        <div className="absolute inset-x-0 bottom-0 h-1/3 bg-[#0b3d91]" />
-        <div className="absolute left-1/2 top-[2px] h-3 w-3 -translate-x-1/2 rounded-full border-2 border-[#f59e0b] border-b-0" />
-      </div>
-      <div className="flex flex-col leading-none">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-          Malawi
-        </span>
-        <span className="mt-1 text-sm font-semibold text-slate-800">Customer Support</span>
-      </div>
-    </a>
   );
 }
 
@@ -180,7 +156,7 @@ function DropdownMenu({ label, sections, pathname, t, isDesktop }) {
         className={[
           "inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-all duration-200 ease-out",
           open || hasActiveChild
-            ? "bg-slate-100 text-slate-950 shadow-sm"
+            ? "border border-slate-200 bg-slate-50 text-slate-950 shadow-sm"
             : "text-slate-700 hover:bg-slate-50 hover:text-slate-950",
         ].join(" ")}
         aria-expanded={open}
@@ -419,21 +395,25 @@ export default function Navbar() {
         navVisible ? "translate-y-0" : "-translate-y-full",
       ].join(" ")}
     >
-      <div className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8 lg:py-4">
+      <div className="bg-white">
+        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-8 px-4 py-3 sm:px-6 lg:grid lg:grid-cols-[minmax(280px,340px)_1fr_auto] lg:gap-7 lg:px-5 xl:px-6 lg:py-3.5">
           <Link
             to="/"
-            className="flex min-w-0 items-center gap-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+            className="flex min-w-0 items-center gap-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
             aria-label="Alinafe Capital home"
           >
-            <div className="shrink-0 bg-white">
-              <AlinafeLogo className="h-[3.2rem] w-auto sm:h-[4rem] lg:h-[4.4rem]" showTagline={false} />
+            <div className="shrink-0">
+              <img
+                src={logoImage}
+                alt="Alinafe Capital"
+                className="h-[3.8rem] w-auto object-contain sm:h-[4.4rem] lg:h-[4.8rem]"
+              />
             </div>
-            <div className="hidden min-w-0 lg:block">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-500">
+            <div className="-ml-2 min-w-0 sm:-ml-2.5 lg:-ml-3">
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-800 sm:text-[12px] lg:text-[15px] lg:tracking-[0.22em]">
                 Alinafe Capital
               </p>
-              <div className="mt-2 h-[2px] w-56 overflow-hidden rounded-full bg-slate-200">
+              <div className="mt-1.5 h-[2px] w-28 overflow-hidden rounded-full bg-slate-200 sm:w-32 lg:mt-2 lg:w-48">
                 <div
                   className="h-full w-full animate-[brandDividerShift_3.4s_ease-in-out_infinite]"
                   style={{
@@ -442,70 +422,26 @@ export default function Navbar() {
                   }}
                 />
               </div>
-              <p className="mt-0.5 text-base font-semibold text-slate-900">
+              <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500 sm:text-[10px] lg:text-xs lg:tracking-[0.22em]">
                 Financial Services
               </p>
             </div>
           </Link>
 
-          <div className="hidden items-center gap-3 lg:flex">
-            <WhatsAppSupportBadge />
-
-            {isAuthenticated && firstName ? (
-              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                <span className="text-slate-500">
-                  {t("navbar.hi")}, {firstName}
-                </span>
-              </div>
-            ) : null}
-
-            {isAuthenticated ? (
-              <>
-                <Link
-                  to="/dashboard"
-                  className="rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
-                >
-                  {t("navbar.dashboard")}
-                </Link>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
-                >
-                  {t("navbar.logout")}
-                </button>
-              </>
-            ) : null}
-
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setMobileOpen((prev) => !prev)}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 text-slate-800 lg:hidden"
-            aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
-            aria-expanded={mobileOpen}
+          <nav
+            className="hidden w-full max-w-[790px] items-center justify-center justify-self-center rounded-full border border-slate-200 bg-white px-3.5 py-1.5 shadow-sm lg:flex lg:gap-2 xl:gap-3.5"
+            aria-label="Primary navigation"
           >
-            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-        </div>
-      </div>
-
-      <div className="hidden border-b border-slate-200 bg-white lg:block">
-        <div className="mx-auto grid max-w-7xl grid-cols-[1fr_auto_1fr] items-center gap-8 px-4 py-3 sm:px-6 lg:px-8">
-          <div />
-
-          <nav className="flex items-center justify-center gap-4" aria-label="Primary navigation">
             {MAIN_LINKS.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) =>
                   [
-                    "rounded-full px-5 py-2.5 text-sm font-semibold transition-colors",
+                    "inline-flex min-h-11 items-center rounded-full px-4 py-2.5 text-sm font-semibold transition-colors",
                     isActive
-                      ? "bg-slate-900 text-white"
-                      : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
+                      ? "bg-slate-900/95 text-white shadow-sm"
+                      : "text-slate-700 hover:bg-slate-50 hover:text-slate-950",
                   ].join(" ")
                 }
                 end={item.to === "/"}
@@ -523,11 +459,37 @@ export default function Navbar() {
             />
           </nav>
 
-          <div className="flex justify-end">
+          <div className="hidden min-w-[220px] items-center justify-end gap-2.5 lg:flex">
+            {isAuthenticated && firstName ? (
+              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                <span className="text-slate-500">
+                  {t("navbar.hi")}, {firstName}
+                </span>
+              </div>
+            ) : null}
+
+            {isAuthenticated ? (
+              <>
+                <Link
+                  to="/dashboard"
+                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
+                >
+                  {t("navbar.dashboard")}
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
+                >
+                  {t("navbar.logout")}
+                </button>
+              </>
+            ) : null}
+
             <button
               type="button"
               onClick={handleApply}
-              className="rounded-2xl px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5"
+              className="inline-flex min-h-11 items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5"
               style={{
                 background: `linear-gradient(135deg, ${BRAND_NAVY}, #13427b 70%, ${BRAND_GOLD})`,
               }}
@@ -535,6 +497,16 @@ export default function Navbar() {
               {t("navbar.applyLoan")}
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setMobileOpen((prev) => !prev)}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 text-slate-800 lg:hidden"
+            aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
+            aria-expanded={mobileOpen}
+          >
+            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
       </div>
 
@@ -549,10 +521,6 @@ export default function Navbar() {
       {mobileOpen ? (
         <div className="border-t border-slate-200 bg-white/95 backdrop-blur lg:hidden">
           <div className="mx-auto max-h-[calc(100vh-7rem)] max-w-7xl space-y-4 overflow-y-auto px-4 py-5 sm:px-6">
-            <div className="flex justify-start">
-              <WhatsAppSupportBadge />
-            </div>
-
             <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-500">

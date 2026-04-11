@@ -217,6 +217,17 @@ const nextLoanAccountNumber = async (dateValue) => {
   return `ACC${String(counter.value).padStart(3, "0")}${year}`;
 };
 
+const nextDisbursementReference = async (dateValue) => {
+  const year = resolveApplicationCodeYear(dateValue);
+  const counter = await SystemCounter.findOneAndUpdate(
+    { key: `loan_disbursement_reference_${year}` },
+    { $inc: { value: 1 } },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
+
+  return `DIS${String(counter.value).padStart(4, "0")}${year}`;
+};
+
 const resolveMonthlyRate = (inquiry) => {
   const text = `${inquiry?.loanProductName || ""} ${inquiry?.loanProductSlug || ""}`.toLowerCase();
   return text.includes("business") ? 0.075 : 0.05;
@@ -931,7 +942,8 @@ export const loanInquiryController = {
           doc.disbursementMobileProvider = "";
           doc.disbursementMobileNumber = "";
         }
-        doc.transactionReference = String(parsed.data.transactionReference || doc.transactionReference || "").trim();
+        doc.transactionReference =
+          String(doc.transactionReference || "").trim() || (await nextDisbursementReference(doc.disbursedAt));
         doc.disbursementNote = String(parsed.data.disbursementNote || doc.disbursementNote || "").trim();
       }
       if (parsed.data.status === "CLOSED") {
@@ -955,7 +967,6 @@ export const loanInquiryController = {
     if (parsed.data.disbursementAccountNumber !== undefined) doc.disbursementAccountNumber = parsed.data.disbursementAccountNumber;
     if (parsed.data.disbursementMobileProvider !== undefined) doc.disbursementMobileProvider = parsed.data.disbursementMobileProvider;
     if (parsed.data.disbursementMobileNumber !== undefined) doc.disbursementMobileNumber = parsed.data.disbursementMobileNumber;
-    if (parsed.data.transactionReference !== undefined) doc.transactionReference = parsed.data.transactionReference;
     if (parsed.data.disbursementNote !== undefined) doc.disbursementNote = parsed.data.disbursementNote;
     if (parsed.data.fullName !== undefined) doc.fullName = parsed.data.fullName;
     if (parsed.data.phone !== undefined) doc.phone = normalizePhone(parsed.data.phone);

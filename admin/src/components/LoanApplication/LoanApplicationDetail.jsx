@@ -353,7 +353,6 @@ export default function LoanApplicationDetail() {
   const [disbursementAccountNumber, setDisbursementAccountNumber] = useState("");
   const [disbursementMobileProvider, setDisbursementMobileProvider] = useState("");
   const [disbursementMobileNumber, setDisbursementMobileNumber] = useState("");
-  const [transactionReference, setTransactionReference] = useState("");
   const [disbursementNote, setDisbursementNote] = useState("");
   const [editMode, setEditMode] = useState(false);
   const [detailsForm, setDetailsForm] = useState(null);
@@ -398,7 +397,6 @@ export default function LoanApplicationDetail() {
       setDisbursementAccountNumber(data?.disbursementAccountNumber || "");
       setDisbursementMobileProvider(data?.disbursementMobileProvider || "");
       setDisbursementMobileNumber(data?.disbursementMobileNumber || "");
-      setTransactionReference(data?.transactionReference || "");
       setDisbursementNote(data?.disbursementNote || "");
       setDetailsForm({
         fullName: data?.fullName || "",
@@ -659,8 +657,6 @@ export default function LoanApplicationDetail() {
           actionStatus === "DISBURSED" ? String(disbursementMobileProvider || "").trim() : item?.disbursementMobileProvider || "",
         disbursementMobileNumber:
           actionStatus === "DISBURSED" ? String(disbursementMobileNumber || "").trim() : item?.disbursementMobileNumber || "",
-        transactionReference:
-          actionStatus === "DISBURSED" ? String(transactionReference || "").trim() : item?.transactionReference || "",
         disbursementNote:
           actionStatus === "DISBURSED" ? String(disbursementNote || "").trim() : item?.disbursementNote || "",
       });
@@ -677,7 +673,6 @@ export default function LoanApplicationDetail() {
       setDisbursementAccountNumber(updated?.disbursementAccountNumber || "");
       setDisbursementMobileProvider(updated?.disbursementMobileProvider || "");
       setDisbursementMobileNumber(updated?.disbursementMobileNumber || "");
-      setTransactionReference(updated?.transactionReference || "");
       setDisbursementNote(updated?.disbursementNote || "");
       setNextStatus("");
       setWhatsappReady(true);
@@ -984,7 +979,6 @@ export default function LoanApplicationDetail() {
               <div class="meta">
                 <p><strong>Printed:</strong> ${escapeHtml(formatDate(new Date().toISOString()))}</p>
                 <p><strong>Application No:</strong> ${escapeHtml(item.applicationCode || "-")}</p>
-                <p><strong>Record ID:</strong> ${escapeHtml(item._id || "-")}</p>
               </div>
             </div>
 
@@ -2406,16 +2400,16 @@ export default function LoanApplicationDetail() {
                     </div>
                   </>
                 ) : null}
-                <div className="space-y-1 md:col-span-2">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600 md:col-span-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Transaction Reference
-                  </label>
-                  <input
-                    className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                    value={transactionReference}
-                    onChange={(e) => setTransactionReference(e.target.value)}
-                    placeholder="Optional reference"
-                  />
+                  </p>
+                  <p className="mt-2 font-medium text-slate-900">
+                    {item?.transactionReference || "System generated on disbursement"}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    This reference is created automatically when the loan is disbursed.
+                  </p>
                 </div>
                 <div className="space-y-1 md:col-span-2">
                   <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">

@@ -217,7 +217,7 @@ export default function AccountDetailPage() {
                 <p className="mt-1 text-sm text-slate-900">{humanizeValue(item.disbursementMethod || "-")}</p>
               </div>
               <div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Reference</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">System Reference</p>
                 <p className="mt-1 text-sm text-slate-900">{item.transactionReference || "-"}</p>
               </div>
             </div>
