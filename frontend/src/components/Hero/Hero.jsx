@@ -59,8 +59,8 @@ const trustPoints = [
 ];
 
 const stats = [
-  { value: "06+", label: "Years serving Malawi" },
-  { value: "01+", label: "Branches nationwide" },
+  { value: "6+", label: "Years serving Malawi" },
+  { value: "1+", label: "Branches nationwide" },
 ];
 
 const Hero = () => {

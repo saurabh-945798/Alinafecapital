@@ -1,11 +1,11 @@
 ﻿const mainBranch = {
-  company: "ALINAFE Online Limited",
+  company: "ALINAFE Capital Limited",
   addressLines: ["Plot No. Area 43/749", "P.O. Box 31245", "Lilongwe 3, Malawi"],
   phone: "+265 997 031 941",
   hours: "Mon-Fri: 08:00 - 17:00",
 };
 
-const upcomingBranches = ["Blantyre Branch", "Mzuzu Branch"];
+const upcomingBranches = ["Blantyre Branch", "Mzuzu Branch", "Zomba Branch"];
 
 const officeMapEmbedUrl =
   "https://www.google.com/maps/embed?pb=!1m17!1m12!1m3!1d940.5720083740964!2d33.81055289482015!3d-13.92699787058866!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m2!1m1!2zMTPCsDU1JzM3LjciUyAzM8KwNDgnNDAuMyJF!5e0!3m2!1sen!2sin!4v1775703827468!5m2!1sen!2sin";
@@ -34,40 +34,32 @@ const Branches = () => {
             </p>
           </div>
 
-          <div className="mt-10 grid gap-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr]">
-            <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-6 sm:p-7">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-                Main Office
-              </p>
-              <div className="mt-4 space-y-3">
-                <h3 className="text-2xl font-semibold text-slate-950">{mainBranch.company}</h3>
-                <p className="text-sm font-medium uppercase tracking-[0.22em] text-slate-500">
-                  {mainBranch.name}
+          <div className="mt-10 rounded-[1.9rem] border border-slate-200 bg-slate-50 p-6 sm:p-8">
+            <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr_0.8fr]">
+              <div className="rounded-[1.5rem] border border-slate-200 bg-white px-5 py-5 sm:px-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                  Main Office
                 </p>
-              </div>
-              <div className="mt-6 rounded-[1.35rem] border border-slate-200 bg-white px-5 py-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
-                  Office Address
-                </p>
+                <h3 className="mt-4 text-2xl font-semibold text-slate-950">{mainBranch.company}</h3>
                 <div className="mt-4 space-y-2 text-sm leading-7 text-slate-700 sm:text-base">
                   {mainBranch.addressLines.map((line) => (
                     <p key={line}>{line}</p>
                   ))}
                 </div>
               </div>
-            </div>
 
-            {quickFacts.map((card) => (
-              <div
-                key={card.label}
-                className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm"
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-                  {card.label}
-                </p>
-                <p className="mt-4 text-base font-medium leading-7 text-slate-900">{card.value}</p>
-              </div>
-            ))}
+              {quickFacts.map((card) => (
+                <div
+                  key={card.label}
+                  className="rounded-[1.5rem] border border-slate-200 bg-white px-5 py-5 sm:px-6"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                    {card.label}
+                  </p>
+                  <p className="mt-4 text-base font-medium leading-7 text-slate-900">{card.value}</p>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="mt-8 rounded-[1.9rem] border border-dashed border-slate-300 bg-slate-50/80 p-6 sm:p-8">
@@ -84,7 +76,7 @@ const Branches = () => {
               </p>
             </div>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
               {upcomingBranches.map((branch) => (
                 <div
                   key={branch}

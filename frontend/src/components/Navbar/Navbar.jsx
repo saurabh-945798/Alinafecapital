@@ -406,11 +406,11 @@ export default function Navbar() {
               <img
                 src={logoImage}
                 alt="Alinafe Capital"
-                className="h-[3.8rem] w-auto object-contain sm:h-[4.4rem] lg:h-[4.8rem]"
+                className="h-[6.5rem] w-auto object-contain sm:h-[6rem] lg:h-[6.6rem]"
               />
             </div>
-            <div className="-ml-2 min-w-0 sm:-ml-2.5 lg:-ml-3">
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-800 sm:text-[12px] lg:text-[15px] lg:tracking-[0.22em]">
+            <div className="-ml-10 min-w-0 sm:-ml-7 lg:-ml-8">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-800 sm:text-[11px] lg:text-[13px] lg:tracking-[0.2em]">
                 Alinafe Capital
               </p>
               <div className="mt-1.5 h-[2px] w-28 overflow-hidden rounded-full bg-slate-200 sm:w-32 lg:mt-2 lg:w-48">
@@ -422,7 +422,7 @@ export default function Navbar() {
                   }}
                 />
               </div>
-              <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-500 sm:text-[10px] lg:text-xs lg:tracking-[0.22em]">
+              <p className="mt-1 text-[8px] font-semibold uppercase tracking-[0.16em] text-slate-500 sm:text-[9px] lg:text-[10px] lg:tracking-[0.18em]">
                 Financial Services
               </p>
             </div>
