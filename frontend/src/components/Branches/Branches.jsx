@@ -12,6 +12,7 @@ const branchLocations = [
       "Area 3, Colby Road, (Behind DeeKay Suppliers)",
       "P.O. Box 31245",
       "Lilongwe, Malawi",
+      "+265 991 75 59 02",
     ],
   },
   { name: "Blantyre Branch", details: [] },
