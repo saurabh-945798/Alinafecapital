@@ -5,7 +5,18 @@
   hours: "Mon-Fri: 08:00 - 17:00",
 };
 
-const branchLocations = ["Lilongwe Branch", "Blantyre Branch", "Mzuzu Branch"];
+const branchLocations = [
+  {
+    name: "Lilongwe Branch",
+    details: [
+      "Area 3, Colby Road, (Behind DeeKay Suppliers)",
+      "P.O. Box 31245",
+      "Lilongwe, Malawi",
+    ],
+  },
+  { name: "Blantyre Branch", details: [] },
+  { name: "Mzuzu Branch", details: [] },
+];
 
 const officeMapEmbedUrl =
   "https://www.google.com/maps/embed?pb=!1m17!1m12!1m3!1d940.5720083740964!2d33.81055289482015!3d-13.92699787058866!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m2!1m1!2zMTPCsDU1JzM3LjciUyAzM8KwNDgnNDAuMyJF!5e0!3m2!1sen!2sin!4v1775703827468!5m2!1sen!2sin";
@@ -63,14 +74,27 @@ const Branches = () => {
           </div>
 
           <div className="mt-8 rounded-[1.9rem] border border-dashed border-slate-300 bg-slate-50/80 p-6 sm:p-8">
+            <div className="mb-5 text-center sm:text-left">
+              <p className="text-sm font-semibold uppercase tracking-[0.26em] text-slate-500">
+                Branches
+              </p>
+            </div>
             <div className="grid gap-4 md:grid-cols-3">
               {branchLocations.map((branch) => (
                 <div
-                  key={branch}
+                  key={branch.name}
                   className="rounded-[1.5rem] border border-slate-200 bg-white px-5 py-5 text-center sm:text-left"
                 >
-                  <p className="text-base font-semibold text-slate-900">{branch}</p>
-                  <p className="mt-2 text-sm text-slate-500">Coming soon.</p>
+                  <p className="text-base font-semibold text-slate-900">{branch.name}</p>
+                  {branch.details.length ? (
+                    <div className="mt-3 space-y-1 text-sm leading-6 text-slate-600">
+                      {branch.details.map((line) => (
+                        <p key={line}>{line}</p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm font-medium text-red-600">Coming soon.</p>
+                  )}
                 </div>
               ))}
             </div>

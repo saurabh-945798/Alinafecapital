@@ -4,6 +4,8 @@ import { Icons } from "./sidebar/icons";
 import { Badge, KycChip, ProgressRing, SkeletonNav, SkeletonWidgets, StatusBadge } from "./sidebar/ui";
 import { clampNumber, formatDateLoose, getInitials } from "./sidebar/utils";
 
+const isPdfAsset = (value = "") => /\.pdf($|\?)/i.test(String(value || "").trim());
+
 /**
  * DashboardSidebar
  * - Brand header (logo + name + role/status badge)
@@ -686,6 +688,8 @@ export default function DashboardSidebar({
     </Shell>
   );
 }
+
+
 
 
 
