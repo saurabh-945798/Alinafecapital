@@ -396,10 +396,10 @@ export default function Navbar() {
       ].join(" ")}
     >
       <div className="bg-white">
-        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-8 px-4 py-3 sm:px-6 lg:grid lg:grid-cols-[minmax(220px,300px)_minmax(0,1fr)_auto] lg:gap-4 lg:px-5 lg:py-3.5 xl:grid-cols-[minmax(260px,340px)_minmax(0,1fr)_auto] xl:gap-6 xl:px-6">
+        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-6 px-4 py-3 sm:px-6 lg:px-5 lg:py-3.5 xl:px-6">
           <Link
             to="/"
-            className="flex min-w-0 items-center gap-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+            className="flex min-w-0 items-center gap-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 lg:w-[270px] lg:flex-none xl:w-[320px]"
             aria-label="Alinafe Capital home"
           >
             <div className="shrink-0">
@@ -409,7 +409,7 @@ export default function Navbar() {
                 className="h-[6.5rem] w-auto object-contain sm:h-[6rem] lg:h-[5.7rem] xl:h-[6.4rem]"
               />
             </div>
-            <div className="-ml-10 min-w-0 sm:-ml-7 lg:-ml-8">
+            <div className="-ml-10 min-w-0 sm:-ml-7 lg:-ml-6 xl:-ml-7">
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-800 sm:text-[11px] lg:text-[11px] lg:tracking-[0.16em] xl:text-[13px] xl:tracking-[0.2em]">
                 Alinafe Capital
               </p>
@@ -429,7 +429,7 @@ export default function Navbar() {
           </Link>
 
           <nav
-            className="hidden min-w-0 w-full max-w-[760px] items-center justify-center justify-self-center rounded-full border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm lg:flex lg:gap-1.5 xl:max-w-[840px] xl:gap-3 xl:px-3.5"
+            className="hidden min-w-0 flex-1 items-center justify-center rounded-full border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm lg:flex lg:gap-1.5 xl:mx-4 xl:gap-3 xl:px-3.5"
             aria-label="Primary navigation"
           >
             {MAIN_LINKS.map((item) => (
@@ -459,7 +459,7 @@ export default function Navbar() {
             />
           </nav>
 
-          <div className="hidden min-w-[200px] items-center justify-end gap-2 lg:flex xl:min-w-[220px] xl:gap-2.5">
+          <div className="hidden items-center justify-end gap-2 lg:w-[210px] lg:flex lg:flex-none xl:w-[230px] xl:gap-2.5">
             {isAuthenticated && firstName ? (
               <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                 <span className="text-slate-500">

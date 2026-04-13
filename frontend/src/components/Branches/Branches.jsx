@@ -5,7 +5,7 @@
   hours: "Mon-Fri: 08:00 - 17:00",
 };
 
-const upcomingBranches = ["Blantyre Branch", "Mzuzu Branch", "Zomba Branch"];
+const branchLocations = ["Lilongwe Branch", "Blantyre Branch", "Mzuzu Branch"];
 
 const officeMapEmbedUrl =
   "https://www.google.com/maps/embed?pb=!1m17!1m12!1m3!1d940.5720083740964!2d33.81055289482015!3d-13.92699787058866!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m2!1m1!2zMTPCsDU1JzM3LjciUyAzM8KwNDgnNDAuMyJF!5e0!3m2!1sen!2sin!4v1775703827468!5m2!1sen!2sin";
@@ -63,21 +63,8 @@ const Branches = () => {
           </div>
 
           <div className="mt-8 rounded-[1.9rem] border border-dashed border-slate-300 bg-slate-50/80 p-6 sm:p-8">
-            <div className="flex flex-col gap-3 text-center sm:text-left">
-              <p className="text-sm font-semibold uppercase tracking-[0.26em] text-slate-500">
-                Branches
-              </p>
-              <h3 className="text-2xl font-semibold tracking-tight text-slate-950">
-                Additional branches are planned
-              </h3>
-              <p className="max-w-3xl text-sm leading-7 text-slate-600 sm:text-base">
-                We are currently serving from our main office while other branch locations are being
-                prepared. These will be announced once operations are ready.
-              </p>
-            </div>
-
-            <div className="mt-6 grid gap-4 md:grid-cols-3">
-              {upcomingBranches.map((branch) => (
+            <div className="grid gap-4 md:grid-cols-3">
+              {branchLocations.map((branch) => (
                 <div
                   key={branch}
                   className="rounded-[1.5rem] border border-slate-200 bg-white px-5 py-5 text-center sm:text-left"

@@ -58,9 +58,7 @@ const Footer = () => {
               </div>
 
               <p className="mt-5 max-w-md text-xs leading-6 text-white/65">
-                ALINAFE CAPITAL is a limited company registered by the Registrar of Companies in Malawi.
-                Company No.: COY-7WULNGE.
-              </p>
+                ALINAFE CAPITAL is a limited company registered by the Registrar of Companies in Malawi.              </p>
             </div>
 
             <div>

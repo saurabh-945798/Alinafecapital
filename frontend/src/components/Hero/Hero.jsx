@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 const BRAND_NAVY = "#002D5B";
 const BRAND_GOLD = "#B38E46";
-const AUTOPLAY_INTERVAL = 1800;
+const AUTOPLAY_INTERVAL = 3200;
 
 const slides = [
   {
@@ -56,11 +56,6 @@ const trustPoints = [
   "Licensed institution",
   "Transparent fees",
   "Faster review",
-];
-
-const stats = [
-  { value: "6+", label: "Years serving Malawi" },
-  { value: "1+", label: "Branches nationwide" },
 ];
 
 const Hero = () => {
@@ -121,6 +116,7 @@ const Hero = () => {
   };
 
   const slide = slides[current];
+  const staticSlide = slides[0];
 
   return (
     <section
@@ -139,44 +135,36 @@ const Hero = () => {
         <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,1.02fr)_minmax(540px,0.98fr)] lg:gap-10 xl:gap-14">
           <div className="order-2 flex flex-col justify-center lg:order-1 lg:pr-4">
             <span className="inline-flex w-fit rounded-full border border-[#d7c29a] bg-[#fff8ec] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-[#8e6f2e]">
-              {slide.badge}
+              {staticSlide.badge}
             </span>
 
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={slide.id}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.35, ease: "easeOut" }}
-              >
-                <h1 className="mt-5 max-w-2xl text-4xl font-bold leading-[1.08] text-slate-950 sm:text-5xl xl:text-[3.7rem]">
-                  {slide.headline}
-                  <span className="mt-2 block" style={{ color: BRAND_GOLD }}>
-                    {slide.highlight}
-                  </span>
-                </h1>
+            <div>
+              <h1 className="mt-5 max-w-2xl text-4xl font-bold leading-[1.08] text-slate-950 sm:text-5xl xl:text-[3.7rem]">
+                {staticSlide.headline}
+                <span className="mt-2 block" style={{ color: BRAND_GOLD }}>
+                  {staticSlide.highlight}
+                </span>
+              </h1>
 
-                <p className="mt-6 max-w-xl text-base leading-8 text-slate-600 sm:text-lg">
-                  {slide.description}
-                </p>
-              </motion.div>
-            </AnimatePresence>
+              <p className="mt-6 max-w-xl text-base leading-8 text-slate-600 sm:text-lg">
+                {staticSlide.description}
+              </p>
+            </div>
 
             <div className="mt-8 flex flex-col gap-4 sm:flex-row">
               <a
-                href={slide.primaryCTA.href}
+                href={staticSlide.primaryCTA.href}
                 className="inline-flex min-h-12 items-center justify-center rounded-xl px-6 py-3 text-center text-sm font-semibold text-white shadow-[0_18px_35px_rgba(0,45,91,0.22)] transition hover:-translate-y-0.5"
                 style={{ backgroundColor: BRAND_NAVY }}
               >
-                {slide.primaryCTA.label}
+                {staticSlide.primaryCTA.label}
               </a>
               <a
-                href={slide.secondaryCTA.href}
+                href={staticSlide.secondaryCTA.href}
                 className="inline-flex min-h-12 items-center justify-center rounded-xl border px-6 py-3 text-center text-sm font-semibold transition hover:bg-slate-50"
                 style={{ borderColor: "#d7c29a", color: BRAND_GOLD }}
               >
-                {slide.secondaryCTA.label}
+                {staticSlide.secondaryCTA.label}
               </a>
             </div>
 
@@ -185,15 +173,6 @@ const Hero = () => {
                 <span key={point} className="rounded-full border border-slate-200 bg-white px-3.5 py-2 shadow-sm">
                   {point}
                 </span>
-              ))}
-            </div>
-
-            <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {stats.map((stat) => (
-                <div key={stat.label} className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                  <p className="text-xl font-bold text-slate-950">{stat.value}</p>
-                  <p className="mt-1 text-sm text-slate-600">{stat.label}</p>
-                </div>
               ))}
             </div>
           </div>
@@ -206,10 +185,10 @@ const Hero = () => {
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={slide.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.4, ease: "easeOut" }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.7, ease: "easeInOut" }}
                     className="flex min-h-[260px] items-center justify-center p-4 sm:min-h-[340px] sm:p-6 lg:min-h-[430px] xl:min-h-[500px]"
                   >
                     <img

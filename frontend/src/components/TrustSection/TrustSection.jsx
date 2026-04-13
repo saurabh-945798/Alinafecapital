@@ -1,13 +1,13 @@
 ﻿import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  ShieldCheck,
   CheckCircle,
   Phone,
   MessageCircle,
   MapPin,
   Lock,
   AlertTriangle,
+  ShieldCheck,
 } from "lucide-react";
 
 const BRAND_NAVY = "#002D5B";
@@ -33,40 +33,6 @@ const testimonials = [
     purpose: "Personal Loan",
     text: "Quick approval and friendly staff. I received funds within 24 hours.",
   },
-];
-
-const Counter = ({ end, suffix }) => {
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    let start = 0;
-    const duration = 1200;
-    const increment = end / (duration / 20);
-
-    const counter = setInterval(() => {
-      start += increment;
-      if (start >= end) {
-        setCount(end);
-        clearInterval(counter);
-      } else {
-        setCount(Math.floor(start));
-      }
-    }, 20);
-
-    return () => clearInterval(counter);
-  }, [end]);
-
-  return (
-    <span>
-      {count}
-      {suffix}
-    </span>
-  );
-};
-
-const stats = [
-  { value: 1, suffix: "+", label: "Branches Nationwide" },
-  { value: 6, suffix: "+", label: "Years in Operation" },
 ];
 
 const TrustSection = () => {
@@ -101,22 +67,6 @@ const TrustSection = () => {
               Transparent lending. Responsible support. Real outcomes built around customer confidence.
             </p>
 
-            <div className="mt-8 grid gap-4 sm:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm sm:col-span-1">
-                <ShieldCheck className="h-6 w-6" style={{ color: BRAND_GOLD }} />
-                <p className="mt-4 text-base font-semibold text-slate-900">Licensed Institution</p>
-                <p className="mt-2 text-sm text-slate-500">License No: MFI</p>
-              </div>
-
-              {stats.map((stat) => (
-                <div key={stat.label} className="rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                  <p className="text-3xl font-bold text-slate-950" style={{ color: BRAND_NAVY }}>
-                    <Counter end={stat.value} suffix={stat.suffix} />
-                  </p>
-                  <p className="mt-2 text-sm text-slate-600">{stat.label}</p>
-                </div>
-              ))}
-            </div>
           </div>
 
           <div>
