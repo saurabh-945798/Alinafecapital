@@ -91,7 +91,7 @@ const formatDateOnly = (value) => {
 const formatMoney = (value) => {
   if (value === undefined || value === null || value === "") return "-";
   const amount = Number(value);
-  return Number.isFinite(amount) ? `MWK ${amount.toLocaleString()}` : "-";
+  return Number.isFinite(amount) ? `MWK ${amount.toLocaleString("en-US")}` : "-";
 };
 
 const resolveRepaymentConfig = (item) => {
@@ -1038,7 +1038,7 @@ export default function LoanApplicationDetail() {
                 </div>
                 <div class="field">
                   <div class="label">Monthly Income</div>
-                  <div class="field-value">${escapeHtml(item.monthlyIncome ? `MWK ${Number(item.monthlyIncome).toLocaleString()}` : "-")}</div>
+                  <div class="field-value">${escapeHtml(item.monthlyIncome ? `MWK ${Number(item.monthlyIncome).toLocaleString("en-US")}` : "-")}</div>
                 </div>
                 <div class="field">
                   <div class="label">Bank Details</div>
@@ -1603,7 +1603,7 @@ export default function LoanApplicationDetail() {
           <p className="text-xs text-slate-500">Loan Type</p>
           <p className="mt-1 font-semibold text-slate-900">{item.loanProductName || item.loanProductSlug}</p>
           <p className="mt-2 text-sm text-slate-700">
-            Requested Amount: {item.requestedAmount ? `MWK ${Number(item.requestedAmount).toLocaleString()}` : "-"}
+            Requested Amount: {item.requestedAmount ? `MWK ${Number(item.requestedAmount).toLocaleString("en-US")}` : "-"}
           </p>
           <p className="mt-1 text-sm text-slate-700">
             Tenure: {item.preferredTenureMonths ? `${item.preferredTenureMonths} months` : "-"}
@@ -1875,7 +1875,7 @@ export default function LoanApplicationDetail() {
                     </p>
                   ) : null}
                   <p className="mt-1 text-sm text-slate-600">
-                    Income: {item.monthlyIncome ? `MWK ${Number(item.monthlyIncome).toLocaleString()}` : "-"}
+                    Income: {item.monthlyIncome ? `MWK ${Number(item.monthlyIncome).toLocaleString("en-US")}` : "-"}
                   </p>
                 </>
               )}

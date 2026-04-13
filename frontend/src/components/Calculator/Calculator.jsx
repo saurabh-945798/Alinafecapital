@@ -21,7 +21,7 @@ const BRAND_GOLD = "#B38E46";
 
 const formatMWK = (num) =>
   "MWK " +
-  Number(num || 0).toLocaleString("en-MW", {
+  Number(num || 0).toLocaleString("en-US", {
     maximumFractionDigits: 0,
   });
 
@@ -869,7 +869,7 @@ const RepaymentCalculator = () => {
                 <a href="/interest-rates" className="underline">Interest Rates</a>
                 <a href="/terms" className="underline">Terms</a>
                 <a href="/privacy" className="underline">Privacy</a>
-                <a href="/complaints" className="underline">Complaints</a>
+                <a href="/complaints" className="underline">Complaints & Support</a>
               </div>
             </div>
           </div>

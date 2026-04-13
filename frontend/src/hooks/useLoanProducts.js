@@ -21,7 +21,7 @@ const keywordCategory = (raw = "") => {
 };
 
 const formatMoney = (currency = "MWK", value = 0) =>
-  `${currency} ${Number(value || 0).toLocaleString()}`;
+  `${currency} ${Number(value || 0).toLocaleString("en-US")}`;
 
 const formatAmountRange = (product) => {
   if (

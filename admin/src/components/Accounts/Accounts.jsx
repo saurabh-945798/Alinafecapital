@@ -20,7 +20,7 @@ const formatDate = (value) => {
 
 const formatMoney = (value) => {
   const amount = Number(value || 0);
-  return Number.isFinite(amount) ? `MWK ${amount.toLocaleString()}` : "-";
+  return Number.isFinite(amount) ? `MWK ${amount.toLocaleString("en-US")}` : "-";
 };
 
 export default function AccountsPage() {

@@ -63,11 +63,11 @@ const EligibilityCheckPage = () => {
           <div className="mt-8 grid sm:grid-cols-3 gap-4 text-sm">
             <div className="rounded-xl border bg-gray-50 p-4" style={{ borderColor: "rgba(0,45,91,0.10)" }}>
               <p className="text-gray-500">Estimated EMI</p>
-              <p className="mt-1 font-semibold">MWK {Math.round(result.emi).toLocaleString()}</p>
+              <p className="mt-1 font-semibold">MWK {Math.round(result.emi).toLocaleString("en-US")}</p>
             </div>
             <div className="rounded-xl border bg-gray-50 p-4" style={{ borderColor: "rgba(0,45,91,0.10)" }}>
               <p className="text-gray-500">Disposable Income</p>
-              <p className="mt-1 font-semibold">MWK {Math.round(result.disposable).toLocaleString()}</p>
+              <p className="mt-1 font-semibold">MWK {Math.round(result.disposable).toLocaleString("en-US")}</p>
             </div>
             <div className="rounded-xl border bg-gray-50 p-4" style={{ borderColor: "rgba(0,45,91,0.10)" }}>
               <p className="text-gray-500">Eligibility Result</p>

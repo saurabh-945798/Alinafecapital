@@ -11,7 +11,7 @@ const BRAND_NAVY = "#002D5B";
 
 const quickLinks = [
   { label: "Home", href: "/" },
-  { label: "About", href: "/about" },
+  { label: "About Us", href: "/about" },
   { label: "Loan Products", href: "/loan-products" },
   { label: "How It Works", href: "/how-it-works" },
   { label: "Calculator", href: "/calculator" },
@@ -119,7 +119,7 @@ const Footer = () => {
                   Terms
                 </Link>
                 <Link to="/complaints" className="rounded transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2">
-                  Complaints
+                  Complaints & Support
                 </Link>
                 <Link to="/interest-rates" className="rounded transition hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2">
                   Interest Rates

@@ -303,7 +303,7 @@ const FAQ = () => {
               <a href="/terms">Terms & Conditions</a>
               <a href="/privacy">Privacy Policy</a>
               <a href="/interest-rates">Interest Rates</a>
-              <a href="/complaints">Complaints Procedure</a>
+              <a href="/complaints">Complaints & Support</a>
             </div>
 
           </div>

@@ -11,7 +11,7 @@ export const translations = {
       eligibility: "Eligibility",
       calculator: "Repayment Calculator",
       faqs: "FAQs",
-      complaints: "Complaints",
+      complaints: "Complaints & Support",
       terms: "Terms & Conditions",
       privacy: "Privacy Policy",
       tools: "Tools",

@@ -79,7 +79,7 @@ export default function DashboardSchedulePage() {
         <SummaryCard label="Next Payment Date" value={summary.nextDate} />
         <SummaryCard
           label="Next Amount"
-          value={`MWK ${summary.nextAmount.toLocaleString()}`}
+          value={`MWK ${summary.nextAmount.toLocaleString("en-US")}`}
         />
         <SummaryCard label="Remaining Installments" value={summary.remaining} />
         <SummaryCard label="Loan End Date" value={summary.endDate} />
@@ -141,7 +141,7 @@ export default function DashboardSchedulePage() {
               </p>
 
               <p className="text-sm">
-                Amount: MWK {item.amount.toLocaleString()}
+                Amount: MWK {item.amount.toLocaleString("en-US")}
               </p>
 
               <button className="w-full rounded-xl border px-4 py-2 text-sm hover:bg-slate-100 transition">

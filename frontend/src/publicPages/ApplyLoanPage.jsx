@@ -473,8 +473,8 @@ const ApplyLoanPage = () => {
                     />
                     {selectedLoanProduct ? (
                       <p className="mt-1 pl-0.5 text-xs leading-5 text-slate-500">
-                        Allowed: MWK {Number(selectedLoanProduct.minAmount || 0).toLocaleString()} - MWK{" "}
-                        {Number(selectedLoanProduct.maxAmount || 0).toLocaleString()}
+                        Allowed: MWK {Number(selectedLoanProduct.minAmount || 0).toLocaleString("en-US")} - MWK{" "}
+                        {Number(selectedLoanProduct.maxAmount || 0).toLocaleString("en-US")}
                       </p>
                     ) : null}
                   </label>
@@ -598,13 +598,13 @@ const ApplyLoanPage = () => {
                 <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Phone:</span> +265{formData.phoneNumber || "-"}</p>
                 <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Email:</span> {formData.email || "-"}</p>
                 <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Employment:</span> {formData.employmentType || "-"}</p>
-                <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Monthly Income:</span> MWK {Number(formData.monthlyIncome || 0).toLocaleString()}</p>
+                <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Monthly Income:</span> MWK {Number(formData.monthlyIncome || 0).toLocaleString("en-US")}</p>
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Loan Request</p>
                 <p className="mt-2 text-sm text-slate-800"><span className="font-semibold">Product:</span> {selectedLoanProduct?.loanName || "-"}</p>
-                <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Amount:</span> MWK {Number(formData.loanAmount || 0).toLocaleString()}</p>
+                <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Amount:</span> MWK {Number(formData.loanAmount || 0).toLocaleString("en-US")}</p>
                 <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Tenure:</span> {formData.tenureMonths || "-"} months</p>
                 <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Category:</span> {selected.category || "-"}</p>
               </div>

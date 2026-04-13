@@ -264,7 +264,10 @@ export default function ProfileForm({
     <form id="profileForm" onSubmit={save} className="space-y-5 sm:space-y-6">
       <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
         <h3 className="text-base font-semibold text-slate-800">Profile Photo</h3>
-        <p className="mt-1 text-sm text-slate-500">JPG, PNG or WEBP. Max size 2MB.</p>
+        <p className="mt-1 text-sm text-slate-500">
+          JPG, PNG or WEBP only. Max size 2MB. PDF files should be uploaded in the KYC
+          Documents section below.
+        </p>
         <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center">
           <div className="h-20 w-20 shrink-0 overflow-hidden rounded-full border border-slate-300 bg-slate-100">
             {profile?.avatarUrl ? (
@@ -301,7 +304,7 @@ export default function ProfileForm({
                 ? "Uploading image..."
                 : profile?.avatarUrl
                 ? "Choose a new image to change photo instantly."
-                : "Choose an image to upload instantly."}
+                : "Choose an image to upload instantly. PDF files belong in the KYC document upload section."}
             </div>
             {!profile?.avatarUrl ? (
               <div className="text-xs font-medium text-amber-700">

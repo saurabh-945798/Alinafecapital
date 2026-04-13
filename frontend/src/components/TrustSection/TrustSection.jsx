@@ -184,7 +184,7 @@ const TrustSection = () => {
                 <a href="/interest-rates">Rates</a>
                 <a href="/terms">Terms</a>
                 <a href="/privacy">Privacy</a>
-                <a href="/complaints">Complaints</a>
+                <a href="/complaints">Complaints & Support</a>
               </div>
             </div>
 

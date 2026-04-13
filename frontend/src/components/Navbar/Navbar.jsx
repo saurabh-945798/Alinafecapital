@@ -154,7 +154,7 @@ function DropdownMenu({ label, sections, pathname, t, isDesktop }) {
           }
         }}
         className={[
-          "inline-flex min-h-11 items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold transition-all duration-200 ease-out",
+          "inline-flex min-h-11 items-center gap-2 rounded-full px-3 py-2.5 text-[13px] font-semibold transition-all duration-200 ease-out xl:px-4 xl:text-sm",
           open || hasActiveChild
             ? "border border-slate-200 bg-slate-50 text-slate-950 shadow-sm"
             : "text-slate-700 hover:bg-slate-50 hover:text-slate-950",
@@ -396,7 +396,7 @@ export default function Navbar() {
       ].join(" ")}
     >
       <div className="bg-white">
-        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-8 px-4 py-3 sm:px-6 lg:grid lg:grid-cols-[minmax(280px,340px)_1fr_auto] lg:gap-7 lg:px-5 xl:px-6 lg:py-3.5">
+        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-8 px-4 py-3 sm:px-6 lg:grid lg:grid-cols-[minmax(220px,300px)_minmax(0,1fr)_auto] lg:gap-4 lg:px-5 lg:py-3.5 xl:grid-cols-[minmax(260px,340px)_minmax(0,1fr)_auto] xl:gap-6 xl:px-6">
           <Link
             to="/"
             className="flex min-w-0 items-center gap-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
@@ -406,14 +406,14 @@ export default function Navbar() {
               <img
                 src={logoImage}
                 alt="Alinafe Capital"
-                className="h-[6.5rem] w-auto object-contain sm:h-[6rem] lg:h-[6.6rem]"
+                className="h-[6.5rem] w-auto object-contain sm:h-[6rem] lg:h-[5.7rem] xl:h-[6.4rem]"
               />
             </div>
             <div className="-ml-10 min-w-0 sm:-ml-7 lg:-ml-8">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-800 sm:text-[11px] lg:text-[13px] lg:tracking-[0.2em]">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-800 sm:text-[11px] lg:text-[11px] lg:tracking-[0.16em] xl:text-[13px] xl:tracking-[0.2em]">
                 Alinafe Capital
               </p>
-              <div className="mt-1.5 h-[2px] w-28 overflow-hidden rounded-full bg-slate-200 sm:w-32 lg:mt-2 lg:w-48">
+              <div className="mt-1.5 h-[2px] w-28 overflow-hidden rounded-full bg-slate-200 sm:w-32 lg:mt-1.5 lg:w-36 xl:mt-2 xl:w-48">
                 <div
                   className="h-full w-full animate-[brandDividerShift_3.4s_ease-in-out_infinite]"
                   style={{
@@ -422,14 +422,14 @@ export default function Navbar() {
                   }}
                 />
               </div>
-              <p className="mt-1 text-[8px] font-semibold uppercase tracking-[0.16em] text-slate-500 sm:text-[9px] lg:text-[10px] lg:tracking-[0.18em]">
+              <p className="mt-1 text-[8px] font-semibold uppercase tracking-[0.16em] text-slate-500 sm:text-[9px] lg:text-[8px] lg:tracking-[0.14em] xl:text-[10px] xl:tracking-[0.18em]">
                 Financial Services
               </p>
             </div>
           </Link>
 
           <nav
-            className="hidden w-full max-w-[790px] items-center justify-center justify-self-center rounded-full border border-slate-200 bg-white px-3.5 py-1.5 shadow-sm lg:flex lg:gap-2 xl:gap-3.5"
+            className="hidden min-w-0 w-full max-w-[760px] items-center justify-center justify-self-center rounded-full border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm lg:flex lg:gap-1.5 xl:max-w-[840px] xl:gap-3 xl:px-3.5"
             aria-label="Primary navigation"
           >
             {MAIN_LINKS.map((item) => (
@@ -438,7 +438,7 @@ export default function Navbar() {
                 to={item.to}
                 className={({ isActive }) =>
                   [
-                    "inline-flex min-h-11 items-center rounded-full px-4 py-2.5 text-sm font-semibold transition-colors",
+                    "inline-flex min-h-11 items-center rounded-full px-3 py-2.5 text-[13px] font-semibold transition-colors xl:px-4 xl:text-sm",
                     isActive
                       ? "bg-slate-900/95 text-white shadow-sm"
                       : "text-slate-700 hover:bg-slate-50 hover:text-slate-950",
@@ -459,7 +459,7 @@ export default function Navbar() {
             />
           </nav>
 
-          <div className="hidden min-w-[220px] items-center justify-end gap-2.5 lg:flex">
+          <div className="hidden min-w-[200px] items-center justify-end gap-2 lg:flex xl:min-w-[220px] xl:gap-2.5">
             {isAuthenticated && firstName ? (
               <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
                 <span className="text-slate-500">

@@ -374,7 +374,7 @@ export default function CustomersPage() {
                         >
                           {a.status}
                         </Badge>
-                        <span>{`MWK ${Number(a.requestedAmount || 0).toLocaleString()}`}</span>
+                        <span>{`MWK ${Number(a.requestedAmount || 0).toLocaleString("en-US")}`}</span>
                         <span className="text-xs text-slate-500">{formatDate(a.createdAt)}</span>
                       </div>
                     ))}

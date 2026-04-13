@@ -25,7 +25,7 @@ const STATUS_LABEL = {
   CANCELLED: "Cancelled",
 };
 
-const money = (value) => `MWK ${Number(value || 0).toLocaleString()}`;
+const money = (value) => `MWK ${Number(value || 0).toLocaleString("en-US")}`;
 
 const formatDate = (value) => {
   if (!value) return "-";

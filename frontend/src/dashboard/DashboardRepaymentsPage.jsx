@@ -152,7 +152,7 @@ export default function DashboardRepaymentsPage() {
               <tr key={item.no} className="border-t hover:bg-slate-50">
                 <td className="p-4">#{item.no}</td>
                 <td className="p-4">{item.dueDate}</td>
-                <td className="p-4">MWK {item.amount.toLocaleString()}</td>
+                <td className="p-4">MWK {item.amount.toLocaleString("en-US")}</td>
                 <td className="p-4">
                   <span className={getStatusChip(item.status)}>
                     {item.status}
@@ -192,7 +192,7 @@ export default function DashboardRepaymentsPage() {
               Due: {item.dueDate}
             </p>
             <p className="text-sm">
-              MWK {item.amount.toLocaleString()}
+              MWK {item.amount.toLocaleString("en-US")}
             </p>
             <button className="w-full rounded-xl border px-4 py-2 text-sm hover:bg-slate-100 transition">
               {item.status === "Paid" ? "View Receipt" : "Pay Now"}
@@ -231,7 +231,7 @@ export default function DashboardRepaymentsPage() {
               <p className="text-slate-500">{p.method}</p>
             </div>
             <div className="text-right">
-              <p>MWK {p.amount.toLocaleString()}</p>
+              <p>MWK {p.amount.toLocaleString("en-US")}</p>
               <p className="text-slate-400">{p.reference}</p>
             </div>
           </div>
@@ -251,7 +251,7 @@ function SummaryCard({ label, value, highlight }) {
       <p className="text-sm text-slate-500">{label}</p>
       <p className="text-lg font-semibold text-slate-800">
         {typeof value === "number"
-          ? `MWK ${value.toLocaleString()}`
+          ? `MWK ${value.toLocaleString("en-US")}`
           : value}
       </p>
     </div>

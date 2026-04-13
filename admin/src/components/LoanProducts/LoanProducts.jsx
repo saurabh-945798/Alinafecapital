@@ -511,8 +511,8 @@ export default function LoanProductsPage() {
                     <td className="px-4 py-3 text-xs">{item.slug}</td>
                     <td className="px-4 py-3">
                       <p>
-                        {item.currency} {Number(item.minAmount || 0).toLocaleString()} - {" "}
-                        {Number(item.maxAmount || 0).toLocaleString()}
+                        {item.currency} {Number(item.minAmount || 0).toLocaleString("en-US")} - {" "}
+                        {Number(item.maxAmount || 0).toLocaleString("en-US")}
                       </p>
                       <p className="text-xs text-slate-500">
                         {item.minTenureMonths} - {item.maxTenureMonths} months

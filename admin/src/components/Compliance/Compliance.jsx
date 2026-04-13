@@ -442,7 +442,7 @@ export default function CompliancePage() {
                 <p className="text-xs text-slate-500">Employment</p>
                 <p className="font-medium text-slate-800">{selected.employmentType || "-"}</p>
                 <p className="text-slate-700">
-                  Income: {selected.monthlyIncome ? `MWK ${Number(selected.monthlyIncome).toLocaleString()}` : "-"}
+                  Income: {selected.monthlyIncome ? `MWK ${Number(selected.monthlyIncome).toLocaleString("en-US")}` : "-"}
                 </p>
               </div>
               <div>
