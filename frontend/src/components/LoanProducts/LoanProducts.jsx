@@ -90,7 +90,7 @@ const LoanProducts = () => {
           </p>
 
           <h2 className="mt-6 text-4xl md:text-5xl font-bold tracking-tight" style={{ color: BRAND_NAVY }}>
-            Popular Loan Products in Malawi
+          Loan Products in Malawi
           </h2>
 
           <p className="mt-4 text-base md:text-lg text-gray-600">

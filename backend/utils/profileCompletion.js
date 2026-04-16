@@ -43,6 +43,7 @@
   if (
     docTypes.has("national_id") &&
     docTypes.has("bank_statement_3_months") &&
+    docTypes.has("security_offer") &&
     (usesTwoDocumentFlow || docTypes.has("payslip_or_business_proof"))
   ) {
     score += 25;

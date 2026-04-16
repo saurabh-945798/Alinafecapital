@@ -25,6 +25,8 @@ export default function AppRoutes() {
           <Route index element={<Dashboard />} />
           <Route path="applications" element={<LoanApplicationsPage />} />
           <Route path="applications/:id" element={<LoanApplicationDetailPage />} />
+          <Route path="payments" element={<AccountsPage />} />
+          <Route path="payments/:id" element={<AccountDetailPage />} />
           <Route path="accounts" element={<AccountsPage />} />
           <Route path="accounts/:id" element={<AccountDetailPage />} />
           <Route path="inquiries" element={<InquiriesPage />} />

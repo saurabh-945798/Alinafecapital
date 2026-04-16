@@ -37,6 +37,11 @@ export default function DocumentUpload({
           key: "bank_statement_3_months",
           title: "Bank Statement (Last 3 months)",
         },
+        {
+          id: "kyc-security-offer",
+          key: "security_offer",
+          title: "Security Offer",
+        },
         ...(!useTwoDocumentFlow
           ? [
               {
@@ -53,6 +58,7 @@ export default function DocumentUpload({
     national_id: documents.find((doc) => doc?.type === "national_id") || null,
     bank_statement_3_months:
       documents.find((doc) => doc?.type === "bank_statement_3_months") || null,
+    security_offer: documents.find((doc) => doc?.type === "security_offer") || null,
     payslip_or_business_proof:
       documents.find((doc) => doc?.type === "payslip_or_business_proof") || null,
   };

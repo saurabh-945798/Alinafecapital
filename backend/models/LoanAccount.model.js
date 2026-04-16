@@ -1,5 +1,21 @@
 import mongoose from "mongoose";
 
+const RepaymentEntrySchema = new mongoose.Schema(
+  {
+    paymentDate: { type: Date, required: true },
+    amount: { type: Number, required: true, min: 0 },
+    method: {
+      type: String,
+      enum: ["cash", "bank_transfer", "mobile_money"],
+      default: "cash",
+    },
+    reference: { type: String, trim: true, default: "" },
+    note: { type: String, trim: true, default: "" },
+    recordedAt: { type: Date, default: Date.now },
+  },
+  { _id: true }
+);
+
 const LoanAccountSchema = new mongoose.Schema(
   {
     accountNumber: {
@@ -42,7 +58,12 @@ const LoanAccountSchema = new mongoose.Schema(
     approvedAt: { type: Date, default: null },
     disbursedAt: { type: Date, default: null },
     nextDueDate: { type: Date, default: null },
+    totalPaidAmount: { type: Number, min: 0, default: 0 },
+    paidInstallmentsCount: { type: Number, min: 0, default: 0 },
+    pendingInstallmentsCount: { type: Number, min: 0, default: 0 },
+    overdueInstallmentsCount: { type: Number, min: 0, default: 0 },
     outstandingBalance: { type: Number, min: 0, default: 0 },
+    repaymentEntries: { type: [RepaymentEntrySchema], default: [] },
     status: {
       type: String,
       enum: ["ACTIVE", "OVERDUE", "CLOSED", "SETTLED"],

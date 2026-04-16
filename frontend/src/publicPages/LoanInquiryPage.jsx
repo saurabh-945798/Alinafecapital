@@ -13,13 +13,18 @@ import { api } from "../services/api";
 const BRAND_NAVY = "#002D5B";
 
 const PUBLIC_LOAN_OPTIONS = [
-  { slug: "home-loan", name: "Home Loan" },
-  { slug: "education-loan", name: "Education Loan" },
-  { slug: "vehicle-loan", name: "Vehicle Loan" },
+  { slug: "civil-servant-loan", name: "Civil Servant Loan" },
+  { slug: "emergency-loan", name: "Emergency Loan" },
+  { slug: "statutory-company-loans", name: "Statutory Company Loans" },
+  { slug: "private-company-loans", name: "Private company loans" },
   { slug: "business-loan", name: "Business Loan" },
-  { slug: "agriculture-loan", name: "Agriculture Loan" },
-  { slug: "personal-loan", name: "Personal Loan" },
 ];
+
+const normalizeLoanText = (value = "") =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 
 const GENDER_OPTIONS = [
   { value: "male", label: "Male" },
@@ -119,19 +124,23 @@ export default function LoanInquiryPage() {
     description: "",
   });
 
-  const mergedLoanOptions = useMemo(
-    () => [
-      ...PUBLIC_LOAN_OPTIONS,
-      ...loanProducts
-        .map((item) => ({ slug: item.slug, name: item.name }))
-        .filter(
-          (item, index, list) =>
-            list.findIndex((entry) => entry.slug === item.slug) === index &&
-            !PUBLIC_LOAN_OPTIONS.some((preset) => preset.slug === item.slug)
-        ),
-    ],
-    [loanProducts]
-  );
+  const mergedLoanOptions = useMemo(() => {
+    const byName = new Map(
+      loanProducts.map((item) => [normalizeLoanText(item?.name), item])
+    );
+    const bySlug = new Map(loanProducts.map((item) => [item?.slug, item]));
+
+    return PUBLIC_LOAN_OPTIONS.map((preset) => {
+      const matched =
+        bySlug.get(preset.slug) ||
+        byName.get(normalizeLoanText(preset.name));
+
+      return {
+        slug: matched?.slug || preset.slug,
+        name: preset.name,
+      };
+    });
+  }, [loanProducts]);
 
   useEffect(() => {
     let mounted = true;
@@ -645,4 +654,3 @@ export default function LoanInquiryPage() {
     </>
   );
 }
-

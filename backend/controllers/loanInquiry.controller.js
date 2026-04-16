@@ -121,6 +121,7 @@ const publicProfileUpdateSchema = z.object({
 const ALLOWED_DOC_TYPES = new Set([
   "national_id",
   "bank_statement_3_months",
+  "security_offer",
   "payslip_or_business_proof",
 ]);
 
@@ -448,7 +449,7 @@ export const loanInquiryController = {
       return res.status(400).json({
         success: false,
         message:
-          "Document type must be national_id, bank_statement_3_months, or payslip_or_business_proof",
+          "Document type must be national_id, bank_statement_3_months, security_offer, or payslip_or_business_proof",
         code: "VALIDATION_ERROR",
       });
     }

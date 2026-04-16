@@ -72,6 +72,7 @@ const DISBURSEMENT_METHODS = [
 const DOC_LABEL = {
   national_id: "National ID",
   bank_statement_3_months: "Bank Statement",
+  security_offer: "Security Offer",
   payslip_or_business_proof: "Payslip / Business Proof",
   address_proof: "Address Proof",
 };

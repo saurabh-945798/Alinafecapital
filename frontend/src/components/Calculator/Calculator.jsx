@@ -32,6 +32,13 @@ const formatDate = (value) =>
     year: "numeric",
   }).format(value);
 
+const addMonths = (dateValue, monthsToAdd) => {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return null;
+  date.setMonth(date.getMonth() + monthsToAdd);
+  return date;
+};
+
 const trackEvent = (eventName, payload = {}) => {
   if (typeof window === "undefined") return;
   window.dataLayer = window.dataLayer || [];
@@ -441,7 +448,7 @@ const RepaymentCalculator = () => {
       ],
       ...schedule.map((row) => [
         row.month,
-        formatDate(new Date(scheduleStartDate.getFullYear(), scheduleStartDate.getMonth() + row.month - 1, scheduleStartDate.getDate())),
+        formatDate(addMonths(scheduleStartDate, row.month) || scheduleStartDate),
         Math.round(row.monthlyDue),
         Math.round(row.principalPaid),
         Math.round(row.interest),
@@ -840,7 +847,7 @@ const RepaymentCalculator = () => {
               {schedule.map((row) => (
                 <tr key={row.month} className="text-center border-t">
                   <td className="p-2">{row.month}</td>
-                  <td>{formatDate(new Date(scheduleStartDate.getFullYear(), scheduleStartDate.getMonth() + row.month - 1, scheduleStartDate.getDate()))}</td>
+                  <td>{formatDate(addMonths(scheduleStartDate, row.month) || scheduleStartDate)}</td>
                   <td>{formatMWK(row.monthlyDue)}</td>
                   <td>{formatMWK(row.principalPaid)}</td>
                   <td>{formatMWK(row.interest)}</td>

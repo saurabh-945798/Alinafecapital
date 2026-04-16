@@ -1,3 +1,10 @@
+import akuzikeChidulaImage from "../../../images/Akuzike Chidula.png";
+import acksonMatemangaImage from "../../../images/Ackson matemanga.jpeg";
+import charityChimunguPhiriImage from "../../../images/Charity Chimungu Phiri.jpeg";
+import emilySikeloImage from "../../../images/Emily Sikelo.jpeg";
+import mosesChiramboImage from "../../../images/Moses Chirambo.png";
+import preciousMkandawireImage from "../../../images/Precious Mkandawire.jpeg";
+
 const coreValues = [
   "Professionalism, Integrity and ethical conduct",
   "Transparency and accountability",
@@ -27,31 +34,37 @@ const visionPoints = [
 
 const boardMembers = [
   {
-    name: "Board Chairperson",
-    role: "Leads board governance, strategic oversight, and institutional direction.",
+    name: "Moses Chirambo",
+    role: "Board Chairperson",
+    image: mosesChiramboImage,
   },
   {
-    name: "Independent Director",
-    role: "Strengthens governance discipline, compliance thinking, and accountability.",
+    name: "Ackson Matemanga",
+    role: "Independent Director",
+    image: acksonMatemangaImage,
   },
   {
-    name: "Non-Executive Director",
-    role: "Supports growth planning, policy oversight, and board-level guidance.",
+    name: "Charity Chimungu Phiri",
+    role: "Non Executive Director",
+    image: charityChimunguPhiriImage,
   },
 ];
 
 const managementTeam = [
   {
-    name: "Chief Executive Officer",
-    role: "Leads overall business strategy, execution, and institutional growth.",
+    name: "Akuzike Chidula",
+    role: "Chief Executive Officer",
+    image: akuzikeChidulaImage,
   },
   {
-    name: "Operations Manager",
-    role: "Oversees daily service delivery, workflow control, and process quality.",
+    name: "Emily Sikelo",
+    role: "Operations Manager",
+    image: emilySikeloImage,
   },
   {
-    name: "Credit & Risk Lead",
-    role: "Drives prudent underwriting, portfolio quality, and risk management discipline.",
+    name: "Precious Mkandawire",
+    role: "Credit & Risk Lead",
+    image: preciousMkandawireImage,
   },
 ];
 
@@ -122,14 +135,26 @@ const InsightCard = ({ title, items, index, tone }) => {
   );
 };
 
-const TeamCard = ({ name, role }) => (
+const TeamCard = ({ name, role, image }) => (
   <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-6">
     <div className="flex items-start gap-4">
       <div className="shrink-0">
-        <div className="relative h-20 w-20 overflow-hidden rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,_#f8fafc_0%,_#e2e8f0_100%)]">
-          <div className="absolute inset-x-4 bottom-0 h-10 rounded-t-full bg-slate-300" />
-          <div className="absolute left-1/2 top-4 h-10 w-10 -translate-x-1/2 rounded-full bg-slate-400" />
-        </div>
+        {image ? (
+          <img
+            src={image}
+            alt={name}
+            className="h-20 w-20 rounded-[24px] border border-slate-200 object-cover"
+          />
+        ) : (
+          <div className="flex h-20 w-20 items-center justify-center rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,_#f8fafc_0%,_#e2e8f0_100%)] text-lg font-semibold text-slate-600">
+            {name
+              .split(" ")
+              .filter(Boolean)
+              .slice(0, 2)
+              .map((part) => part[0]?.toUpperCase())
+              .join("")}
+          </div>
+        )}
       </div>
       <div className="min-w-0">
         <p className="text-lg font-semibold text-slate-900">{name}</p>
@@ -137,6 +162,34 @@ const TeamCard = ({ name, role }) => (
       </div>
     </div>
   </div>
+);
+
+const BoardProfileCard = ({ name, role, image }) => (
+  <article className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md">
+    <div className="relative aspect-[4/5] w-full overflow-hidden bg-slate-100">
+      {image ? (
+        <img
+          src={image}
+          alt={name}
+          className="h-full w-full object-cover object-top"
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-3xl font-semibold text-slate-500">
+          {name
+            .split(" ")
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((part) => part[0]?.toUpperCase())
+            .join("")}
+        </div>
+      )}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-900/70 to-transparent" />
+    </div>
+    <div className="p-5">
+      <p className="text-lg font-semibold text-slate-900">{name}</p>
+      <p className="mt-2 text-sm text-slate-600">{role}</p>
+    </div>
+  </article>
 );
 
 const About = () => {
@@ -199,7 +252,7 @@ const About = () => {
             <InsightCard title="Why Clients Trust Us" items={trustPoints} index="04" tone="emerald" />
           </div>
 
-          <div className="mt-12 grid gap-8 xl:grid-cols-2">
+          <div className="mt-12 space-y-8">
             <div className="rounded-[32px] border border-slate-200 bg-slate-50/80 p-6 sm:p-8">
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -215,9 +268,14 @@ const About = () => {
                 to ensure sustainable growth, accountability, and sound decision-making.
               </p>
 
-              <div className="mt-6 grid gap-4">
+              <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {boardMembers.map((member) => (
-                  <TeamCard key={member.name} name={member.name} role={member.role} />
+                  <BoardProfileCard
+                    key={member.name}
+                    name={member.name}
+                    role={member.role}
+                    image={member.image}
+                  />
                 ))}
               </div>
             </div>
@@ -237,9 +295,14 @@ const About = () => {
                 credit quality, internal process discipline, and day-to-day operational performance.
               </p>
 
-              <div className="mt-6 grid gap-4">
+              <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
                 {managementTeam.map((member) => (
-                  <TeamCard key={member.name} name={member.name} role={member.role} />
+                  <BoardProfileCard
+                    key={member.name}
+                    name={member.name}
+                    role={member.role}
+                    image={member.image}
+                  />
                 ))}
               </div>
             </div>

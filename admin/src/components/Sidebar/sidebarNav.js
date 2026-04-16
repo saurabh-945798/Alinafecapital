@@ -18,7 +18,7 @@ export const sidebarNav = [
   {
     section: "Operations",
     items: [
-      { label: "Accounts", to: "/admin/accounts", icon: Wallet },
+      { label: "Payments", to: "/admin/payments", icon: Wallet },
       { label: "Loan Products", to: "/admin/loan-products", icon: Package },
       { label: "Complaints", to: "/admin/complaints", icon: MessageSquareWarning },
     ],

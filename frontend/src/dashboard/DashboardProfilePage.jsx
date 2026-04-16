@@ -78,6 +78,10 @@ export default function DashboardProfilePage() {
         label: "Bank Statement (3 Months)",
         done: activeDocuments.some((d) => d?.type === "bank_statement_3_months"),
       },
+      {
+        label: "Security Offer",
+        done: activeDocuments.some((d) => d?.type === "security_offer"),
+      },
       ...(!useTwoDocumentFlow
         ? [
             {
@@ -95,11 +99,14 @@ export default function DashboardProfilePage() {
     const hasBankStatement = activeDocuments.some(
       (d) => d?.type === "bank_statement_3_months"
     );
+    const hasSecurityOffer = activeDocuments.some(
+      (d) => d?.type === "security_offer"
+    );
     const hasPayslip = activeDocuments.some(
       (d) => d?.type === "payslip_or_business_proof"
     );
 
-    if (!hasNationalId || !hasBankStatement) return false;
+    if (!hasNationalId || !hasBankStatement || !hasSecurityOffer) return false;
     if (useTwoDocumentFlow) return true;
     return hasPayslip;
   }, [latestDocuments, useTwoDocumentFlow]);
