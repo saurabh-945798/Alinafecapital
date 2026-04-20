@@ -31,6 +31,7 @@ export default function ProfileForm({
   apiBasePath = "/profile/me",
   submitUrl = "/profile/me/submit",
   avatarUrl = "/profile/me/avatar",
+  declarationAccepted = false,
 }) {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [showCongratsModal, setShowCongratsModal] = useState(false);
@@ -175,6 +176,11 @@ export default function ProfileForm({
 
     if (action === "submit" && !documentsComplete) {
       setError("Please upload all required KYC documents before submitting.");
+      return;
+    }
+
+    if (action === "submit" && !declarationAccepted) {
+      setError("Please accept the loan applicant declaration before submitting.");
       return;
     }
 

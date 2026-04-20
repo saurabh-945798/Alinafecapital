@@ -19,6 +19,7 @@ export default function DashboardProfilePage() {
   const [showSavedModal, setShowSavedModal] = useState(false);
   const [savedModalMode, setSavedModalMode] = useState("save");
   const [profileSectionsComplete, setProfileSectionsComplete] = useState(false);
+  const [declarationAccepted, setDeclarationAccepted] = useState(false);
   const [latestDocuments, setLatestDocuments] = useState(
     Array.isArray(profile?.documents) ? profile.documents : []
   );
@@ -112,6 +113,7 @@ export default function DashboardProfilePage() {
   }, [latestDocuments, useTwoDocumentFlow]);
 
   const canSubmitWholeProfile = profileSectionsComplete && documentsComplete;
+  const canSubmitWithDeclaration = canSubmitWholeProfile && declarationAccepted;
   const kycStatus = String(profile?.kycStatus || "not_started").toLowerCase();
   const isUnderReview = kycStatus === "pending";
   const isApproved = kycStatus === "verified";
@@ -275,6 +277,7 @@ export default function DashboardProfilePage() {
               onEmploymentTypeChange={setSelectedEmploymentType}
               onCompletionChange={setProfileSectionsComplete}
               documentsComplete={documentsComplete}
+              declarationAccepted={declarationAccepted}
               onSaved={(_, mode = "save") => {
                 setSaveState("saved");
                 setSavedModalMode(mode);
@@ -331,12 +334,79 @@ export default function DashboardProfilePage() {
             />
           </div>
 
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="text-base font-semibold text-slate-900">Loan Applicant Declaration</h2>
+            <p className="text-sm text-slate-500">
+              Please read and confirm this declaration before final submission.
+            </p>
+
+            <div className="mt-4 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-6 text-slate-700">
+              <p>
+                I, the undersigned, hereby declare that all information provided in this application is true and correct,
+                and I understand I am bound by all obligations and undertakings that result from my relationship with
+                Alinafe Capital Limited.
+              </p>
+              <p className="mt-2">
+                I understand that if my application is successful, I remain personally liable for repayment should the
+                approved facility become unpaid.
+              </p>
+              <p className="mt-2">
+                I consent to provide required proof documents (income, residence, National ID or official ID, employer
+                undertaking for employee loans, or collateral for business loans) for processing.
+              </p>
+              <p className="mt-2">
+                I consent that Alinafe Capital Limited may perform necessary enquiries and reference checks with financial
+                institutions and creditors.
+              </p>
+              <p className="mt-2">
+                I confirm that the contents were explained to me in a language I understand, and I consent to court
+                jurisdiction for claims arising from this agreement.
+              </p>
+              <p className="mt-2">
+                I acknowledge that delays in servicing the loan may attract a penalty of 10% per month on outstanding
+                arrears, as per facility terms.
+              </p>
+              <p className="mt-2">
+                Guarantor clause: where applicable, the guarantor accepts liability if the applicant defaults on repayment.
+              </p>
+            </div>
+
+            <label
+              className={[
+                "mt-4 flex items-start gap-3 rounded-xl border bg-white p-3 transition",
+                declarationAccepted
+                  ? "border-slate-200"
+                  : "border-amber-400 animate-pulse shadow-[0_0_0_3px_rgba(251,191,36,0.22)]",
+              ].join(" ")}
+            >
+              <input
+                type="checkbox"
+                checked={declarationAccepted}
+                onChange={(e) => setDeclarationAccepted(e.target.checked)}
+                className={[
+                  "mt-0.5 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-300",
+                  declarationAccepted ? "" : "animate-pulse",
+                ].join(" ")}
+              />
+              <span
+                className={[
+                  "text-sm",
+                  declarationAccepted ? "text-slate-700" : "font-semibold text-amber-700",
+                ].join(" ")}
+              >
+                I have read and agree to the declaration and terms above.
+              </span>
+            </label>
+          </div>
+
           <div className="sticky bottom-0 z-10 flex flex-col items-stretch justify-between gap-3 rounded-xl border border-slate-200 bg-white/95 px-3 py-3 backdrop-blur sm:px-4 sm:flex-row sm:items-center">
             <div className="text-xs font-medium leading-5 text-slate-500">
               {saveState === "saving" && "Saving..."}
               {saveState === "saved" &&
                 (savedModalMode === "submit" ? "Submitted just now" : "Saved just now")}
               {saveState === "error" && "Error saving changes"}
+              {canSubmitWholeProfile && !declarationAccepted && saveState === "" &&
+                "Please accept the Loan Applicant Declaration to enable final submit"}
               {!canSubmitWholeProfile &&
                 saveState === "" &&
                 "Complete all profile details and required KYC documents first"}
@@ -351,7 +421,7 @@ export default function DashboardProfilePage() {
               >
                 Save
               </button>
-              {canSubmitWholeProfile ? (
+              {canSubmitWithDeclaration ? (
                 <button
                   type="submit"
                   form="profileForm"
