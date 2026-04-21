@@ -489,16 +489,16 @@ export default function ProfileForm({
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
-        <h3 className="text-base font-semibold text-slate-800">References</h3>
+        <h3 className="text-base font-semibold text-slate-800">Guarantor Details</h3>
         <p className="mt-1 text-sm text-slate-500">
-          Add two people we can contact if needed.
+          Add guarantor contact details for verification if needed.
         </p>
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <label className="space-y-1.5">
-            <span className="text-sm font-medium text-slate-700">Reference 1 Name</span>
+            <span className="text-sm font-medium text-slate-700">Guarantor 1 Name</span>
             <input
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-              placeholder="Enter first reference name"
+              placeholder="Enter guarantor 1 name"
               value={form.reference1Name}
               onChange={(e) => setForm((p) => ({ ...p, reference1Name: e.target.value }))}
               required
@@ -506,10 +506,10 @@ export default function ProfileForm({
           </label>
 
           <label className="space-y-1.5">
-            <span className="text-sm font-medium text-slate-700">Reference 1 Phone</span>
+            <span className="text-sm font-medium text-slate-700">Guarantor 1 Phone</span>
             <input
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-              placeholder="Enter first reference phone"
+              placeholder="Enter guarantor 1 phone"
               value={form.reference1Phone}
               onChange={(e) => setForm((p) => ({ ...p, reference1Phone: e.target.value }))}
               required
@@ -517,10 +517,10 @@ export default function ProfileForm({
           </label>
 
           <label className="space-y-1.5">
-            <span className="text-sm font-medium text-slate-700">Reference 2 Name</span>
+            <span className="text-sm font-medium text-slate-700">Guarantor 2 Name</span>
             <input
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-              placeholder="Enter second reference name"
+              placeholder="Enter guarantor 2 name"
               value={form.reference2Name}
               onChange={(e) => setForm((p) => ({ ...p, reference2Name: e.target.value }))}
               required
@@ -528,10 +528,10 @@ export default function ProfileForm({
           </label>
 
           <label className="space-y-1.5">
-            <span className="text-sm font-medium text-slate-700">Reference 2 Phone</span>
+            <span className="text-sm font-medium text-slate-700">Guarantor 2 Phone</span>
             <input
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-              placeholder="Enter second reference phone"
+              placeholder="Enter guarantor 2 phone"
               value={form.reference2Phone}
               onChange={(e) => setForm((p) => ({ ...p, reference2Phone: e.target.value }))}
               required

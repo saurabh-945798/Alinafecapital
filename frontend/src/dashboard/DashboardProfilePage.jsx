@@ -342,32 +342,31 @@ export default function DashboardProfilePage() {
 
             <div className="mt-4 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-6 text-slate-700">
               <p>
-                I, the undersigned, hereby declare that all information provided in this application is true and correct,
-                and I understand I am bound by all obligations and undertakings that result from my relationship with
-                Alinafe Capital Limited.
+                I undersigned, hereby declare the following:
               </p>
               <p className="mt-2">
-                I understand that if my application is successful, I remain personally liable for repayment should the
-                approved facility become unpaid.
+                1. That according to my knowledge all information provided in this application is true and correct, and I declare myself bound to all obligations, undertakings and information it contains or which may result from the Alinafe Capital Limited - client relationship established by this document;
               </p>
               <p className="mt-2">
-                I consent to provide required proof documents (income, residence, National ID or official ID, employer
-                undertaking for employee loans, or collateral for business loans) for processing.
+                2. I understand that, if my application for this loan facility is successful, I will be liable for the loan personally should the facility approved become unpaid.
               </p>
               <p className="mt-2">
-                I consent that Alinafe Capital Limited may perform necessary enquiries and reference checks with financial
-                institutions and creditors.
+                3. I consent to provide proof of income, proof of residence, National ID or any official ID and letter of undertaking from employer (Loan to employees) or collateral to business loans to Alinafe Capital Limited to facilitate processing of this loan facility.
               </p>
               <p className="mt-2">
-                I confirm that the contents were explained to me in a language I understand, and I consent to court
-                jurisdiction for claims arising from this agreement.
+                4. I consent that Alinafe Capital Limited may make such enquiries including references to financial dealings with other financial institutions and creditors, as it considers necessary.
               </p>
               <p className="mt-2">
-                I acknowledge that delays in servicing the loan may attract a penalty of 10% per month on outstanding
-                arrears, as per facility terms.
+                5. I declare that contents of this application form were clearly explained to me in the language that I understand.
               </p>
               <p className="mt-2">
-                Guarantor clause: where applicable, the guarantor accepts liability if the applicant defaults on repayment.
+                6. I consent to jurisdiction of the Courts in respect of any claim arising hereunder and elect the respective address(es) above for all purposes arising from this agreement.
+              </p>
+              <p className="mt-2">
+                7. Should the loan facility be granted to me, I declare and acknowledge that the following terms will apply to such facilities:
+              </p>
+              <p className="mt-2">
+                8. Alinafe Capital Limited on the basis of delays in servicing my loans shall charge a penalty of 10% per month of the outstanding loan arrears.
               </p>
             </div>
 
