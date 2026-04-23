@@ -179,8 +179,8 @@ export default function LoanInquiryPage() {
   };
 
   const validateForm = () => {
-    if (!form.fullName.trim()) return "Full name is required.";
-    if (!form.address.trim()) return "Address is required.";
+    if (form.fullName.trim().length < 2) return "Full name must be at least 2 characters.";
+    if (form.address.trim().length < 5) return "Address must be at least 5 characters.";
     if (!form.phone.trim() || form.phone.trim().length !== 9) {
       return "Enter a valid 9-digit phone number.";
     }
@@ -189,13 +189,18 @@ export default function LoanInquiryPage() {
     if (!form.gender) return "Please select gender.";
     if (!form.maritalStatus) return "Please select marital status.";
     if (form.dependants === "") return "Please select number of dependants.";
+    const dependantsValue = Number(form.dependants);
+    if (!Number.isInteger(dependantsValue) || dependantsValue < 0 || dependantsValue > 20) {
+      return "Dependants must be a whole number between 0 and 20.";
+    }
     if (!form.housingStatus) return "Please select housing status.";
     if (!form.employmentStatus) return "Please select employment status.";
     if (!form.borrowerType) return "Please select borrower type.";
     if (!form.loanProductSlug) return "Please select loan type.";
     if (!form.requestedAmount.trim()) return "Loan amount is required.";
+    if (Number(form.requestedAmount) <= 0) return "Loan amount must be greater than 0.";
     if (!form.preferredTenureMonths) return "Please select tenure.";
-    if (!form.description.trim()) return "Description is required.";
+    if (form.description.trim().length < 3) return "Description must be at least 3 characters.";
     return "";
   };
 
@@ -209,6 +214,12 @@ export default function LoanInquiryPage() {
 
     if (name === "requestedAmount") {
       updateField(name, value.replace(/[^\d]/g, ""));
+      return;
+    }
+
+    if (name === "dependants") {
+      const sanitized = value.replace(/[^\d]/g, "").slice(0, 2);
+      updateField(name, sanitized);
       return;
     }
 
@@ -274,7 +285,13 @@ export default function LoanInquiryPage() {
       setShowSuccessModal(true);
       resetForm();
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to submit inquiry.");
+      const backend = err?.response?.data;
+      const firstDetail = Array.isArray(backend?.details) ? backend.details[0] : null;
+      const detailMsg =
+        firstDetail?.message ||
+        (Array.isArray(firstDetail?.errors) && firstDetail.errors[0]?.message) ||
+        "";
+      setError(detailMsg || backend?.message || "Failed to submit inquiry.");
     } finally {
       setSubmitting(false);
     }
