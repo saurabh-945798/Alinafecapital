@@ -20,17 +20,77 @@ export default function DashboardProfilePage() {
   const [savedModalMode, setSavedModalMode] = useState("save");
   const [profileSectionsComplete, setProfileSectionsComplete] = useState(false);
   const [declarationAccepted, setDeclarationAccepted] = useState(false);
+  const [latestAvatarUrl, setLatestAvatarUrl] = useState("");
   const [latestDocuments, setLatestDocuments] = useState(
     Array.isArray(profile?.documents) ? profile.documents : []
   );
 
   useEffect(() => {
-    setLatestDocuments(Array.isArray(profile?.documents) ? profile.documents : []);
+    const serverDocs = Array.isArray(profile?.documents) ? profile.documents : [];
+    if (!serverDocs.length) return;
+    setLatestDocuments((prev) => {
+      const map = new Map();
+      (Array.isArray(prev) ? prev : []).forEach((doc) => {
+        if (doc?.type) map.set(doc.type, doc);
+      });
+      serverDocs.forEach((doc) => {
+        if (doc?.type) map.set(doc.type, doc);
+      });
+      return Array.from(map.values());
+    });
   }, [profile?.documents]);
 
-  const completion = profile?.profileCompletion ?? 0;
+  useEffect(() => {
+    const serverAvatar = String(profile?.avatarUrl || "").trim();
+    if (serverAvatar) {
+      setLatestAvatarUrl(serverAvatar);
+    }
+  }, [profile?.avatarUrl]);
+
+  const activeProfile = useMemo(
+    () => ({
+      ...(profile || {}),
+      avatarUrl: latestAvatarUrl || profile?.avatarUrl || "",
+      documents: Array.isArray(latestDocuments) ? latestDocuments : [],
+    }),
+    [latestAvatarUrl, latestDocuments, profile]
+  );
+
+  const profileForForm = useMemo(
+    () => ({
+      ...activeProfile,
+      documents: latestDocuments,
+    }),
+    [activeProfile, latestDocuments]
+  );
+
+  const profileForDocuments = useMemo(
+    () => ({
+      ...activeProfile,
+      documents: latestDocuments,
+      employmentType: selectedEmploymentType || activeProfile?.employmentType || "",
+    }),
+    [activeProfile, latestDocuments, selectedEmploymentType]
+  );
+
+  const mergeIntoLatestDocuments = (incomingDocs) => {
+    const serverDocs = Array.isArray(incomingDocs) ? incomingDocs : [];
+    if (!serverDocs.length) return;
+    setLatestDocuments((prev) => {
+      const map = new Map();
+      (Array.isArray(prev) ? prev : []).forEach((doc) => {
+        if (doc?.type) map.set(doc.type, doc);
+      });
+      serverDocs.forEach((doc) => {
+        if (doc?.type) map.set(doc.type, doc);
+      });
+      return Array.from(map.values());
+    });
+  };
+
+  const completion = activeProfile?.profileCompletion ?? 0;
   const employmentType = String(
-    selectedEmploymentType || profile?.employmentType || ""
+    selectedEmploymentType || activeProfile?.employmentType || ""
   )
     .trim()
     .toLowerCase();
@@ -40,36 +100,70 @@ export default function DashboardProfilePage() {
   const checklist = useMemo(() => {
     const activeDocuments = Array.isArray(latestDocuments) ? latestDocuments : [];
 
-    if (!profile) return [];
+    if (!activeProfile) return [];
 
     return [
-      { label: "Full Name", done: !!profile.fullName },
-      { label: "Phone Number", done: !!profile.phone },
-      { label: "Email Address", done: !!profile.email },
-      { label: "Profile Photo", done: !!profile.avatarUrl },
+      { label: "Full Name", done: !!activeProfile.fullName },
+      { label: "Phone Number", done: !!activeProfile.phone },
+      { label: "Email Address", done: !!activeProfile.email },
+      { label: "Profile Photo", done: !!activeProfile.avatarUrl },
       {
         label: "Address (line, city, district)",
-        done: !!profile.addressLine1 && !!profile.city && !!profile.district,
+        done: !!activeProfile.addressLine1 && !!activeProfile.city && !!activeProfile.district,
       },
-      { label: "Employment Info", done: !!profile.employmentType },
+      {
+        label: "Employment Info",
+        done: (() => {
+          const type = String(activeProfile.employmentType || "").trim().toLowerCase();
+          const isBusiness = type === "business";
+          const isFarmer = type === "farmer";
+          const isPrivateCompanyEmployee = type === "private company employee";
+          const isSelfEmployed = type === "self-employed";
+          const requiresSalaryDate =
+            type === "government employee" ||
+            isPrivateCompanyEmployee ||
+            isSelfEmployed;
+          const isFixedContract = String(activeProfile.employmentStatus || "").trim() === "fixed_contract";
+          if (isBusiness) {
+            return !!activeProfile.employmentType && !!activeProfile.businessName && !!activeProfile.businessActivityNature;
+          }
+          if (isFarmer) {
+            return !!activeProfile.employmentType;
+          }
+          return (
+            !!activeProfile.employmentType &&
+            !!activeProfile.jobTitle &&
+            (isPrivateCompanyEmployee || isSelfEmployed || !!activeProfile.employmentNumber) &&
+            !!activeProfile.employmentStatus &&
+            !!activeProfile.durationWorkedYears &&
+            !!activeProfile.durationWorkedMonths &&
+            !!activeProfile.hrContactPhone &&
+            (!requiresSalaryDate || !!activeProfile.salaryDate) &&
+            (String(activeProfile.employmentStatus || "").trim() !== "fixed_contract" ||
+              (!!activeProfile.contractDurationYears && !!activeProfile.contractDurationMonths))
+          );
+        })(),
+      },
       {
         label: "Government ID",
         done:
-          String(profile.employmentType || "").trim().toLowerCase() !== "government employee" ||
-          !!profile.governmentId,
+          String(activeProfile.employmentType || "").trim().toLowerCase() !== "government employee" ||
+          !!activeProfile.governmentId,
       },
-      { label: "Monthly Income", done: !!profile.monthlyIncome },
+      { label: "Monthly Income", done: !!activeProfile.monthlyIncome },
       {
         label: "Bank Details (name, account number, branch code)",
-        done: !!profile.bankName && !!profile.accountNumber && !!profile.branchCode,
+        done: !!activeProfile.bankName && !!activeProfile.accountNumber && !!activeProfile.branchCode,
       },
       {
-        label: "References (2 names and phone numbers)",
+        label: "Guarantor / Witness Details",
         done:
-          !!profile.reference1Name &&
-          !!profile.reference1Phone &&
-          !!profile.reference2Name &&
-          !!profile.reference2Phone,
+          !!activeProfile.reference1Name &&
+          !!activeProfile.reference1Phone &&
+          !!activeProfile.guarantorRelationship &&
+          activeDocuments.some((d) => d?.type === "guarantor_national_id") &&
+          !!activeProfile.guarantorOccupation &&
+          !!activeProfile.guarantorHomeVillage,
       },
       {
         label: "National ID Document",
@@ -92,7 +186,7 @@ export default function DashboardProfilePage() {
           ]
         : []),
     ];
-  }, [latestDocuments, profile, useTwoDocumentFlow]);
+  }, [activeProfile, latestDocuments, useTwoDocumentFlow]);
 
   const documentsComplete = useMemo(() => {
     const activeDocuments = Array.isArray(latestDocuments) ? latestDocuments : [];
@@ -114,7 +208,7 @@ export default function DashboardProfilePage() {
 
   const canSubmitWholeProfile = profileSectionsComplete && documentsComplete;
   const canSubmitWithDeclaration = canSubmitWholeProfile && declarationAccepted;
-  const kycStatus = String(profile?.kycStatus || "not_started").toLowerCase();
+  const kycStatus = String(activeProfile?.kycStatus || "not_started").toLowerCase();
   const isUnderReview = kycStatus === "pending";
   const isApproved = kycStatus === "verified";
   const statusBadgeClass = isApproved
@@ -191,7 +285,7 @@ export default function DashboardProfilePage() {
                   <span
                     className={`inline-flex rounded-full px-3 py-1 text-sm font-semibold capitalize ${statusBadgeClass}`}
                   >
-                    {profile?.kycStatus || "pending"}
+                    {activeProfile?.kycStatus || "pending"}
                   </span>
                 </div>
               </div>
@@ -200,8 +294,8 @@ export default function DashboardProfilePage() {
                   Submitted On
                 </div>
                 <div className="mt-2 text-sm font-semibold text-slate-900">
-                  {profile?.submittedAt
-                    ? new Date(profile.submittedAt).toLocaleString()
+                  {activeProfile?.submittedAt
+                    ? new Date(activeProfile.submittedAt).toLocaleString()
                     : "Just now"}
                 </div>
               </div>
@@ -230,10 +324,10 @@ export default function DashboardProfilePage() {
               Completion: {completion}%
             </span>
             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 font-medium capitalize text-slate-700">
-              KYC: {profile?.kycStatus || "Not started"}
+              KYC: {activeProfile?.kycStatus || "Not started"}
             </span>
             <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-500">
-              Last updated: {profile?.updatedAt ? new Date(profile.updatedAt).toLocaleDateString() : "-"}
+              Last updated: {activeProfile?.updatedAt ? new Date(activeProfile.updatedAt).toLocaleDateString() : "-"}
             </span>
           </div>
         </div>
@@ -270,10 +364,15 @@ export default function DashboardProfilePage() {
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
             <ProfileForm
-              profile={profile}
+              profile={profileForForm}
               apiBasePath={profileApiBasePath}
               submitUrl={profileSubmitUrl}
               avatarUrl={profileAvatarUrl}
+              docUploadUrl={
+                isPublicAccess
+                  ? `/inquiries/access/${token}/doc`
+                  : "/profile/me/doc"
+              }
               onEmploymentTypeChange={setSelectedEmploymentType}
               onCompletionChange={setProfileSectionsComplete}
               documentsComplete={documentsComplete}
@@ -288,10 +387,18 @@ export default function DashboardProfilePage() {
                   setShowSavedModal(false);
                 }, 5000);
               }}
-              onAvatarSaved={() => {
+              onAvatarSaved={(nextProfile) => {
                 setUiError("");
                 setUiSuccess("");
-                refresh();
+                mergeIntoLatestDocuments(nextProfile?.documents);
+                const nextAvatar = String(nextProfile?.avatarUrl || "").trim();
+                if (nextAvatar) {
+                  setLatestAvatarUrl(nextAvatar);
+                }
+              }}
+              onGuarantorDocUploaded={(nextProfile) => {
+                setUiError("");
+                mergeIntoLatestDocuments(nextProfile?.documents);
               }}
               setError={(msg) => {
                 setSaveState("error");
@@ -313,11 +420,7 @@ export default function DashboardProfilePage() {
             </div>
 
             <DocumentUpload
-              profile={{
-                ...profile,
-                documents: latestDocuments,
-                employmentType: selectedEmploymentType || profile?.employmentType || "",
-              }}
+              profile={profileForDocuments}
               uploadUrl={
                 isPublicAccess
                   ? `/inquiries/access/${token}/doc`
@@ -325,9 +428,7 @@ export default function DashboardProfilePage() {
               }
               onUploaded={(nextProfile) => {
                 setUiError("");
-                if (Array.isArray(nextProfile?.documents)) {
-                  setLatestDocuments(nextProfile.documents);
-                }
+                mergeIntoLatestDocuments(nextProfile?.documents);
               }}
               setError={(msg) => setUiError(msg)}
               setSuccess={() => {}}
@@ -404,11 +505,11 @@ export default function DashboardProfilePage() {
               {saveState === "saved" &&
                 (savedModalMode === "submit" ? "Submitted just now" : "Saved just now")}
               {saveState === "error" && "Error saving changes"}
-              {canSubmitWholeProfile && !declarationAccepted && saveState === "" &&
-                "Please accept the Loan Applicant Declaration to enable final submit"}
               {!canSubmitWholeProfile &&
                 saveState === "" &&
                 "Complete all profile details and required KYC documents first"}
+              {canSubmitWholeProfile && !declarationAccepted && saveState === "" &&
+                "Please accept the Loan Applicant Declaration to enable final submit"}
             </div>
 
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -420,16 +521,20 @@ export default function DashboardProfilePage() {
               >
                 Save
               </button>
-              {canSubmitWithDeclaration ? (
-                <button
-                  type="submit"
-                  form="profileForm"
-                  value="submit"
-                  className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-slate-800 sm:w-auto"
-                >
-                  Submit  
-                </button>
-              ) : null}
+              <button
+                type="submit"
+                form="profileForm"
+                value="submit"
+                disabled={!canSubmitWithDeclaration}
+                className={[
+                  "w-full rounded-xl px-4 py-2.5 text-sm font-medium transition sm:w-auto",
+                  canSubmitWithDeclaration
+                    ? "bg-slate-900 text-white hover:bg-slate-800"
+                    : "cursor-not-allowed border border-slate-200 bg-slate-100 text-slate-400",
+                ].join(" ")}
+              >
+                Submit
+              </button>
             </div>
           </div>
 

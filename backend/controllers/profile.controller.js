@@ -6,6 +6,7 @@ const ALLOWED_DOC_TYPES = new Set([
   "national_id",
   "bank_statement_3_months",
   "security_offer",
+  "guarantor_national_id",
   "payslip_or_business_proof",
 ]);
 
@@ -78,7 +79,31 @@ export async function upsertMyProfile(req, res, next) {
       district: req.body.district,
       country: req.body.country || "Malawi",
       employmentType: req.body.employmentType,
+      businessName: req.body.businessName,
+      employerNameOrBusinessAddress: req.body.employerNameOrBusinessAddress,
+      businessActivityNature: req.body.businessActivityNature,
+      jobTitle: req.body.jobTitle,
+      employmentNumber: req.body.employmentNumber,
+      employmentStatus: req.body.employmentStatus,
+      contractDurationYears:
+        req.body.contractDurationYears !== undefined
+          ? Number(req.body.contractDurationYears)
+          : undefined,
+      contractDurationMonths:
+        req.body.contractDurationMonths !== undefined
+          ? Number(req.body.contractDurationMonths)
+          : undefined,
+      durationWorkedYears:
+        req.body.durationWorkedYears !== undefined
+          ? Number(req.body.durationWorkedYears)
+          : undefined,
+      durationWorkedMonths:
+        req.body.durationWorkedMonths !== undefined
+          ? Number(req.body.durationWorkedMonths)
+          : undefined,
+      hrContactPhone: req.body.hrContactPhone,
       governmentId: req.body.governmentId,
+      salaryDate: req.body.salaryDate,
       monthlyIncome:
         req.body.monthlyIncome !== undefined ? Number(req.body.monthlyIncome) : undefined,
       bankName: req.body.bankName,
@@ -88,6 +113,9 @@ export async function upsertMyProfile(req, res, next) {
       reference1Phone: req.body.reference1Phone,
       reference2Name: req.body.reference2Name,
       reference2Phone: req.body.reference2Phone,
+      guarantorRelationship: req.body.guarantorRelationship,
+      guarantorOccupation: req.body.guarantorOccupation,
+      guarantorHomeVillage: req.body.guarantorHomeVillage,
     };
 
     Object.keys(update).forEach((k) => update[k] === undefined && delete update[k]);
@@ -192,6 +220,24 @@ export async function submitKyc(req, res, next) {
         success: false,
         message: "Profile photo is required before KYC submission",
         code: "AVATAR_REQUIRED",
+      });
+    }
+
+    const hasGuarantorDetails =
+      String(profile.reference1Name || "").trim() &&
+      String(profile.reference1Phone || "").trim() &&
+      String(profile.guarantorRelationship || "").trim() &&
+      Array.isArray(profile.documents) &&
+      profile.documents.some((d) => d?.type === "guarantor_national_id") &&
+      String(profile.guarantorOccupation || "").trim() &&
+      String(profile.guarantorHomeVillage || "").trim();
+
+    if (!hasGuarantorDetails) {
+      await profile.save();
+      return res.status(400).json({
+        success: false,
+        message: "Please complete all guarantor details before KYC submission",
+        code: "GUARANTOR_INCOMPLETE",
       });
     }
 

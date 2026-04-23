@@ -29,6 +29,7 @@ const allowedMimes = new Set([
   "image/jpeg",
   "image/png",
   "image/jpg",
+  "image/webp",
 ]);
 const allowedAvatarMimes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const avatarExtByMime = {
@@ -58,8 +59,15 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  if (!allowedMimes.has(file.mimetype)) {
-    return cb(new Error("Allowed formats: PDF, JPG, JPEG, PNG"));
+  const ext = String(path.extname(file.originalname || "") || "").toLowerCase();
+  const allowedExts = new Set([".pdf", ".jpg", ".jpeg", ".png", ".webp"]);
+  const mime = String(file.mimetype || "").toLowerCase();
+  const isOctetStream = mime === "application/octet-stream";
+  const allowedByMime = allowedMimes.has(mime);
+  const allowedByExt = allowedExts.has(ext);
+
+  if (!allowedByMime && !(isOctetStream && allowedByExt)) {
+    return cb(new Error("Allowed formats: PDF, JPG, JPEG, PNG, WEBP"));
   }
   cb(null, true);
 };

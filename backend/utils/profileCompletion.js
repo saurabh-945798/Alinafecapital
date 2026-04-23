@@ -21,11 +21,38 @@
 
   // Income: 20
   const employmentType = String(profile.employmentType || "").trim().toLowerCase();
+  const isBusiness = employmentType === "business";
+  const isFarmer = employmentType === "farmer";
+  const isPrivateCompanyEmployee = employmentType === "private company employee";
+  const isSelfEmployed = employmentType === "self-employed";
   const requiresGovernmentId = employmentType === "government employee";
+  const requiresSalaryDate =
+    employmentType === "government employee" ||
+    isPrivateCompanyEmployee ||
+    isSelfEmployed;
+  const employmentStatus = String(profile.employmentStatus || "").trim().toLowerCase();
+  const requiresContractDuration = employmentStatus === "fixed_contract";
+  const hasNonNegativeNumber = (value) =>
+    typeof value === "number" && Number.isFinite(value) && value >= 0;
+  const hasEmploymentCore = isBusiness
+    ? hasText(profile.businessName) && hasText(profile.businessActivityNature)
+    : isFarmer
+    ? true
+    : hasText(profile.jobTitle) &&
+      (isPrivateCompanyEmployee || isSelfEmployed || hasText(profile.employmentNumber)) &&
+      hasText(profile.employmentStatus) &&
+      (!requiresContractDuration ||
+        (hasNonNegativeNumber(profile.contractDurationYears) &&
+          hasNonNegativeNumber(profile.contractDurationMonths))) &&
+      hasNonNegativeNumber(profile.durationWorkedYears) &&
+      hasNonNegativeNumber(profile.durationWorkedMonths) &&
+      hasText(profile.hrContactPhone);
   if (
     hasText(profile.employmentType) &&
+    hasEmploymentCore &&
     hasNumber(profile.monthlyIncome) &&
-    (!requiresGovernmentId || hasText(profile.governmentId))
+    (!requiresGovernmentId || hasText(profile.governmentId)) &&
+    (!requiresSalaryDate || hasText(profile.salaryDate))
   ) {
     score += 15;
   }

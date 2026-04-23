@@ -421,7 +421,17 @@ export default function LoanApplicationDetail() {
         district: data?.district || "",
         country: data?.country || "Malawi",
         employmentType: data?.employmentType || "",
+        businessName: data?.businessName || "",
+        businessActivityNature: data?.businessActivityNature || "",
+        jobTitle: data?.jobTitle || "",
+        employmentNumber: data?.employmentNumber || "",
+        contractDurationYears: data?.contractDurationYears ?? "",
+        contractDurationMonths: data?.contractDurationMonths ?? "",
+        durationWorkedYears: data?.durationWorkedYears ?? "",
+        durationWorkedMonths: data?.durationWorkedMonths ?? "",
+        hrContactPhone: data?.hrContactPhone || "",
         governmentId: data?.governmentId || "",
+        salaryDate: data?.salaryDate || "",
         monthlyIncome: data?.monthlyIncome ?? "",
         bankName: data?.bankName || "",
         accountNumber: data?.accountNumber || "",
@@ -430,6 +440,9 @@ export default function LoanApplicationDetail() {
         reference1Phone: data?.reference1Phone || "",
         reference2Name: data?.reference2Name || "",
         reference2Phone: data?.reference2Phone || "",
+        guarantorRelationship: data?.guarantorRelationship || data?.reference2Name || "",
+        guarantorOccupation: data?.guarantorOccupation || data?.reference2Phone || "",
+        guarantorHomeVillage: data?.guarantorHomeVillage || "",
       });
       setAvatarBroken(false);
       setWhatsappReady(false);
@@ -486,7 +499,17 @@ export default function LoanApplicationDetail() {
         district: updated?.district || "",
         country: updated?.country || "Malawi",
         employmentType: updated?.employmentType || "",
+        businessName: updated?.businessName || "",
+        businessActivityNature: updated?.businessActivityNature || "",
+        jobTitle: updated?.jobTitle || "",
+        employmentNumber: updated?.employmentNumber || "",
+        contractDurationYears: updated?.contractDurationYears ?? "",
+        contractDurationMonths: updated?.contractDurationMonths ?? "",
+        durationWorkedYears: updated?.durationWorkedYears ?? "",
+        durationWorkedMonths: updated?.durationWorkedMonths ?? "",
+        hrContactPhone: updated?.hrContactPhone || "",
         governmentId: updated?.governmentId || "",
+        salaryDate: updated?.salaryDate || "",
         monthlyIncome: updated?.monthlyIncome ?? "",
         bankName: updated?.bankName || "",
         accountNumber: updated?.accountNumber || "",
@@ -495,6 +518,9 @@ export default function LoanApplicationDetail() {
         reference1Phone: updated?.reference1Phone || "",
         reference2Name: updated?.reference2Name || "",
         reference2Phone: updated?.reference2Phone || "",
+        guarantorRelationship: updated?.guarantorRelationship || updated?.reference2Name || "",
+        guarantorOccupation: updated?.guarantorOccupation || updated?.reference2Phone || "",
+        guarantorHomeVillage: updated?.guarantorHomeVillage || "",
       });
       setEditMode(false);
       setStatusNotice({
@@ -1035,6 +1061,24 @@ export default function LoanApplicationDetail() {
                     item.governmentId
                       ? `<br/>Government ID: ${escapeHtml(item.governmentId)}`
                       : ""
+                  }${
+                    item.salaryDate ? `<br/>Salary Date: ${escapeHtml(item.salaryDate)}` : ""
+                  }${
+                    item.businessName ? `<br/>Business Name: ${escapeHtml(item.businessName)}` : ""
+                  }${
+                    item.businessActivityNature ? `<br/>Business Activity: ${escapeHtml(item.businessActivityNature)}` : ""
+                  }${
+                    item.jobTitle ? `<br/>Job Title: ${escapeHtml(item.jobTitle)}` : ""
+                  }${
+                    item.employmentNumber ? `<br/>Employment Number: ${escapeHtml(item.employmentNumber)}` : ""
+                  }${
+                    item.employmentStatus ? `<br/>Employment Status: ${escapeHtml(humanizeValue(item.employmentStatus))}` : ""
+                  }${
+                    item.durationWorkedYears !== undefined && item.durationWorkedYears !== null
+                      ? `<br/>Duration Worked: ${escapeHtml(String(item.durationWorkedYears))} years / ${escapeHtml(String(item.durationWorkedMonths ?? 0))} months`
+                      : ""
+                  }${
+                    item.hrContactPhone ? `<br/>HR Contact: ${escapeHtml(item.hrContactPhone)}` : ""
                   }</div>
                 </div>
                 <div class="field">
@@ -1046,12 +1090,12 @@ export default function LoanApplicationDetail() {
                   <div class="field-value">${escapeHtml(item.bankName || "-")}<br/>${escapeHtml(item.accountNumber || "-")}<br/>${escapeHtml(item.branchCode || "-")}</div>
                 </div>
                 <div class="field">
-                  <div class="label">Reference 1</div>
+                  <div class="label">Guarantor / Witness</div>
                   <div class="field-value">${escapeHtml(item.reference1Name || "-")}<br/>${escapeHtml(item.reference1Phone || "-")}</div>
                 </div>
                 <div class="field">
-                  <div class="label">Reference 2</div>
-                  <div class="field-value">${escapeHtml(item.reference2Name || "-")}<br/>${escapeHtml(item.reference2Phone || "-")}</div>
+                  <div class="label">Guarantor Details</div>
+                  <div class="field-value">Relationship: ${escapeHtml(item.guarantorRelationship || item.reference2Name || "-")}<br/>Occupation: ${escapeHtml(item.guarantorOccupation || item.reference2Phone || "-")}<br/>Home Village: ${escapeHtml(item.guarantorHomeVillage || "-")}</div>
                 </div>
               </div>
             </div>
@@ -1414,6 +1458,19 @@ export default function LoanApplicationDetail() {
       tone: "border-amber-200 bg-amber-50 text-amber-800",
     };
   })();
+
+  const kycEmploymentType = String(
+    (editMode ? detailsForm?.employmentType : item?.employmentType) || ""
+  )
+    .trim()
+    .toLowerCase();
+  const isKycBusiness = kycEmploymentType === "business";
+  const isKycFarmer = kycEmploymentType === "farmer";
+  const isKycGovernment = kycEmploymentType === "government employee";
+  const isKycPrivate = kycEmploymentType === "private company employee";
+  const isKycSelf = kycEmploymentType === "self-employed";
+  const requiresSalaryDate = isKycGovernment || isKycPrivate || isKycSelf;
+  const hideEmploymentNumber = isKycPrivate || isKycSelf || isKycFarmer;
 
   const actionHistory = Array.isArray(item.actionHistory) ? item.actionHistory : [];
   const availableStatuses = (() => {
@@ -1862,17 +1919,76 @@ export default function LoanApplicationDetail() {
               {editMode ? (
                 <div className="mt-2 space-y-2">
                   <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.employmentType || ""} onChange={(e) => updateDetailsField("employmentType", e.target.value)} placeholder="Employment type" />
-                  {String(detailsForm?.employmentType || "").trim().toLowerCase() === "government employee" ? (
+                  {isKycBusiness ? (
+                    <>
+                      <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.businessName || ""} onChange={(e) => updateDetailsField("businessName", e.target.value)} placeholder="Business name" />
+                      <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.businessActivityNature || ""} onChange={(e) => updateDetailsField("businessActivityNature", e.target.value)} placeholder="Nature of business activity" />
+                    </>
+                  ) : isKycFarmer ? null : (
+                    <>
+                      <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.jobTitle || ""} onChange={(e) => updateDetailsField("jobTitle", e.target.value)} placeholder="Job title" />
+                      {!hideEmploymentNumber ? (
+                        <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.employmentNumber || ""} onChange={(e) => updateDetailsField("employmentNumber", e.target.value)} placeholder="Employment number" />
+                      ) : null}
+                      <select className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.employmentStatus || ""} onChange={(e) => updateDetailsField("employmentStatus", e.target.value)}>
+                        <option value="">Employment status</option>
+                        <option value="full_time">Full-Time</option>
+                        <option value="part_time">Part-Time</option>
+                        <option value="fixed_contract">Fixed Contract</option>
+                      </select>
+                      {String(detailsForm?.employmentStatus || "").trim() === "fixed_contract" ? (
+                        <>
+                          <input type="number" className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.contractDurationYears ?? ""} onChange={(e) => updateDetailsField("contractDurationYears", e.target.value)} placeholder="Contract duration years" />
+                          <input type="number" className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.contractDurationMonths ?? ""} onChange={(e) => updateDetailsField("contractDurationMonths", e.target.value)} placeholder="Contract duration months" />
+                        </>
+                      ) : null}
+                      <input type="number" className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.durationWorkedYears ?? ""} onChange={(e) => updateDetailsField("durationWorkedYears", e.target.value)} placeholder="Duration worked years" />
+                      <input type="number" className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.durationWorkedMonths ?? ""} onChange={(e) => updateDetailsField("durationWorkedMonths", e.target.value)} placeholder="Duration worked months" />
+                      <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.hrContactPhone || ""} onChange={(e) => updateDetailsField("hrContactPhone", e.target.value)} placeholder="Employer HR contact phone" />
+                    </>
+                  )}
+                  {isKycGovernment ? (
                     <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.governmentId || ""} onChange={(e) => updateDetailsField("governmentId", e.target.value)} placeholder="Government ID" />
+                  ) : null}
+                  {requiresSalaryDate ? (
+                    <input type="date" className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.salaryDate || ""} onChange={(e) => updateDetailsField("salaryDate", e.target.value)} />
                   ) : null}
                   <input type="number" className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.monthlyIncome ?? ""} onChange={(e) => updateDetailsField("monthlyIncome", e.target.value)} placeholder="Monthly income" />
                 </div>
               ) : (
                 <>
                   <p className="mt-1 text-sm font-medium text-slate-900">{item.employmentType || "-"}</p>
-                  {String(item.employmentType || "").trim().toLowerCase() === "government employee" ? (
+                  {isKycBusiness ? (
+                    <>
+                      <p className="mt-1 text-sm text-slate-600">Business Name: {item.businessName || "-"}</p>
+                      <p className="mt-1 text-sm text-slate-600">Business Activity: {item.businessActivityNature || "-"}</p>
+                    </>
+                  ) : isKycFarmer ? null : (
+                    <>
+                      <p className="mt-1 text-sm text-slate-600">Job Title: {item.jobTitle || "-"}</p>
+                      {!hideEmploymentNumber ? (
+                        <p className="mt-1 text-sm text-slate-600">Employment Number: {item.employmentNumber || "-"}</p>
+                      ) : null}
+                      <p className="mt-1 text-sm text-slate-600">Employment Status: {humanizeValue(item.employmentStatus)}</p>
+                      {String(item.employmentStatus || "").trim() === "fixed_contract" ? (
+                        <p className="mt-1 text-sm text-slate-600">
+                          Contract: {item.contractDurationYears ?? "-"} years / {item.contractDurationMonths ?? "-"} months
+                        </p>
+                      ) : null}
+                      <p className="mt-1 text-sm text-slate-600">
+                        Duration Worked: {item.durationWorkedYears ?? "-"} years / {item.durationWorkedMonths ?? "-"} months
+                      </p>
+                      <p className="mt-1 text-sm text-slate-600">HR Contact: {item.hrContactPhone || "-"}</p>
+                    </>
+                  )}
+                  {isKycGovernment ? (
                     <p className="mt-1 text-sm text-slate-600">
                       Government ID: {item.governmentId || "-"}
+                    </p>
+                  ) : null}
+                  {requiresSalaryDate ? (
+                    <p className="mt-1 text-sm text-slate-600">
+                      Salary Date: {item.salaryDate || "-"}
                     </p>
                   ) : null}
                   <p className="mt-1 text-sm text-slate-600">
@@ -1931,24 +2047,28 @@ export default function LoanApplicationDetail() {
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                References
+                Guarantor / Witness
               </p>
               {editMode ? (
                 <div className="mt-2 space-y-2">
-                  <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.reference1Name || ""} onChange={(e) => updateDetailsField("reference1Name", e.target.value)} placeholder="Reference 1 name" />
-                  <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.reference1Phone || ""} onChange={(e) => updateDetailsField("reference1Phone", e.target.value)} placeholder="Reference 1 phone" />
-                  <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.reference2Name || ""} onChange={(e) => updateDetailsField("reference2Name", e.target.value)} placeholder="Reference 2 name" />
-                  <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.reference2Phone || ""} onChange={(e) => updateDetailsField("reference2Phone", e.target.value)} placeholder="Reference 2 phone" />
+                  <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.reference1Name || ""} onChange={(e) => updateDetailsField("reference1Name", e.target.value)} placeholder="Guarantor full name" />
+                  <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.reference1Phone || ""} onChange={(e) => updateDetailsField("reference1Phone", e.target.value)} placeholder="Guarantor phone" />
+                  <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.guarantorRelationship || ""} onChange={(e) => updateDetailsField("guarantorRelationship", e.target.value)} placeholder="Relationship" />
+                  <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.guarantorOccupation || ""} onChange={(e) => updateDetailsField("guarantorOccupation", e.target.value)} placeholder="Occupation" />
+                  <input className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm" value={detailsForm?.guarantorHomeVillage || ""} onChange={(e) => updateDetailsField("guarantorHomeVillage", e.target.value)} placeholder="Home village" />
                 </div>
               ) : (
                 <div className="mt-1 space-y-2 text-sm text-slate-600">
                   <div>
-                    <p className="font-medium text-slate-900">{item.reference1Name || "-"}</p>
-                    <p>{item.reference1Phone || "-"}</p>
+                    <p className="font-medium text-slate-900">Full Name: {item.reference1Name || "-"}</p>
+                    <p>Phone: {item.reference1Phone || "-"}</p>
                   </div>
                   <div>
-                    <p className="font-medium text-slate-900">{item.reference2Name || "-"}</p>
-                    <p>{item.reference2Phone || "-"}</p>
+                    <p className="font-medium text-slate-900">
+                      Relationship: {item.guarantorRelationship || item.reference2Name || "-"}
+                    </p>
+                    <p>Occupation: {item.guarantorOccupation || item.reference2Phone || "-"}</p>
+                    <p>Home Village: {item.guarantorHomeVillage || "-"}</p>
                   </div>
                 </div>
               )}

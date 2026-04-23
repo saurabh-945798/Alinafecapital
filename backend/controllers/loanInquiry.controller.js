@@ -10,12 +10,11 @@ import { normalizePhone } from "../utils/normalize.js";
 import { calculateProfileCompletion } from "../utils/profileCompletion.js";
 
 const PUBLIC_LOAN_TYPES = [
-  { slug: "home-loan", name: "Home Loan" },
-  { slug: "education-loan", name: "Education Loan" },
-  { slug: "vehicle-loan", name: "Vehicle Loan" },
+  { slug: "civil-servant-loan", name: "Civil Servant Loan" },
+  { slug: "emergency-loan", name: "Emergency Loan" },
+  { slug: "statutory-company-loans", name: "Statutory Company Loans" },
+  { slug: "private-company-loans", name: "Private company loans" },
   { slug: "business-loan", name: "Business Loan" },
-  { slug: "agriculture-loan", name: "Agriculture Loan" },
-  { slug: "personal-loan", name: "Personal Loan" },
 ];
 
 const publicCreateSchema = z.object({
@@ -81,7 +80,19 @@ const adminUpdateSchema = z.object({
   district: z.string().trim().max(120).optional(),
   country: z.string().trim().max(120).optional(),
   employmentType: z.string().trim().max(120).optional(),
+  businessName: z.string().trim().max(160).optional(),
+  employerNameOrBusinessAddress: z.string().trim().max(300).optional(),
+  businessActivityNature: z.string().trim().max(200).optional(),
+  jobTitle: z.string().trim().max(120).optional(),
+  employmentNumber: z.string().trim().max(120).optional(),
+  employmentStatus: z.enum(["full_time", "part_time", "fixed_contract"]).optional(),
+  contractDurationYears: z.coerce.number().int().min(0).max(80).optional(),
+  contractDurationMonths: z.coerce.number().int().min(0).max(11).optional(),
+  durationWorkedYears: z.coerce.number().int().min(0).max(80).optional(),
+  durationWorkedMonths: z.coerce.number().int().min(0).max(11).optional(),
+  hrContactPhone: z.string().trim().max(30).optional(),
   governmentId: z.string().trim().max(120).optional().or(z.literal("")),
+  salaryDate: z.string().trim().max(50).optional().or(z.literal("")),
   monthlyIncome: z.coerce.number().min(0).optional(),
   bankName: z.string().trim().max(120).optional(),
   accountNumber: z.string().trim().max(120).optional(),
@@ -90,6 +101,9 @@ const adminUpdateSchema = z.object({
   reference1Phone: z.string().trim().max(30).optional(),
   reference2Name: z.string().trim().max(120).optional(),
   reference2Phone: z.string().trim().max(30).optional(),
+  guarantorRelationship: z.string().trim().max(120).optional(),
+  guarantorOccupation: z.string().trim().max(120).optional(),
+  guarantorHomeVillage: z.string().trim().max(120).optional(),
 });
 
 const publicProfileUpdateSchema = z.object({
@@ -98,7 +112,19 @@ const publicProfileUpdateSchema = z.object({
   district: z.string().trim().min(2),
   country: z.string().trim().default("Malawi"),
   employmentType: z.string().trim().min(2),
+  businessName: z.string().trim().optional(),
+  employerNameOrBusinessAddress: z.string().trim().min(3).optional(),
+  businessActivityNature: z.string().trim().optional(),
+  jobTitle: z.string().trim().optional(),
+  employmentNumber: z.string().trim().optional(),
+  employmentStatus: z.enum(["full_time", "part_time", "fixed_contract"]).optional(),
+  contractDurationYears: z.coerce.number().int().min(0).max(80).optional(),
+  contractDurationMonths: z.coerce.number().int().min(0).max(11).optional(),
+  durationWorkedYears: z.coerce.number().int().min(0).max(80).optional(),
+  durationWorkedMonths: z.coerce.number().int().min(0).max(11).optional(),
+  hrContactPhone: z.string().trim().optional(),
   governmentId: z.string().trim().optional().or(z.literal("")),
+  salaryDate: z.string().trim().optional().or(z.literal("")),
   monthlyIncome: z.coerce.number().gt(0),
   bankName: z.string().trim().min(2),
   accountNumber: z.string().trim().min(3),
@@ -107,13 +133,90 @@ const publicProfileUpdateSchema = z.object({
   reference1Phone: z.string().trim().min(6),
   reference2Name: z.string().trim().min(2),
   reference2Phone: z.string().trim().min(6),
+  guarantorRelationship: z.string().trim().min(2),
+  guarantorOccupation: z.string().trim().min(2),
+  guarantorHomeVillage: z.string().trim().min(2),
 }).superRefine((data, ctx) => {
   const employmentType = String(data.employmentType || "").trim().toLowerCase();
+  const isPrivateCompanyEmployee = employmentType === "private company employee";
+  const isSelfEmployed = employmentType === "self-employed";
+  const isFarmer = employmentType === "farmer";
+  const requiresSalaryDate =
+    employmentType === "government employee" || isPrivateCompanyEmployee || isSelfEmployed;
   if (employmentType === "government employee" && !String(data.governmentId || "").trim()) {
     ctx.addIssue({
       code: "custom",
       path: ["governmentId"],
       message: "Government ID is required for government employees.",
+    });
+  }
+  if (requiresSalaryDate && !String(data.salaryDate || "").trim()) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["salaryDate"],
+      message: "Date of salary is required.",
+    });
+  }
+  if (employmentType === "business") {
+    if (!String(data.businessName || "").trim()) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["businessName"],
+        message: "Business name is required for business employment type.",
+      });
+    }
+    if (!String(data.businessActivityNature || "").trim()) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["businessActivityNature"],
+        message: "Business activity is required for business employment type.",
+      });
+    }
+    return;
+  }
+  if (isFarmer) {
+    return;
+  }
+  if (!String(data.jobTitle || "").trim()) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["jobTitle"],
+      message: "Job title is required.",
+    });
+  }
+  if (!isPrivateCompanyEmployee && !isSelfEmployed && !String(data.employmentNumber || "").trim()) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["employmentNumber"],
+      message: "Employment number is required.",
+    });
+  }
+  if (!String(data.employmentStatus || "").trim()) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["employmentStatus"],
+      message: "Employment status is required.",
+    });
+  }
+  if (data.employmentStatus === "fixed_contract" && (data.contractDurationYears === undefined || data.contractDurationMonths === undefined)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["contractDurationYears"],
+      message: "Fixed contract duration (years and months) is required for fixed contract.",
+    });
+  }
+  if (data.durationWorkedYears === undefined || data.durationWorkedMonths === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["durationWorkedYears"],
+      message: "Duration worked (years and months) is required.",
+    });
+  }
+  if (!String(data.hrContactPhone || "").trim()) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["hrContactPhone"],
+      message: "Employer HR contact phone is required.",
     });
   }
 });
@@ -122,8 +225,21 @@ const ALLOWED_DOC_TYPES = new Set([
   "national_id",
   "bank_statement_3_months",
   "security_offer",
+  "guarantor_national_id",
   "payslip_or_business_proof",
 ]);
+
+const normalizeDocType = (value = "") => {
+  const raw = String(value || "").trim().toLowerCase();
+  const map = {
+    guarantornationalid: "guarantor_national_id",
+    guarantor_nationalid: "guarantor_national_id",
+    "guarantor-national-id": "guarantor_national_id",
+    guarantor_id: "guarantor_national_id",
+    guarantorid: "guarantor_national_id",
+  };
+  return map[raw] || raw;
+};
 
 const toDocumentKey = (value = "") =>
   String(value || "")
@@ -413,43 +529,98 @@ export const loanInquiryController = {
       });
     }
 
-    const inquiry = await ensureInquiryApplicationCode(req.inquiry);
+    const inquiryId = req.inquiry?._id;
+    const inquiry = await ensureInquiryApplicationCode(
+      await LoanInquiry.findById(inquiryId)
+    );
+    if (!inquiry) {
+      return res.status(404).json({
+        success: false,
+        message: "Inquiry link is invalid or expired",
+        code: "NOT_FOUND",
+      });
+    }
     const payload = parsed.data;
+    const update = {
+      addressLine1: payload.addressLine1,
+      address: payload.addressLine1,
+      city: payload.city,
+      district: payload.district,
+      country: payload.country || "Malawi",
+      employmentType: payload.employmentType,
+      businessName: payload.businessName || "",
+      employerNameOrBusinessAddress: payload.employerNameOrBusinessAddress,
+      businessActivityNature: payload.businessActivityNature,
+      jobTitle: payload.jobTitle,
+      employmentNumber: payload.employmentNumber,
+      employmentStatus: payload.employmentStatus,
+      contractDurationYears: payload.contractDurationYears ?? null,
+      contractDurationMonths: payload.contractDurationMonths ?? null,
+      durationWorkedYears: payload.durationWorkedYears,
+      durationWorkedMonths: payload.durationWorkedMonths,
+      hrContactPhone: payload.hrContactPhone,
+      governmentId: payload.governmentId || "",
+      salaryDate: payload.salaryDate || "",
+      monthlyIncome: Number(payload.monthlyIncome),
+      bankName: payload.bankName,
+      accountNumber: payload.accountNumber,
+      branchCode: payload.branchCode,
+      reference1Name: payload.reference1Name,
+      reference1Phone: payload.reference1Phone,
+      reference2Name: payload.reference2Name,
+      reference2Phone: payload.reference2Phone,
+      guarantorRelationship: payload.guarantorRelationship,
+      guarantorOccupation: payload.guarantorOccupation,
+      guarantorHomeVillage: payload.guarantorHomeVillage,
+    };
 
-    inquiry.addressLine1 = payload.addressLine1;
-    inquiry.address = payload.addressLine1;
-    inquiry.city = payload.city;
-    inquiry.district = payload.district;
-    inquiry.country = payload.country || "Malawi";
-    inquiry.employmentType = payload.employmentType;
-    inquiry.governmentId = payload.governmentId || "";
-    inquiry.monthlyIncome = Number(payload.monthlyIncome);
-    inquiry.bankName = payload.bankName;
-    inquiry.accountNumber = payload.accountNumber;
-    inquiry.branchCode = payload.branchCode;
-    inquiry.reference1Name = payload.reference1Name;
-    inquiry.reference1Phone = payload.reference1Phone;
-    inquiry.reference2Name = payload.reference2Name;
-    inquiry.reference2Phone = payload.reference2Phone;
+    const updatedInquiry = await LoanInquiry.findByIdAndUpdate(
+      inquiry._id,
+      { $set: update },
+      { new: true }
+    );
 
-    syncInquiryCompletion(inquiry);
-    await inquiry.save();
+    if (!updatedInquiry) {
+      return res.status(404).json({
+        success: false,
+        message: "Inquiry link is invalid or expired",
+        code: "NOT_FOUND",
+      });
+    }
+
+    const nextCompletion = calculateProfileCompletion(updatedInquiry);
+    if (updatedInquiry.profileCompletion !== nextCompletion) {
+      await LoanInquiry.updateOne(
+        { _id: updatedInquiry._id },
+        { $set: { profileCompletion: nextCompletion } }
+      );
+      updatedInquiry.profileCompletion = nextCompletion;
+    }
 
     return res.json({
       success: true,
-      data: toPublicInquiryProfile(inquiry),
+      data: toPublicInquiryProfile(updatedInquiry),
     });
   },
 
   publicDocUpload: async (req, res) => {
-    const inquiry = await ensureInquiryApplicationCode(req.inquiry);
-    const type = String(req.body.type || "").trim();
+    const inquiry = await ensureInquiryApplicationCode(
+      await LoanInquiry.findById(req.inquiry?._id)
+    );
+    if (!inquiry) {
+      return res.status(404).json({
+        success: false,
+        message: "Inquiry link is invalid or expired",
+        code: "NOT_FOUND",
+      });
+    }
+    const type = normalizeDocType(req.body.type || req.body.documentType);
 
     if (!ALLOWED_DOC_TYPES.has(type)) {
       return res.status(400).json({
         success: false,
         message:
-          "Document type must be national_id, bank_statement_3_months, security_offer, or payslip_or_business_proof",
+          "Document type must be national_id, bank_statement_3_months, security_offer, guarantor_national_id, or payslip_or_business_proof",
         code: "VALIDATION_ERROR",
       });
     }
@@ -462,26 +633,50 @@ export const loanInquiryController = {
       });
     }
 
-    inquiry.documents = (inquiry.documents || []).filter((d) => d.type !== type);
-    inquiry.documents.push({
+    const nextDoc = {
       type,
       fileUrl: toPublicFileUrl(req.file.path),
       filePath: req.file.path,
       mime: req.file.mimetype,
       uploadedAt: new Date(),
-    });
+    };
+    await LoanInquiry.updateOne({ _id: inquiry._id }, { $pull: { documents: { type } } });
+    await LoanInquiry.updateOne({ _id: inquiry._id }, { $push: { documents: nextDoc } });
 
-    syncInquiryCompletion(inquiry);
-    await inquiry.save();
+    const updatedInquiry = await LoanInquiry.findById(inquiry._id);
+    if (!updatedInquiry) {
+      return res.status(404).json({
+        success: false,
+        message: "Inquiry link is invalid or expired",
+        code: "NOT_FOUND",
+      });
+    }
+    const nextCompletion = calculateProfileCompletion(updatedInquiry);
+    if (updatedInquiry.profileCompletion !== nextCompletion) {
+      await LoanInquiry.updateOne(
+        { _id: updatedInquiry._id },
+        { $set: { profileCompletion: nextCompletion } }
+      );
+      updatedInquiry.profileCompletion = nextCompletion;
+    }
 
     return res.json({
       success: true,
-      data: toPublicInquiryProfile(inquiry),
+      data: toPublicInquiryProfile(updatedInquiry),
     });
   },
 
   publicAvatarUpload: async (req, res) => {
-    const inquiry = await ensureInquiryApplicationCode(req.inquiry);
+    const inquiry = await ensureInquiryApplicationCode(
+      await LoanInquiry.findById(req.inquiry?._id)
+    );
+    if (!inquiry) {
+      return res.status(404).json({
+        success: false,
+        message: "Inquiry link is invalid or expired",
+        code: "NOT_FOUND",
+      });
+    }
 
     if (!req.file) {
       return res.status(400).json({
@@ -492,12 +687,35 @@ export const loanInquiryController = {
     }
 
     const previousAvatarPath = inquiry.avatarPath || "";
-    inquiry.avatarPath = req.file.path;
-    inquiry.avatarUrl = toPublicFileUrl(req.file.path);
-    syncInquiryCompletion(inquiry);
-    await inquiry.save();
+    const nextAvatarPath = req.file.path;
+    const nextAvatarUrl = toPublicFileUrl(req.file.path);
+    const updatedInquiry = await LoanInquiry.findByIdAndUpdate(
+      inquiry._id,
+      {
+        $set: {
+          avatarPath: nextAvatarPath,
+          avatarUrl: nextAvatarUrl,
+        },
+      },
+      { new: true }
+    );
+    if (!updatedInquiry) {
+      return res.status(404).json({
+        success: false,
+        message: "Inquiry link is invalid or expired",
+        code: "NOT_FOUND",
+      });
+    }
+    const nextCompletion = calculateProfileCompletion(updatedInquiry);
+    if (updatedInquiry.profileCompletion !== nextCompletion) {
+      await LoanInquiry.updateOne(
+        { _id: updatedInquiry._id },
+        { $set: { profileCompletion: nextCompletion } }
+      );
+      updatedInquiry.profileCompletion = nextCompletion;
+    }
 
-    if (previousAvatarPath && previousAvatarPath !== inquiry.avatarPath && fs.existsSync(previousAvatarPath)) {
+    if (previousAvatarPath && previousAvatarPath !== nextAvatarPath && fs.existsSync(previousAvatarPath)) {
       try {
         fs.unlinkSync(previousAvatarPath);
       } catch {
@@ -507,12 +725,21 @@ export const loanInquiryController = {
 
     return res.json({
       success: true,
-      data: toPublicInquiryProfile(inquiry),
+      data: toPublicInquiryProfile(updatedInquiry),
     });
   },
 
   publicSubmitKyc: async (req, res) => {
-    const inquiry = await ensureInquiryApplicationCode(req.inquiry);
+    const inquiry = await ensureInquiryApplicationCode(
+      await LoanInquiry.findById(req.inquiry?._id)
+    );
+    if (!inquiry) {
+      return res.status(404).json({
+        success: false,
+        message: "Inquiry link is invalid or expired",
+        code: "NOT_FOUND",
+      });
+    }
     syncInquiryCompletion(inquiry);
 
     if (!String(inquiry.avatarUrl || "").trim()) {
@@ -521,6 +748,24 @@ export const loanInquiryController = {
         success: false,
         message: "Profile photo is required before KYC submission",
         code: "AVATAR_REQUIRED",
+      });
+    }
+
+    const hasGuarantorDetails =
+      String(inquiry.reference1Name || "").trim() &&
+      String(inquiry.reference1Phone || "").trim() &&
+      String(inquiry.guarantorRelationship || "").trim() &&
+      Array.isArray(inquiry.documents) &&
+      inquiry.documents.some((d) => d?.type === "guarantor_national_id") &&
+      String(inquiry.guarantorOccupation || "").trim() &&
+      String(inquiry.guarantorHomeVillage || "").trim();
+
+    if (!hasGuarantorDetails) {
+      await inquiry.save();
+      return res.status(400).json({
+        success: false,
+        message: "Please complete all guarantor details before submission",
+        code: "GUARANTOR_INCOMPLETE",
       });
     }
 
@@ -997,7 +1242,19 @@ export const loanInquiryController = {
     if (parsed.data.district !== undefined) doc.district = parsed.data.district;
     if (parsed.data.country !== undefined) doc.country = parsed.data.country;
     if (parsed.data.employmentType !== undefined) doc.employmentType = parsed.data.employmentType;
+    if (parsed.data.businessName !== undefined) doc.businessName = parsed.data.businessName;
+    if (parsed.data.employerNameOrBusinessAddress !== undefined) doc.employerNameOrBusinessAddress = parsed.data.employerNameOrBusinessAddress;
+    if (parsed.data.businessActivityNature !== undefined) doc.businessActivityNature = parsed.data.businessActivityNature;
+    if (parsed.data.jobTitle !== undefined) doc.jobTitle = parsed.data.jobTitle;
+    if (parsed.data.employmentNumber !== undefined) doc.employmentNumber = parsed.data.employmentNumber;
+    if (parsed.data.employmentStatus !== undefined) doc.employmentStatus = parsed.data.employmentStatus;
+    if (parsed.data.contractDurationYears !== undefined) doc.contractDurationYears = parsed.data.contractDurationYears;
+    if (parsed.data.contractDurationMonths !== undefined) doc.contractDurationMonths = parsed.data.contractDurationMonths;
+    if (parsed.data.durationWorkedYears !== undefined) doc.durationWorkedYears = parsed.data.durationWorkedYears;
+    if (parsed.data.durationWorkedMonths !== undefined) doc.durationWorkedMonths = parsed.data.durationWorkedMonths;
+    if (parsed.data.hrContactPhone !== undefined) doc.hrContactPhone = parsed.data.hrContactPhone;
     if (parsed.data.governmentId !== undefined) doc.governmentId = parsed.data.governmentId;
+    if (parsed.data.salaryDate !== undefined) doc.salaryDate = parsed.data.salaryDate;
     if (parsed.data.monthlyIncome !== undefined) doc.monthlyIncome = parsed.data.monthlyIncome;
     if (parsed.data.bankName !== undefined) doc.bankName = parsed.data.bankName;
     if (parsed.data.accountNumber !== undefined) doc.accountNumber = parsed.data.accountNumber;
@@ -1006,6 +1263,9 @@ export const loanInquiryController = {
     if (parsed.data.reference1Phone !== undefined) doc.reference1Phone = parsed.data.reference1Phone;
     if (parsed.data.reference2Name !== undefined) doc.reference2Name = parsed.data.reference2Name;
     if (parsed.data.reference2Phone !== undefined) doc.reference2Phone = parsed.data.reference2Phone;
+    if (parsed.data.guarantorRelationship !== undefined) doc.guarantorRelationship = parsed.data.guarantorRelationship;
+    if (parsed.data.guarantorOccupation !== undefined) doc.guarantorOccupation = parsed.data.guarantorOccupation;
+    if (parsed.data.guarantorHomeVillage !== undefined) doc.guarantorHomeVillage = parsed.data.guarantorHomeVillage;
 
     if (doc.status === "CLOSED" && !String(doc.closeReason || "").trim()) {
       return res.status(400).json({

@@ -249,6 +249,8 @@ export default function LoanInquiryPage() {
     setSubmitting(true);
 
     try {
+      const selectedLoanName =
+        mergedLoanOptions.find((item) => item.slug === form.loanProductSlug)?.name || undefined;
       await api.post("/inquiries", {
         fullName: form.fullName,
         address: form.address,
@@ -262,8 +264,7 @@ export default function LoanInquiryPage() {
         employmentStatus: form.employmentStatus,
         borrowerType: form.borrowerType,
         loanProductSlug: form.loanProductSlug,
-        loanProductName:
-          mergedLoanOptions.find((item) => item.slug === form.loanProductSlug)?.name || "",
+        ...(selectedLoanName ? { loanProductName: selectedLoanName } : {}),
         requestedAmount: Number(form.requestedAmount),
         preferredTenureMonths: Number(form.preferredTenureMonths),
         notes: form.description.trim(),
