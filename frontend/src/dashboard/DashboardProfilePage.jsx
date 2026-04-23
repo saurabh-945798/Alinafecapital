@@ -5,7 +5,11 @@ import { useProfile, usePublicProfile } from "../hooks/useProfile";
 import { DocumentUpload, ProfileForm } from "../features/dashboard";
 
 export default function DashboardProfilePage() {
-  const { token } = useParams();
+  const { token: rawToken } = useParams();
+  const token = useMemo(() => {
+    const value = String(rawToken || "").trim();
+    return value.replace(/[)\].,;!?]+$/g, "");
+  }, [rawToken]);
   const isPublicAccess = !!token;
   const privateProfileState = useProfile(!isPublicAccess);
   const publicProfileState = usePublicProfile(token, isPublicAccess);

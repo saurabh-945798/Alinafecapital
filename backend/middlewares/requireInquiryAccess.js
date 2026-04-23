@@ -2,9 +2,20 @@ import { LoanInquiry } from "../models/LoanInquiry.model.js";
 
 export async function requireInquiryAccess(req, res, next) {
   try {
-    const token = String(req.params.token || "").trim();
+    const rawToken = String(req.params.token || "").trim();
+    const decodedToken = (() => {
+      try {
+        return decodeURIComponent(rawToken);
+      } catch {
+        return rawToken;
+      }
+    })();
+    const token = String(decodedToken || "").trim();
+    const cleanedToken = token
+      .replace(/^["'`]+|["'`]+$/g, "")
+      .replace(/[)\].,;!?]+$/g, "");
 
-    if (!token) {
+    if (!cleanedToken) {
       return res.status(400).json({
         success: false,
         message: "Invalid inquiry access token",
@@ -12,7 +23,17 @@ export async function requireInquiryAccess(req, res, next) {
       });
     }
 
-    const inquiry = await LoanInquiry.findOne({ publicAccessToken: token });
+    const candidates = Array.from(
+      new Set([
+        cleanedToken,
+        cleanedToken.toLowerCase(),
+        cleanedToken.replace(/[^a-zA-Z0-9_-]/g, ""),
+      ].filter(Boolean))
+    );
+
+    const inquiry = await LoanInquiry.findOne({
+      publicAccessToken: { $in: candidates },
+    });
     if (!inquiry) {
       return res.status(404).json({
         success: false,

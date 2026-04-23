@@ -131,8 +131,8 @@ const publicProfileUpdateSchema = z.object({
   branchCode: z.string().trim().min(2),
   reference1Name: z.string().trim().min(2),
   reference1Phone: z.string().trim().min(6),
-  reference2Name: z.string().trim().min(2),
-  reference2Phone: z.string().trim().min(6),
+  reference2Name: z.string().trim().min(2).optional().or(z.literal("")),
+  reference2Phone: z.string().trim().min(6).optional().or(z.literal("")),
   guarantorRelationship: z.string().trim().min(2),
   guarantorOccupation: z.string().trim().min(2),
   guarantorHomeVillage: z.string().trim().min(2),
@@ -567,11 +567,11 @@ export const loanInquiryController = {
       branchCode: payload.branchCode,
       reference1Name: payload.reference1Name,
       reference1Phone: payload.reference1Phone,
-      reference2Name: payload.reference2Name,
-      reference2Phone: payload.reference2Phone,
-      guarantorRelationship: payload.guarantorRelationship,
-      guarantorOccupation: payload.guarantorOccupation,
-      guarantorHomeVillage: payload.guarantorHomeVillage,
+      reference2Name: payload.reference2Name || payload.reference1Name || "",
+      reference2Phone: payload.reference2Phone || payload.reference1Phone || "",
+      guarantorRelationship: payload.guarantorRelationship || payload.guarantorRelationship,
+      guarantorOccupation: payload.guarantorOccupation || payload.guarantorOccupation,
+      guarantorHomeVillage: payload.guarantorHomeVillage || payload.guarantorHomeVillage,
     };
 
     const updatedInquiry = await LoanInquiry.findByIdAndUpdate(
@@ -754,11 +754,11 @@ export const loanInquiryController = {
     const hasGuarantorDetails =
       String(inquiry.reference1Name || "").trim() &&
       String(inquiry.reference1Phone || "").trim() &&
-      String(inquiry.guarantorRelationship || "").trim() &&
+      String(inquiry.guarantorRelationship || inquiry.guarantorRelationship || "").trim() &&
       Array.isArray(inquiry.documents) &&
       inquiry.documents.some((d) => d?.type === "guarantor_national_id") &&
-      String(inquiry.guarantorOccupation || "").trim() &&
-      String(inquiry.guarantorHomeVillage || "").trim();
+      String(inquiry.guarantorOccupation || inquiry.guarantorOccupation || "").trim() &&
+      String(inquiry.guarantorHomeVillage || inquiry.guarantorHomeVillage || "").trim();
 
     if (!hasGuarantorDetails) {
       await inquiry.save();
@@ -1263,9 +1263,15 @@ export const loanInquiryController = {
     if (parsed.data.reference1Phone !== undefined) doc.reference1Phone = parsed.data.reference1Phone;
     if (parsed.data.reference2Name !== undefined) doc.reference2Name = parsed.data.reference2Name;
     if (parsed.data.reference2Phone !== undefined) doc.reference2Phone = parsed.data.reference2Phone;
-    if (parsed.data.guarantorRelationship !== undefined) doc.guarantorRelationship = parsed.data.guarantorRelationship;
-    if (parsed.data.guarantorOccupation !== undefined) doc.guarantorOccupation = parsed.data.guarantorOccupation;
-    if (parsed.data.guarantorHomeVillage !== undefined) doc.guarantorHomeVillage = parsed.data.guarantorHomeVillage;
+    if (parsed.data.guarantorRelationship !== undefined || parsed.data.guarantorRelationship !== undefined) {
+      doc.guarantorRelationship = parsed.data.guarantorRelationship ?? parsed.data.guarantorRelationship;
+    }
+    if (parsed.data.guarantorOccupation !== undefined || parsed.data.guarantorOccupation !== undefined) {
+      doc.guarantorOccupation = parsed.data.guarantorOccupation ?? parsed.data.guarantorOccupation;
+    }
+    if (parsed.data.guarantorHomeVillage !== undefined || parsed.data.guarantorHomeVillage !== undefined) {
+      doc.guarantorHomeVillage = parsed.data.guarantorHomeVillage ?? parsed.data.guarantorHomeVillage;
+    }
 
     if (doc.status === "CLOSED" && !String(doc.closeReason || "").trim()) {
       return res.status(400).json({

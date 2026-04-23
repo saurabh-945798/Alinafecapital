@@ -134,9 +134,9 @@ export default function ProfileForm({
       branchCode: profile.branchCode || "",
       reference1Name: profile.reference1Name || "",
       reference1Phone: profile.reference1Phone || "",
-      guarantorRelationship: profile.guarantorRelationship || "",
-      guarantorOccupation: profile.guarantorOccupation || "",
-      guarantorHomeVillage: profile.guarantorHomeVillage || "",
+      guarantorRelationship: profile.guarantorRelationship || profile.guarantorRelationship || "",
+      guarantorOccupation: profile.guarantorOccupation || profile.guarantorOccupation || "",
+      guarantorHomeVillage: profile.guarantorHomeVillage || profile.guarantorHomeVillage || "",
     });
     onEmploymentTypeChange?.(profile.employmentType || "");
   }, [
@@ -164,6 +164,9 @@ export default function ProfileForm({
     profile?.branchCode,
     profile?.reference1Name,
     profile?.reference1Phone,
+    profile?.guarantorRelationship,
+    profile?.guarantorOccupation,
+    profile?.guarantorHomeVillage,
     profile?.guarantorRelationship,
     profile?.guarantorOccupation,
     profile?.guarantorHomeVillage,
@@ -227,10 +230,10 @@ export default function ProfileForm({
       !!String(form.branchCode || "").trim() &&
       !!String(form.reference1Name || "").trim() &&
       !!String(form.reference1Phone || "").trim() &&
-      !!String(form.guarantorRelationship || "").trim() &&
+      !!String(form.guarantorRelationship || form.guarantorRelationship || "").trim() &&
       !!guarantorNationalIdDoc &&
-      !!String(form.guarantorOccupation || "").trim() &&
-      !!String(form.guarantorHomeVillage || "").trim() &&
+      !!String(form.guarantorOccupation || form.guarantorOccupation || "").trim() &&
+      !!String(form.guarantorHomeVillage || form.guarantorHomeVillage || "").trim() &&
       guarantorDeclarationAccepted;
 
     onCompletionChange?.(sectionsComplete);
@@ -319,10 +322,10 @@ export default function ProfileForm({
     if (!String(form.branchCode || "").trim()) return "Please enter your branch.";
     if (!String(form.reference1Name || "").trim()) return "Please enter guarantor full name.";
     if (!String(form.reference1Phone || "").trim()) return "Please enter guarantor phone number.";
-    if (!String(form.guarantorRelationship || "").trim()) return "Please enter guarantor relationship.";
-    if (!guarantorNationalIdDoc) return "Please upload guarantor national ID document.";
-    if (!String(form.guarantorOccupation || "").trim()) return "Please enter guarantor occupation.";
-    if (!String(form.guarantorHomeVillage || "").trim()) return "Please enter guarantor home village.";
+    if (!String(form.guarantorRelationship || form.guarantorRelationship || "").trim()) return "Please enter guarantor relationship.";
+    if (!guarantorNationalIdDoc) return "Please upload guarantor National ID document.";
+    if (!String(form.guarantorOccupation || form.guarantorOccupation || "").trim()) return "Please enter guarantor occupation.";
+    if (!String(form.guarantorHomeVillage || form.guarantorHomeVillage || "").trim()) return "Please enter guarantor home village.";
 
     return "";
   };
@@ -404,11 +407,11 @@ export default function ProfileForm({
         branchCode: form.branchCode,
         reference1Name: form.reference1Name,
         reference1Phone: form.reference1Phone,
-        reference2Name: form.guarantorRelationship,
-        reference2Phone: form.guarantorOccupation,
-        guarantorRelationship: form.guarantorRelationship,
-        guarantorOccupation: form.guarantorOccupation,
-        guarantorHomeVillage: form.guarantorHomeVillage,
+        reference2Name: form.reference1Name,
+        reference2Phone: form.reference1Phone,
+        guarantorRelationship: form.guarantorRelationship || form.guarantorRelationship,
+        guarantorOccupation: form.guarantorOccupation || form.guarantorOccupation,
+        guarantorHomeVillage: form.guarantorHomeVillage || form.guarantorHomeVillage,
       });
 
       const savedProfile = response?.data?.item ?? response?.data?.data ?? null;
@@ -510,7 +513,7 @@ export default function ProfileForm({
     const allowedByExtension =
       file.type === "application/octet-stream" && allowedExtensions.has(extension);
     if (!allowedByMime && !allowedByExtension) {
-      setError("Guarantor National ID must be PDF, JPG, JPEG, PNG, or WEBP.");
+      setError("guarantor National ID must be PDF, JPG, JPEG, PNG, or WEBP.");
       return;
     }
 
@@ -530,7 +533,7 @@ export default function ProfileForm({
       onGuarantorDocUploaded?.(nextProfile);
       window.setTimeout(() => setGuarantorDocUploaded(false), 2000);
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to upload guarantor national ID document.");
+      setError(err?.response?.data?.message || "Failed to upload guarantor National ID document.");
     } finally {
       setGuarantorDocUploading(false);
     }
@@ -1007,7 +1010,7 @@ export default function ProfileForm({
             <span className="text-sm font-medium text-slate-700">Relationship</span>
             <select
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-              value={form.guarantorRelationship}
+              value={form.guarantorRelationship || form.guarantorRelationship}
               onChange={(e) => setForm((p) => ({ ...p, guarantorRelationship: e.target.value }))}
               required
             >
@@ -1055,7 +1058,7 @@ export default function ProfileForm({
             <input
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
               placeholder="Enter occupation"
-              value={form.guarantorOccupation}
+              value={form.guarantorOccupation || form.guarantorOccupation}
               onChange={(e) => setForm((p) => ({ ...p, guarantorOccupation: e.target.value }))}
               required
             />
@@ -1066,7 +1069,7 @@ export default function ProfileForm({
             <input
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
               placeholder="Enter home village"
-              value={form.guarantorHomeVillage}
+              value={form.guarantorHomeVillage || form.guarantorHomeVillage}
               onChange={(e) => setForm((p) => ({ ...p, guarantorHomeVillage: e.target.value }))}
               required
             />
