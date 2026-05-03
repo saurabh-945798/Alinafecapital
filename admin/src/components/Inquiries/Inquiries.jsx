@@ -3,6 +3,7 @@ import Button from "../ui/Button";
 import Badge from "../ui/Badge";
 import { inquiriesApi } from "../../services/api/inquiries.api";
 import { useToast } from "../../context/ToastContext.jsx";
+import { formatMWK } from "../../utils/money.js";
 
 const STATUS_TONE = {
   NEW: "amber",
@@ -141,7 +142,7 @@ export default function InquiriesPage() {
                     </td>
                     <td className="px-4 py-3">{item.loanProductSlug}</td>
                     <td className="px-4 py-3">
-                      <p>MWK {Number(item.requestedAmount || 0).toLocaleString("en-US")}</p>
+                      <p>{formatMWK(item.requestedAmount, 3)}</p>
                       <p className="text-xs text-slate-500">{item.preferredTenureMonths || "-"} months</p>
                     </td>
                     <td className="px-4 py-3">
@@ -219,7 +220,7 @@ export default function InquiriesPage() {
             <div className="rounded-lg border p-3">
               <p className="text-xs text-slate-500">Loan</p>
               <p className="font-semibold">{selected.loanProductSlug}</p>
-              <p>Requested: MWK {Number(selected.requestedAmount || 0).toLocaleString("en-US")}</p>
+              <p>Requested: {formatMWK(selected.requestedAmount, 3)}</p>
               <p>Tenure: {selected.preferredTenureMonths || "-"} months</p>
             </div>
             <div className="rounded-lg border p-3">

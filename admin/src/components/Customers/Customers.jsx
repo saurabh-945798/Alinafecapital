@@ -5,6 +5,7 @@ import Badge from "../ui/Badge";
 import { customersApi } from "../../services/api/customers.api";
 import { useToast } from "../../context/ToastContext.jsx";
 import { ADMIN_FILE_BASE_URL } from "../../config/api";
+import { formatMWK } from "../../utils/money.js";
 
 const formatDate = (value) => {
   if (!value) return "-";
@@ -374,7 +375,7 @@ export default function CustomersPage() {
                         >
                           {a.status}
                         </Badge>
-                        <span>{`MWK ${Number(a.requestedAmount || 0).toLocaleString("en-US")}`}</span>
+                        <span>{formatMWK(a.requestedAmount, 3)}</span>
                         <span className="text-xs text-slate-500">{formatDate(a.createdAt)}</span>
                       </div>
                     ))}

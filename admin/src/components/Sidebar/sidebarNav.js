@@ -4,6 +4,7 @@ import {
   Settings,
   Package,
   Wallet,
+  BarChart3,
   MessageSquareWarning,
 } from "lucide-react";
 
@@ -19,6 +20,7 @@ export const sidebarNav = [
     section: "Operations",
     items: [
       { label: "Payments", to: "/admin/payments", icon: Wallet },
+      { label: "Reports", to: "/admin/reports", icon: BarChart3 },
       { label: "Loan Products", to: "/admin/loan-products", icon: Package },
       { label: "Complaints", to: "/admin/complaints", icon: MessageSquareWarning },
     ],

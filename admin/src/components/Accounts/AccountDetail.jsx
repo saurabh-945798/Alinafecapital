@@ -5,6 +5,7 @@ import Badge from "../ui/Badge";
 import Button from "../ui/Button";
 import { accountsApi } from "../../services/api/accounts.api";
 import { useToast } from "../../context/ToastContext.jsx";
+import { formatMWK, truncateAmount } from "../../utils/money.js";
 
 const ACCOUNT_STATUS_TONE = {
   ACTIVE: "green",
@@ -26,8 +27,7 @@ const formatDateOnly = (value) => {
 };
 
 const formatMoney = (value) => {
-  const amount = Number(value || 0);
-  return Number.isFinite(amount) ? `MWK ${amount.toLocaleString("en-US")}` : "-";
+  return formatMWK(value, 3);
 };
 
 const humanizeValue = (value = "") => {
@@ -184,7 +184,7 @@ export default function AccountDetailPage() {
       month: row.month,
       paymentDate: new Date().toISOString().slice(0, 10),
       amount: String(
-        Math.max(0, Number(row.remainingAmount || row.installment || 0)).toFixed(2)
+        Math.max(0, Number(row.remainingAmount || row.installment || 0)).toFixed(3)
       ),
       method: "cash",
       reference: "",

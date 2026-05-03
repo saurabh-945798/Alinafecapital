@@ -5,6 +5,7 @@ import Button from "../ui/Button";
 import { complianceApi } from "../../services/api/compliance.api";
 import { useToast } from "../../context/ToastContext.jsx";
 import { ADMIN_FILE_BASE_URL } from "../../config/api";
+import { formatMWK } from "../../utils/money.js";
 
 const KYC_STATUSES = ["pending", "verified", "rejected", "not_started", "all"];
 
@@ -442,7 +443,7 @@ export default function CompliancePage() {
                 <p className="text-xs text-slate-500">Employment</p>
                 <p className="font-medium text-slate-800">{selected.employmentType || "-"}</p>
                 <p className="text-slate-700">
-                  Income: {selected.monthlyIncome ? `MWK ${Number(selected.monthlyIncome).toLocaleString("en-US")}` : "-"}
+                  Income: {selected.monthlyIncome ? formatMWK(selected.monthlyIncome, 3) : "-"}
                 </p>
               </div>
               <div>

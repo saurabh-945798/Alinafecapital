@@ -6,7 +6,8 @@ import Badge from "../ui/Badge";
 import { inquiriesApi } from "../../services/api/inquiries.api";
 import { complianceApi } from "../../services/api/compliance.api";
 import { useToast } from "../../context/ToastContext.jsx";
-import { ADMIN_FILE_BASE_URL, PUBLIC_APP_URL } from "../../config/api";
+import { ADMIN_FILE_BASE_URL } from "../../config/api";
+import { formatMWK } from "../../utils/money.js";
 
 const STATUS_TONE = {
   NEW: "amber",
@@ -47,8 +48,6 @@ const HUMAN_KYC = {
 };
 
 const ACTION_STATUS_LABEL = {
-  KYC_SENT: "KYC",
-  KYC_REJECTED: "KYC Rejected",
   VERIFIED: "Verify",
   APPROVED: "Approved",
   DISBURSED: "Disburse",
@@ -91,8 +90,7 @@ const formatDateOnly = (value) => {
 
 const formatMoney = (value) => {
   if (value === undefined || value === null || value === "") return "-";
-  const amount = Number(value);
-  return Number.isFinite(amount) ? `MWK ${amount.toLocaleString("en-US")}` : "-";
+  return formatMWK(value, 3);
 };
 
 const resolveRepaymentConfig = (item) => {
@@ -206,56 +204,6 @@ const toWhatsappNumber = (phone = "") => {
   return digits;
 };
 
-const buildWhatsappLink = (item, nextStatus, rejectionReason = "") => {
-  const phone = toWhatsappNumber(item?.phone);
-  if (!phone) return "";
-
-  const customerName = item?.fullName || "Customer";
-  const loanName = item?.loanProductName || item?.loanProductSlug || "loan request";
-  const status = String(nextStatus || "").toUpperCase();
-  const publicAccessToken = String(item?.publicAccessToken || "").trim();
-  const profileLink = publicAccessToken
-    ? `${PUBLIC_APP_URL.replace(/\/$/, "")}/profile-kyc/${publicAccessToken}`
-    : "";
-
-  const kycSentMessage = profileLink
-    ? `Hello ${customerName}, thank you for your ${loanName} request. Please complete your profile and KYC form using this secure link: ${profileLink}. Once you finish it, we will continue with your review.`
-    : `Hello ${customerName}, thank you for your ${loanName} request. Our team will share your profile and KYC form link shortly so we can continue with your review.`;
-  const kycRejectedMessage = profileLink
-    ? `Hello ${customerName}, your KYC requires correction. Reason: ${rejectionReason}. Please fill the form again using this link: ${profileLink}`
-    : `Hello ${customerName}, your KYC requires correction. Reason: ${rejectionReason}. Our team will share your KYC form link shortly.`;
-
-  const messageMap = {
-    NEW: `Hello ${customerName}, we have received your ${loanName} request at Alinafe Capital. Your request is now under review and our team will contact you soon.`,
-    CONTACTED: `Hello ${customerName}, our team is now contacting you regarding your ${loanName} request. Please keep your phone available as we will guide you on the next steps shortly.`,
-    KYC_SENT: kycSentMessage,
-    KYC_REJECTED: kycRejectedMessage,
-    VERIFIED: `Hello ${customerName}, your KYC has been verified successfully. Our team is now continuing the review of your ${loanName} request.`,
-    APPROVED: `Hello ${customerName}, your ${loanName} request has been successfully approved. Please visit the branch to continue and receive your funds.`,
-    DISBURSED: `Hello ${customerName}, your ${loanName} has now been disbursed successfully. Please keep your repayment schedule and branch communication for the next steps.`,
-    CLOSED: `Hello ${customerName}, your ${loanName} request has now been closed. Please contact Alinafe Capital if you need any clarification.`,
-    QUALIFIED: `Hello ${customerName}, your ${loanName} request has been successfully approved. Please visit the branch to continue and receive your funds.`,
-  };
-
-  const message =
-    messageMap[status] ||
-    `Hello ${customerName}, your ${loanName} request is currently under review by Alinafe Capital. We will contact you soon.`;
-
-  return `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}&type=phone_number&app_absent=0`;
-};
-
-const getEffectiveWhatsappStatus = (item, nextStatus) => {
-  if (nextStatus) return nextStatus;
-  if (item?.status === "DISBURSED") return "DISBURSED";
-  if (item?.kycStatus === "verified" && item?.status !== "APPROVED" && item?.status !== "DISBURSED") return "VERIFIED";
-  if (item?.kycStatus === "pending") return "KYC_SENT";
-  if (item?.status === "KYC_REJECTED" || item?.kycStatus === "rejected") return "KYC_REJECTED";
-  if (item?.status === "KYC_SENT") return "KYC_SENT";
-  if (item?.status === "APPROVED") return "APPROVED";
-  if (item?.status === "CLOSED") return "CLOSED";
-  if (item?.status === "CONTACTED" || item?.status === "NEW") return "CONTACTED";
-  return item?.status || "";
-};
 
 const getDisplayedStatusKey = (item) => {
   if (!item) return "";
@@ -288,13 +236,13 @@ const getStatusNotification = (status) => {
   const config = {
     KYC_SENT: {
       title: "KYC status updated",
-      message: "The inquiry is now marked for KYC. You can use WhatsApp preview to send the KYC form link.",
+      message: "The inquiry is now marked for KYC. Wait for customer profile and document submission.",
       tone: "border-blue-200 bg-blue-50 text-blue-900",
       iconTone: "bg-blue-100 text-blue-600",
     },
     KYC_REJECTED: {
       title: "KYC rejected",
-      message: "The KYC status has been rejected successfully. You can now send the rejection message to the customer.",
+      message: "The KYC status has been rejected successfully. Wait for customer re-submission.",
       tone: "border-rose-200 bg-rose-50 text-rose-900",
       iconTone: "bg-rose-100 text-rose-600",
     },
@@ -306,7 +254,7 @@ const getStatusNotification = (status) => {
     },
     APPROVED: {
       title: "Loan approved",
-      message: "The loan inquiry has been approved successfully. You can now send the approval message to the customer.",
+      message: "The loan inquiry has been approved successfully.",
       tone: "border-emerald-200 bg-emerald-50 text-emerald-900",
       iconTone: "bg-emerald-100 text-emerald-600",
     },
@@ -363,7 +311,6 @@ export default function LoanApplicationDetail() {
   const [kycOpen, setKycOpen] = useState(true);
   const [repaymentOpen, setRepaymentOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [whatsappReady, setWhatsappReady] = useState(false);
   const [statusNotice, setStatusNotice] = useState(null);
   const [docActionLoading, setDocActionLoading] = useState("");
   const [addDocName, setAddDocName] = useState("");
@@ -445,7 +392,6 @@ export default function LoanApplicationDetail() {
         guarantorHomeVillage: data?.guarantorHomeVillage || "",
       });
       setAvatarBroken(false);
-      setWhatsappReady(false);
       setEditMode(false);
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to load inquiry details.");
@@ -600,7 +546,6 @@ export default function LoanApplicationDetail() {
         }
         await loadDetail();
         setNextStatus("");
-        setWhatsappReady(true);
         setStatusNotice(getStatusNotification("VERIFIED"));
         toast.success("KYC verified.");
         return;
@@ -702,7 +647,6 @@ export default function LoanApplicationDetail() {
       setDisbursementMobileNumber(updated?.disbursementMobileNumber || "");
       setDisbursementNote(updated?.disbursementNote || "");
       setNextStatus("");
-      setWhatsappReady(true);
       setStatusNotice(getStatusNotification(actionStatus));
       toast.success("Loan inquiry updated.");
     } catch (err) {
@@ -715,34 +659,6 @@ export default function LoanApplicationDetail() {
     }
   };
 
-  const openWhatsapp = async () => {
-    const effectiveStatus = getEffectiveWhatsappStatus(item, "");
-    if (!effectiveStatus) {
-      toast.error("Update the inquiry status first.");
-      return;
-    }
-
-    let rejectionReason = String(adminNote || "").trim();
-    if (effectiveStatus === "KYC_REJECTED" && !rejectionReason) {
-      const enteredReason = window.prompt("Enter the reason for KYC rejection:");
-      rejectionReason = String(enteredReason || "").trim();
-      if (!rejectionReason) {
-        toast.warning("KYC rejection reason is required before sending WhatsApp.");
-        return;
-      }
-      setAdminNote(rejectionReason);
-    }
-
-    let effectiveItem = item;
-
-    const href = buildWhatsappLink(effectiveItem, effectiveStatus, rejectionReason);
-    if (!href) {
-      toast.error("WhatsApp number is not available for this customer.");
-      return;
-    }
-
-    window.open(href, "_blank", "noopener,noreferrer");
-  };
 
   const handlePrint = () => {
     if (!item) return;
@@ -1083,7 +999,7 @@ export default function LoanApplicationDetail() {
                 </div>
                 <div class="field">
                   <div class="label">Monthly Income</div>
-                  <div class="field-value">${escapeHtml(item.monthlyIncome ? `MWK ${Number(item.monthlyIncome).toLocaleString("en-US")}` : "-")}</div>
+                  <div class="field-value">${escapeHtml(item.monthlyIncome ? formatMWK(item.monthlyIncome, 3) : "-")}</div>
                 </div>
                 <div class="field">
                   <div class="label">Bank Details</div>
@@ -1476,11 +1392,10 @@ export default function LoanApplicationDetail() {
   const availableStatuses = (() => {
     if (item?.status === "DISBURSED") return ["CLOSED"];
     if (item?.status === "APPROVED") return ["DISBURSED", "CLOSED"];
+    if (item?.status === "VERIFIED" || item?.kycStatus === "verified") return ["APPROVED", "CLOSED"];
     if (item?.status === "CLOSED") return [];
-    if (item?.kycStatus === "verified") return ["APPROVED", "CLOSED"];
-    if (item?.kycStatus === "pending") return ["KYC_REJECTED", "VERIFIED", "CLOSED"];
-    if (item?.kycStatus === "rejected") return ["KYC_SENT", "CLOSED"];
-    return ["KYC_SENT", "CLOSED"];
+    if (hasSubmittedKyc) return ["VERIFIED", "CLOSED"];
+    return ["CLOSED"];
   })();
   const repaymentPlan =
     item?.kycStatus === "verified" || item?.status === "APPROVED" || item?.status === "DISBURSED"
@@ -1513,22 +1428,22 @@ export default function LoanApplicationDetail() {
     }
     if (!hasSubmittedKyc) {
       return {
-        title: "Send KYC link",
-        note: "Customer has not submitted Profile + KYC yet. Send the KYC form link on WhatsApp first.",
+        title: "Waiting for submission",
+        note: "Customer has not submitted the complete profile and document form yet.",
         tone: "border-blue-200 bg-blue-50 text-blue-800",
       };
     }
     if (item.kycStatus === "pending") {
       if (item.status === "KYC_REJECTED") {
         return {
-          title: "Customer submitted KYC again",
-          note: "The customer has resubmitted the KYC form. Review the new documents and then verify or reject it again if needed.",
+          title: "Customer resubmitted details",
+          note: "Review the new documents and verify if the submission is complete.",
           tone: "border-amber-200 bg-amber-50 text-amber-800",
         };
       }
       return {
-        title: "Review submitted KYC",
-        note: "Check the uploaded documents, then verify KYC or reject it with a reason.",
+        title: "Review submitted details",
+        note: "Check the uploaded documents, then verify the application.",
         tone: "border-amber-200 bg-amber-50 text-amber-800",
       };
     }
@@ -1541,8 +1456,8 @@ export default function LoanApplicationDetail() {
     }
     if (item.kycStatus === "rejected" || item.status === "KYC_REJECTED") {
       return {
-        title: "KYC Rejected",
-        note: "KYC is currently rejected. Review the reason and wait for the next customer update.",
+        title: "Submission rejected",
+        note: "Review the rejection reason and wait for the next customer update.",
         tone: "border-rose-200 bg-rose-50 text-rose-800",
       };
     }
@@ -1661,7 +1576,7 @@ export default function LoanApplicationDetail() {
           <p className="text-xs text-slate-500">Loan Type</p>
           <p className="mt-1 font-semibold text-slate-900">{item.loanProductName || item.loanProductSlug}</p>
           <p className="mt-2 text-sm text-slate-700">
-            Requested Amount: {item.requestedAmount ? `MWK ${Number(item.requestedAmount).toLocaleString("en-US")}` : "-"}
+            Requested Amount: {item.requestedAmount ? formatMWK(item.requestedAmount, 3) : "-"}
           </p>
           <p className="mt-1 text-sm text-slate-700">
             Tenure: {item.preferredTenureMonths ? `${item.preferredTenureMonths} months` : "-"}
@@ -1911,8 +1826,8 @@ export default function LoanApplicationDetail() {
 
           {kycOpen ? (
             <div className="mt-4 space-y-4">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Employment
               </p>
@@ -1957,47 +1872,47 @@ export default function LoanApplicationDetail() {
                 </div>
               ) : (
                 <>
-                  <p className="mt-1 text-sm font-medium text-slate-900">{item.employmentType || "-"}</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{item.employmentType || "-"}</p>
                   {isKycBusiness ? (
-                    <>
-                      <p className="mt-1 text-sm text-slate-600">Business Name: {item.businessName || "-"}</p>
-                      <p className="mt-1 text-sm text-slate-600">Business Activity: {item.businessActivityNature || "-"}</p>
-                    </>
+                    <div className="mt-2 space-y-1 text-sm text-slate-700">
+                      <p><span className="font-medium text-slate-500">Business Name:</span> {item.businessName || "-"}</p>
+                      <p><span className="font-medium text-slate-500">Business Activity:</span> {item.businessActivityNature || "-"}</p>
+                    </div>
                   ) : isKycFarmer ? null : (
-                    <>
-                      <p className="mt-1 text-sm text-slate-600">Job Title: {item.jobTitle || "-"}</p>
+                    <div className="mt-2 space-y-1 text-sm text-slate-700">
+                      <p><span className="font-medium text-slate-500">Job Title:</span> {item.jobTitle || "-"}</p>
                       {!hideEmploymentNumber ? (
-                        <p className="mt-1 text-sm text-slate-600">Employment Number: {item.employmentNumber || "-"}</p>
+                        <p><span className="font-medium text-slate-500">Employment Number:</span> {item.employmentNumber || "-"}</p>
                       ) : null}
-                      <p className="mt-1 text-sm text-slate-600">Employment Status: {humanizeValue(item.employmentStatus)}</p>
+                      <p><span className="font-medium text-slate-500">Employment Status:</span> {humanizeValue(item.employmentStatus)}</p>
                       {String(item.employmentStatus || "").trim() === "fixed_contract" ? (
-                        <p className="mt-1 text-sm text-slate-600">
-                          Contract: {item.contractDurationYears ?? "-"} years / {item.contractDurationMonths ?? "-"} months
+                        <p>
+                          <span className="font-medium text-slate-500">Contract:</span> {item.contractDurationYears ?? "-"} years / {item.contractDurationMonths ?? "-"} months
                         </p>
                       ) : null}
-                      <p className="mt-1 text-sm text-slate-600">
-                        Duration Worked: {item.durationWorkedYears ?? "-"} years / {item.durationWorkedMonths ?? "-"} months
+                      <p>
+                        <span className="font-medium text-slate-500">Duration Worked:</span> {item.durationWorkedYears ?? "-"} years / {item.durationWorkedMonths ?? "-"} months
                       </p>
-                      <p className="mt-1 text-sm text-slate-600">HR Contact: {item.hrContactPhone || "-"}</p>
-                    </>
+                      <p><span className="font-medium text-slate-500">HR Contact:</span> {item.hrContactPhone || "-"}</p>
+                    </div>
                   )}
-                  {isKycGovernment ? (
-                    <p className="mt-1 text-sm text-slate-600">
-                      Government ID: {item.governmentId || "-"}
+                  {isKycGovernment && String(item.governmentId || "").trim() ? (
+                    <p className="mt-2 text-sm text-slate-700">
+                      <span className="font-medium text-slate-500">Government ID:</span> {item.governmentId || "-"}
                     </p>
                   ) : null}
                   {requiresSalaryDate ? (
-                    <p className="mt-1 text-sm text-slate-600">
-                      Salary Date: {item.salaryDate || "-"}
+                    <p className="mt-1 text-sm text-slate-700">
+                      <span className="font-medium text-slate-500">Salary Date:</span> {item.salaryDate || "-"}
                     </p>
                   ) : null}
-                  <p className="mt-1 text-sm text-slate-600">
-                    Income: {item.monthlyIncome ? `MWK ${Number(item.monthlyIncome).toLocaleString("en-US")}` : "-"}
+                  <p className="mt-1 text-sm text-slate-700">
+                    <span className="font-medium text-slate-500">Income:</span> {item.monthlyIncome ? formatMWK(item.monthlyIncome, 3) : "-"}
                   </p>
                 </>
               )}
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Bank Details
               </p>
@@ -2015,7 +1930,7 @@ export default function LoanApplicationDetail() {
                 </>
               )}
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Timeline
               </p>
@@ -2045,7 +1960,7 @@ export default function LoanApplicationDetail() {
                 Transaction Ref: {item.transactionReference || "-"}
               </p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Guarantor / Witness
               </p>
@@ -2321,7 +2236,7 @@ export default function LoanApplicationDetail() {
           <h3 className="text-sm font-semibold">Next Actions</h3>
           {!hasSubmittedKyc ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800">
-              Customer has not submitted Profile + KYC yet. Use `Send KYC Link` to share the form, then wait for submission before approval or KYC rejection.
+              Customer has not submitted profile and required documents yet. Wait for submission before verification.
             </div>
           ) : null}
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
@@ -2331,7 +2246,6 @@ export default function LoanApplicationDetail() {
                 type="button"
                 onClick={() => {
                   setNextStatus(status);
-                  setWhatsappReady(false);
                 }}
                 className={[
                   "min-h-11 rounded-xl border px-3 py-2 text-sm font-semibold transition",
@@ -2352,11 +2266,7 @@ export default function LoanApplicationDetail() {
               rows={1}
               className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
               placeholder={
-                nextStatus === "KYC_REJECTED"
-                  ? "Add KYC rejection reason"
-                  : nextStatus === "KYC_SENT"
-                    ? "Optional note for the customer"
-                  : "Add admin note"
+                "Add admin note"
               }
             />
 
@@ -2553,8 +2463,7 @@ export default function LoanApplicationDetail() {
               disabled={
                 !nextStatus ||
                 actionLoading ||
-                ((nextStatus === "APPROVED" || nextStatus === "KYC_REJECTED" || nextStatus === "VERIFIED") && !hasSubmittedKyc) ||
-                (nextStatus === "KYC_REJECTED" && !String(adminNote || "").trim()) ||
+                ((nextStatus === "APPROVED" || nextStatus === "VERIFIED") && !hasSubmittedKyc) ||
                 (nextStatus === "CLOSED" && !String(closeReason || "").trim()) ||
                 ((nextStatus === "VERIFIED" || nextStatus === "APPROVED") && !String(verifiedBy || "").trim()) ||
                 (nextStatus === "APPROVED" && !String(approvedBy || "").trim()) ||
@@ -2576,13 +2485,6 @@ export default function LoanApplicationDetail() {
             >
               {actionLoading ? "Updating..." : "Update Inquiry"}
             </Button>
-            <Button
-              variant="outline"
-              onClick={openWhatsapp}
-              disabled={actionLoading || !whatsappReady}
-            >
-              WP Preview
-            </Button>
           </div>
 
           {nextStatus === "VERIFIED" && hasSubmittedKyc ? (
@@ -2600,16 +2502,6 @@ export default function LoanApplicationDetail() {
               Capture the method details correctly. Bank transfer requires account details, while mobile money requires provider and number.
             </p>
           ) : null}
-          {nextStatus === "KYC_SENT" ? (
-            <p className="text-xs font-medium text-slate-600">
-              Save the inquiry first. After that, `WP Preview` will open the WhatsApp message with the KYC form link.
-            </p>
-          ) : null}
-          {nextStatus === "KYC_REJECTED" && !String(adminNote || "").trim() ? (
-            <p className="text-xs font-medium text-rose-600">
-              Add the KYC rejection reason before sending WhatsApp or saving.
-            </p>
-          ) : null}
           {nextStatus === "CLOSED" && !String(closeReason || "").trim() ? (
             <p className="text-xs font-medium text-rose-600">
               Select the close reason before saving.
@@ -2617,15 +2509,11 @@ export default function LoanApplicationDetail() {
           ) : null}
           {nextStatus ? (
             <p className="text-xs font-medium text-slate-600">
-              Update the inquiry first. WhatsApp preview is enabled only after the status is saved.
-            </p>
-          ) : whatsappReady ? (
-            <p className="text-xs font-medium text-slate-600">
-              Status saved. You can now use `WP Preview` to send the WhatsApp message.
+              Update the inquiry to save this action.
             </p>
           ) : (
             <p className="text-xs font-medium text-slate-600">
-              Select a status first. After saving it, `WP Preview` will become available.
+              Select a status first, then update the inquiry.
             </p>
           )}
         <div className="rounded-lg border p-3">

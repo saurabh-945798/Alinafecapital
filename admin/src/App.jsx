@@ -10,6 +10,7 @@ import InquiriesPage from "./components/Inquiries/Inquiries.jsx";
 import LoanApplicationsPage from "./components/LoanApplication/LoanApplication.jsx";
 import LoanApplicationDetailPage from "./components/LoanApplication/LoanApplicationDetail.jsx";
 import LoanProductsPage from "./components/LoanProducts/LoanProducts.jsx";
+import ReportsPage from "./components/Reports/Reports.jsx";
 import SettingsPage from "./components/Settings/Settings.jsx";
 import AdminLayout from "./layout/AdminLayout.jsx"; 
 
@@ -27,6 +28,7 @@ export default function AppRoutes() {
           <Route path="applications/:id" element={<LoanApplicationDetailPage />} />
           <Route path="payments" element={<AccountsPage />} />
           <Route path="payments/:id" element={<AccountDetailPage />} />
+          <Route path="reports" element={<ReportsPage />} />
           <Route path="accounts" element={<AccountsPage />} />
           <Route path="accounts/:id" element={<AccountDetailPage />} />
           <Route path="inquiries" element={<InquiriesPage />} />

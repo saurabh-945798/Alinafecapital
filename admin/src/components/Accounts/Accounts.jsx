@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
 import { accountsApi } from "../../services/api/accounts.api";
+import { formatMWK } from "../../utils/money.js";
 import { useToast } from "../../context/ToastContext.jsx";
 
 const ACCOUNT_STATUS_TONE = {
@@ -19,8 +20,7 @@ const formatDate = (value) => {
 };
 
 const formatMoney = (value) => {
-  const amount = Number(value || 0);
-  return Number.isFinite(amount) ? `MWK ${amount.toLocaleString("en-US")}` : "-";
+  return formatMWK(value, 3);
 };
 
 export default function AccountsPage() {

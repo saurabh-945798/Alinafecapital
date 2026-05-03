@@ -29,11 +29,47 @@ const publicCreateSchema = z.object({
   housingStatus: z.enum(["tenant", "home_owner"]),
   employmentStatus: z.enum(["employed", "not_employed"]),
   borrowerType: z.enum(["first_time", "repeat"]),
+  applicantNationalIdNumber: z.string().trim().min(2).optional(),
+  applicantOccupation: z.string().trim().min(2).optional(),
+  homeVillage: z.string().trim().min(2).optional(),
+  traditionalAuthority: z.string().trim().min(2).optional(),
+  residenceArea: z.string().trim().min(2).optional(),
+  residenceDistrict: z.string().trim().min(2).optional(),
+  employerNameOrBusinessAddress: z.string().trim().min(3).optional(),
+  businessActivityNature: z.string().trim().min(2).optional(),
+  jobTitle: z.string().trim().min(2).optional(),
+  employmentNumber: z.string().trim().min(2).optional(),
+  employmentType: z.string().trim().min(2).optional(),
+  contractDurationYears: z.coerce.number().int().min(0).optional(),
+  contractDurationMonths: z.coerce.number().int().min(0).max(11).optional(),
+  durationWorkedYears: z.coerce.number().int().min(0).optional(),
+  durationWorkedMonths: z.coerce.number().int().min(0).max(11).optional(),
+  hrContactPhone: z.string().trim().min(6).optional(),
+  salaryDate: z.string().trim().optional(),
   loanProductSlug: z.string().trim().min(2),
   loanProductName: z.string().trim().min(2).optional(),
   monthlyIncome: z.coerce.number().min(0).optional(),
   requestedAmount: z.coerce.number().gt(0),
   preferredTenureMonths: z.coerce.number().int().min(1),
+  totalDeductionPerMonth: z.coerce.number().min(0).optional(),
+  collateral: z.string().trim().optional(),
+  approvedDisbursedLoanAmount: z.coerce.number().min(0).optional(),
+  approvedTotalDeductionPerMonth: z.coerce.number().min(0).optional(),
+  bankName: z.string().trim().min(2).optional(),
+  accountHolderName: z.string().trim().min(2).optional(),
+  accountNumber: z.string().trim().min(3).optional(),
+  accountPhoneNumber: z.string().trim().min(6).optional(),
+  branchCode: z.string().trim().min(2).optional(),
+  guarantorRelationship: z.string().trim().min(2).optional(),
+  guarantorNationalId: z.string().trim().min(2).optional(),
+  guarantorOccupation: z.string().trim().min(2).optional(),
+  guarantorHomeVillage: z.string().trim().min(2).optional(),
+  guarantorTraditionalAuthority: z.string().trim().min(2).optional(),
+  guarantorDistrict: z.string().trim().min(2).optional(),
+  guarantorResidenceArea: z.string().trim().min(2).optional(),
+  guarantorResidenceDistrict: z.string().trim().min(2).optional(),
+  declarationAccepted: z.boolean().optional(),
+  guarantorDeclarationAccepted: z.boolean().optional(),
   notes: z.string().trim().min(3).max(1000),
 });
 
@@ -70,6 +106,12 @@ const adminUpdateSchema = z.object({
   housingStatus: z.enum(["tenant", "home_owner"]).optional(),
   employmentStatus: z.enum(["employed", "not_employed"]).optional(),
   borrowerType: z.enum(["first_time", "repeat"]).optional(),
+  applicantNationalIdNumber: z.string().trim().max(120).optional(),
+  applicantOccupation: z.string().trim().max(120).optional(),
+  homeVillage: z.string().trim().max(120).optional(),
+  traditionalAuthority: z.string().trim().max(120).optional(),
+  residenceArea: z.string().trim().max(160).optional(),
+  residenceDistrict: z.string().trim().max(120).optional(),
   loanProductSlug: z.string().trim().min(2).max(120).optional(),
   loanProductName: z.string().trim().min(2).max(160).optional(),
   requestedAmount: z.coerce.number().min(0).optional(),
@@ -97,6 +139,12 @@ const adminUpdateSchema = z.object({
   bankName: z.string().trim().max(120).optional(),
   accountNumber: z.string().trim().max(120).optional(),
   branchCode: z.string().trim().max(120).optional(),
+  accountHolderName: z.string().trim().max(120).optional(),
+  accountPhoneNumber: z.string().trim().max(30).optional(),
+  totalDeductionPerMonth: z.coerce.number().min(0).optional(),
+  collateral: z.string().trim().max(300).optional(),
+  approvedDisbursedLoanAmount: z.coerce.number().min(0).optional(),
+  approvedTotalDeductionPerMonth: z.coerce.number().min(0).optional(),
   reference1Name: z.string().trim().max(120).optional(),
   reference1Phone: z.string().trim().max(30).optional(),
   reference2Name: z.string().trim().max(120).optional(),
@@ -104,6 +152,12 @@ const adminUpdateSchema = z.object({
   guarantorRelationship: z.string().trim().max(120).optional(),
   guarantorOccupation: z.string().trim().max(120).optional(),
   guarantorHomeVillage: z.string().trim().max(120).optional(),
+  guarantorTraditionalAuthority: z.string().trim().max(120).optional(),
+  guarantorDistrict: z.string().trim().max(120).optional(),
+  guarantorResidenceArea: z.string().trim().max(160).optional(),
+  guarantorResidenceDistrict: z.string().trim().max(120).optional(),
+  declarationAccepted: z.boolean().optional(),
+  guarantorDeclarationAccepted: z.boolean().optional(),
 });
 
 const publicProfileUpdateSchema = z.object({
@@ -474,7 +528,24 @@ export const loanInquiryController = {
       housingStatus: payload.housingStatus,
       employmentStatus: payload.employmentStatus,
       borrowerType: payload.borrowerType,
+      applicantNationalIdNumber: payload.applicantNationalIdNumber || "",
+      applicantOccupation: payload.applicantOccupation || "",
+      homeVillage: payload.homeVillage || "",
+      traditionalAuthority: payload.traditionalAuthority || "",
+      residenceArea: payload.residenceArea || "",
+      residenceDistrict: payload.residenceDistrict || "",
       addressLine1: payload.address,
+      employerNameOrBusinessAddress: payload.employerNameOrBusinessAddress || "",
+      businessActivityNature: payload.businessActivityNature || "",
+      jobTitle: payload.jobTitle || "",
+      employmentNumber: payload.employmentNumber || "",
+      employmentType: payload.employmentType || "",
+      contractDurationYears: payload.contractDurationYears ?? null,
+      contractDurationMonths: payload.contractDurationMonths ?? null,
+      durationWorkedYears: payload.durationWorkedYears ?? null,
+      durationWorkedMonths: payload.durationWorkedMonths ?? null,
+      hrContactPhone: payload.hrContactPhone || "",
+      salaryDate: payload.salaryDate || "",
       loanProductSlug: loanProduct?.slug || publicLoanType.slug,
       loanProductName:
         loanProduct?.name ||
@@ -484,6 +555,27 @@ export const loanInquiryController = {
       monthlyIncome: payload.monthlyIncome,
       requestedAmount: payload.requestedAmount,
       preferredTenureMonths: payload.preferredTenureMonths,
+      totalDeductionPerMonth: payload.totalDeductionPerMonth || 0,
+      collateral: payload.collateral || "",
+      approvedDisbursedLoanAmount: payload.approvedDisbursedLoanAmount || 0,
+      approvedTotalDeductionPerMonth: payload.approvedTotalDeductionPerMonth || 0,
+      bankName: payload.bankName || "",
+      accountHolderName: payload.accountHolderName || "",
+      accountNumber: payload.accountNumber || "",
+      accountPhoneNumber: payload.accountPhoneNumber || "",
+      branchCode: payload.branchCode || "",
+      reference1Name: payload.reference1Name || "",
+      reference1Phone: payload.reference1Phone || "",
+      guarantorRelationship: payload.guarantorRelationship || "",
+      guarantorNationalId: payload.guarantorNationalId || "",
+      guarantorOccupation: payload.guarantorOccupation || "",
+      guarantorHomeVillage: payload.guarantorHomeVillage || "",
+      guarantorTraditionalAuthority: payload.guarantorTraditionalAuthority || "",
+      guarantorDistrict: payload.guarantorDistrict || "",
+      guarantorResidenceArea: payload.guarantorResidenceArea || "",
+      guarantorResidenceDistrict: payload.guarantorResidenceDistrict || "",
+      declarationAccepted: !!payload.declarationAccepted,
+      guarantorDeclarationAccepted: !!payload.guarantorDeclarationAccepted,
       notes: payload.notes || "",
       source: "website",
       status: "NEW",
@@ -504,6 +596,8 @@ export const loanInquiryController = {
       success: true,
       data: {
         id: inquiry._id,
+        accessToken: inquiry.publicAccessToken,
+        accessLink: `/profile-kyc/${inquiry.publicAccessToken}`,
         message: "Inquiry submitted successfully",
       },
     });
@@ -1227,6 +1321,12 @@ export const loanInquiryController = {
     if (parsed.data.housingStatus !== undefined) doc.housingStatus = parsed.data.housingStatus;
     if (parsed.data.employmentStatus !== undefined) doc.employmentStatus = parsed.data.employmentStatus;
     if (parsed.data.borrowerType !== undefined) doc.borrowerType = parsed.data.borrowerType;
+    if (parsed.data.applicantNationalIdNumber !== undefined) doc.applicantNationalIdNumber = parsed.data.applicantNationalIdNumber;
+    if (parsed.data.applicantOccupation !== undefined) doc.applicantOccupation = parsed.data.applicantOccupation;
+    if (parsed.data.homeVillage !== undefined) doc.homeVillage = parsed.data.homeVillage;
+    if (parsed.data.traditionalAuthority !== undefined) doc.traditionalAuthority = parsed.data.traditionalAuthority;
+    if (parsed.data.residenceArea !== undefined) doc.residenceArea = parsed.data.residenceArea;
+    if (parsed.data.residenceDistrict !== undefined) doc.residenceDistrict = parsed.data.residenceDistrict;
     if (parsed.data.loanProductSlug !== undefined) doc.loanProductSlug = parsed.data.loanProductSlug;
     if (parsed.data.loanProductName !== undefined) doc.loanProductName = parsed.data.loanProductName;
     if (parsed.data.requestedAmount !== undefined) doc.requestedAmount = parsed.data.requestedAmount;
@@ -1259,6 +1359,12 @@ export const loanInquiryController = {
     if (parsed.data.bankName !== undefined) doc.bankName = parsed.data.bankName;
     if (parsed.data.accountNumber !== undefined) doc.accountNumber = parsed.data.accountNumber;
     if (parsed.data.branchCode !== undefined) doc.branchCode = parsed.data.branchCode;
+    if (parsed.data.accountHolderName !== undefined) doc.accountHolderName = parsed.data.accountHolderName;
+    if (parsed.data.accountPhoneNumber !== undefined) doc.accountPhoneNumber = parsed.data.accountPhoneNumber;
+    if (parsed.data.totalDeductionPerMonth !== undefined) doc.totalDeductionPerMonth = parsed.data.totalDeductionPerMonth;
+    if (parsed.data.collateral !== undefined) doc.collateral = parsed.data.collateral;
+    if (parsed.data.approvedDisbursedLoanAmount !== undefined) doc.approvedDisbursedLoanAmount = parsed.data.approvedDisbursedLoanAmount;
+    if (parsed.data.approvedTotalDeductionPerMonth !== undefined) doc.approvedTotalDeductionPerMonth = parsed.data.approvedTotalDeductionPerMonth;
     if (parsed.data.reference1Name !== undefined) doc.reference1Name = parsed.data.reference1Name;
     if (parsed.data.reference1Phone !== undefined) doc.reference1Phone = parsed.data.reference1Phone;
     if (parsed.data.reference2Name !== undefined) doc.reference2Name = parsed.data.reference2Name;
@@ -1272,6 +1378,12 @@ export const loanInquiryController = {
     if (parsed.data.guarantorHomeVillage !== undefined || parsed.data.guarantorHomeVillage !== undefined) {
       doc.guarantorHomeVillage = parsed.data.guarantorHomeVillage ?? parsed.data.guarantorHomeVillage;
     }
+    if (parsed.data.guarantorTraditionalAuthority !== undefined) doc.guarantorTraditionalAuthority = parsed.data.guarantorTraditionalAuthority;
+    if (parsed.data.guarantorDistrict !== undefined) doc.guarantorDistrict = parsed.data.guarantorDistrict;
+    if (parsed.data.guarantorResidenceArea !== undefined) doc.guarantorResidenceArea = parsed.data.guarantorResidenceArea;
+    if (parsed.data.guarantorResidenceDistrict !== undefined) doc.guarantorResidenceDistrict = parsed.data.guarantorResidenceDistrict;
+    if (parsed.data.declarationAccepted !== undefined) doc.declarationAccepted = parsed.data.declarationAccepted;
+    if (parsed.data.guarantorDeclarationAccepted !== undefined) doc.guarantorDeclarationAccepted = parsed.data.guarantorDeclarationAccepted;
 
     if (doc.status === "CLOSED" && !String(doc.closeReason || "").trim()) {
       return res.status(400).json({
