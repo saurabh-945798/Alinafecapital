@@ -81,10 +81,11 @@ const adminListSchema = z.object({
 });
 
 const adminUpdateSchema = z.object({
-  status: z.enum(["NEW", "CONTACTED", "KYC_SENT", "KYC_REJECTED", "APPROVED", "DISBURSED", "CLOSED", "QUALIFIED"]).optional(),
+  status: z.enum(["NEW", "CONTACTED", "KYC_SENT", "KYC_REJECTED", "APPROVED", "AUTHORIZED", "DISBURSED", "CLOSED", "QUALIFIED"]).optional(),
   adminNote: z.string().trim().max(1000).optional(),
   closeReason: z.string().trim().max(200).optional(),
   approvedBy: z.string().trim().max(120).optional(),
+  authorizedBy: z.string().trim().max(120).optional(),
   disbursedBy: z.string().trim().max(120).optional(),
   disbursementAmount: z.coerce.number().min(0).optional(),
   disbursementMethod: z.enum(["cash", "bank_transfer", "mobile_money"]).optional().or(z.literal("")),
@@ -1167,11 +1168,18 @@ export const loanInquiryController = {
           code: "KYC_NOT_VERIFIED",
         });
       }
-      if (parsed.data.status === "DISBURSED" && doc.status !== "APPROVED") {
+      if (parsed.data.status === "AUTHORIZED" && doc.status !== "APPROVED") {
         return res.status(400).json({
           success: false,
-          message: "The inquiry must be approved before loan disbursement.",
+          message: "The inquiry must be approved before authorization.",
           code: "APPROVAL_REQUIRED",
+        });
+      }
+      if (parsed.data.status === "DISBURSED" && doc.status !== "AUTHORIZED") {
+        return res.status(400).json({
+          success: false,
+          message: "The inquiry must be authorized before loan disbursement.",
+          code: "AUTHORIZATION_REQUIRED",
         });
       }
 
@@ -1201,6 +1209,17 @@ export const loanInquiryController = {
         }
         doc.approvedAt = new Date();
         doc.approvedBy = String(parsed.data.approvedBy || doc.approvedBy || "").trim();
+      }
+      if (parsed.data.status === "AUTHORIZED") {
+        if (!String(parsed.data.authorizedBy || doc.authorizedBy || "").trim()) {
+          return res.status(400).json({
+            success: false,
+            message: "Authorized by is required before authorizing the inquiry.",
+            code: "AUTHORIZED_BY_REQUIRED",
+          });
+        }
+        doc.authorizedAt = new Date();
+        doc.authorizedBy = String(parsed.data.authorizedBy || doc.authorizedBy || "").trim();
       }
       if (parsed.data.status === "DISBURSED") {
         if (!String(parsed.data.disbursedBy || doc.disbursedBy || "").trim()) {
@@ -1298,6 +1317,9 @@ export const loanInquiryController = {
     }
     if (parsed.data.approvedBy !== undefined) {
       doc.approvedBy = parsed.data.approvedBy;
+    }
+    if (parsed.data.authorizedBy !== undefined) {
+      doc.authorizedBy = parsed.data.authorizedBy;
     }
     if (parsed.data.disbursedBy !== undefined) doc.disbursedBy = parsed.data.disbursedBy;
     if (parsed.data.disbursementAmount !== undefined) doc.disbursementAmount = parsed.data.disbursementAmount;

@@ -104,7 +104,9 @@ const LoanInquirySchema = new mongoose.Schema(
     verifiedAt: { type: Date, default: null },
     rejectedAt: { type: Date, default: null },
     verifiedBy: { type: String, trim: true, default: "" },
+    authorizedBy: { type: String, trim: true, default: "" },
     disbursedAt: { type: Date, default: null },
+    authorizedAt: { type: Date, default: null },
     disbursedBy: { type: String, trim: true, default: "" },
     disbursementAmount: { type: Number, min: 0, default: 0 },
     disbursementMethod: { type: String, trim: true, default: "" },
@@ -129,7 +131,7 @@ const LoanInquirySchema = new mongoose.Schema(
     notes: { type: String, trim: true, default: "" },
     status: {
       type: String,
-      enum: ["NEW", "CONTACTED", "KYC_SENT", "KYC_REJECTED", "APPROVED", "DISBURSED", "CLOSED", "QUALIFIED"],
+      enum: ["NEW", "CONTACTED", "KYC_SENT", "KYC_REJECTED", "APPROVED", "AUTHORIZED", "DISBURSED", "CLOSED", "QUALIFIED"],
       default: "NEW",
       index: true,
     },

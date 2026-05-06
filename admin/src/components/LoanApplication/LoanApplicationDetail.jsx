@@ -16,6 +16,7 @@ const STATUS_TONE = {
   KYC_REJECTED: "red",
   VERIFIED: "green",
   APPROVED: "green",
+  AUTHORIZED: "blue",
   DISBURSED: "blue",
   QUALIFIED: "green",
   CLOSED: "gray",
@@ -35,6 +36,7 @@ const HUMAN_STATUS = {
   KYC_REJECTED: "KYC Rejected",
   VERIFIED: "Verified",
   APPROVED: "Approved",
+  AUTHORIZED: "Authorized",
   DISBURSED: "Disbursed",
   QUALIFIED: "Approved",
   CLOSED: "Closed",
@@ -50,6 +52,7 @@ const HUMAN_KYC = {
 const ACTION_STATUS_LABEL = {
   VERIFIED: "Verify",
   APPROVED: "Approved",
+  AUTHORIZED: "Authorized",
   DISBURSED: "Disburse",
   CLOSED: "Closed",
 };
@@ -208,6 +211,7 @@ const toWhatsappNumber = (phone = "") => {
 const getDisplayedStatusKey = (item) => {
   if (!item) return "";
   if (item.status === "DISBURSED") return "DISBURSED";
+  if (item.status === "AUTHORIZED") return "AUTHORIZED";
   if (item.status === "APPROVED") return "APPROVED";
   if (item.status === "CLOSED") return "CLOSED";
   if (item.kycStatus === "verified") return "VERIFIED";
@@ -223,6 +227,7 @@ const getHistoryStatusKey = (entry) => {
   if (entry.type === "kyc_verified" || entry.status === "VERIFIED") return "VERIFIED";
   if (entry.type === "kyc_rejected" || entry.status === "KYC_REJECTED") return "KYC_REJECTED";
   if (entry.status === "APPROVED") return "APPROVED";
+  if (entry.status === "AUTHORIZED") return "AUTHORIZED";
   if (entry.status === "DISBURSED") return "DISBURSED";
   if (entry.status === "CLOSED") return "CLOSED";
   if (entry.status === "KYC_SENT") return "KYC_SENT";
@@ -257,6 +262,12 @@ const getStatusNotification = (status) => {
       message: "The loan inquiry has been approved successfully.",
       tone: "border-emerald-200 bg-emerald-50 text-emerald-900",
       iconTone: "bg-emerald-100 text-emerald-600",
+    },
+    AUTHORIZED: {
+      title: "Loan authorized",
+      message: "The loan inquiry has been authorized successfully and is ready for disbursement.",
+      tone: "border-blue-200 bg-blue-50 text-blue-900",
+      iconTone: "bg-blue-100 text-blue-600",
     },
     DISBURSED: {
       title: "Loan disbursed",
@@ -294,6 +305,7 @@ export default function LoanApplicationDetail() {
   const [closeReason, setCloseReason] = useState("");
   const [verifiedBy, setVerifiedBy] = useState("");
   const [approvedBy, setApprovedBy] = useState("");
+  const [authorizedBy, setAuthorizedBy] = useState("");
   const [disbursedBy, setDisbursedBy] = useState("");
   const [disbursementAmount, setDisbursementAmount] = useState("");
   const [disbursementMethod, setDisbursementMethod] = useState("");
@@ -314,6 +326,7 @@ export default function LoanApplicationDetail() {
   const [statusNotice, setStatusNotice] = useState(null);
   const [docActionLoading, setDocActionLoading] = useState("");
   const [addDocName, setAddDocName] = useState("");
+  const [approvalWhatsAppMessage, setApprovalWhatsAppMessage] = useState("");
   const hasSubmittedKyc =
     item?.kycStatus === "pending" ||
     item?.kycStatus === "verified" ||
@@ -337,6 +350,7 @@ export default function LoanApplicationDetail() {
       setCloseReason(data?.closeReason || "");
       setVerifiedBy(data?.verifiedBy || "");
       setApprovedBy(data?.approvedBy || "");
+      setAuthorizedBy(data?.authorizedBy || "");
       setDisbursedBy(data?.disbursedBy || "");
       setDisbursementAmount(data?.disbursementAmount ?? data?.requestedAmount ?? "");
       setDisbursementMethod(data?.disbursementMethod || "");
@@ -403,6 +417,15 @@ export default function LoanApplicationDetail() {
   useEffect(() => {
     loadDetail();
   }, [id]);
+
+  useEffect(() => {
+    if (!item?._id) return;
+    const customerName = String(item.fullName || "Customer").trim();
+    const loanName = String(item.loanProductName || item.loanProductSlug || "loan").trim();
+    setApprovalWhatsAppMessage(
+      `Hello ${customerName}, your application for ${loanName} is approved. Our team will contact you shortly for the next process.`
+    );
+  }, [item?._id, item?.fullName, item?.loanProductName, item?.loanProductSlug]);
 
   const updateDetailsField = (name, value) => {
     setDetailsForm((prev) => ({ ...prev, [name]: value }));
@@ -573,9 +596,18 @@ export default function LoanApplicationDetail() {
         throw new Error("Select the close reason before updating.");
       }
 
-      if (actionStatus === "DISBURSED") {
+      if (actionStatus === "AUTHORIZED") {
         if (item.status !== "APPROVED") {
-          throw new Error("Approve the loan before disbursement.");
+          throw new Error("Approve the loan before authorization.");
+        }
+        if (!String(authorizedBy || "").trim()) {
+          throw new Error("Authorized by is required before authorizing the loan.");
+        }
+      }
+
+      if (actionStatus === "DISBURSED") {
+        if (item.status !== "AUTHORIZED") {
+          throw new Error("Authorize the loan before disbursement.");
         }
         if (!String(disbursedBy || "").trim()) {
           throw new Error("Disbursed by is required before disbursing the loan.");
@@ -612,6 +644,7 @@ export default function LoanApplicationDetail() {
         adminNote,
         closeReason: actionStatus === "CLOSED" ? closeReason : "",
         approvedBy: actionStatus === "APPROVED" ? approvedBy.trim() : item?.approvedBy || "",
+        authorizedBy: actionStatus === "AUTHORIZED" ? authorizedBy.trim() : item?.authorizedBy || "",
         disbursedBy: actionStatus === "DISBURSED" ? disbursedBy.trim() : item?.disbursedBy || "",
         disbursementAmount:
           actionStatus === "DISBURSED"
@@ -637,6 +670,7 @@ export default function LoanApplicationDetail() {
       setCloseReason(updated?.closeReason || "");
       setVerifiedBy(updated?.verifiedBy || verifiedBy);
       setApprovedBy(updated?.approvedBy || "");
+      setAuthorizedBy(updated?.authorizedBy || "");
       setDisbursedBy(updated?.disbursedBy || "");
       setDisbursementAmount(updated?.disbursementAmount ?? updated?.requestedAmount ?? "");
       setDisbursementMethod(updated?.disbursementMethod || "");
@@ -947,6 +981,7 @@ export default function LoanApplicationDetail() {
                   <div class="subvalue">Verified: ${escapeHtml(formatDate(item.verifiedAt))}</div>
                   <div class="subvalue">Verified By: ${escapeHtml(item.verifiedBy || "-")}</div>
                   <div class="subvalue">Approved By: ${escapeHtml(item.approvedBy || "-")}</div>
+                  <div class="subvalue">Authorized By: ${escapeHtml(item.authorizedBy || "-")}</div>
                   <div class="subvalue">Disbursed By: ${escapeHtml(item.disbursedBy || "-")}</div>
                   <div class="subvalue">Method: ${escapeHtml(humanizeValue(item.disbursementMethod || "-"))}</div>
                 </div>
@@ -1048,6 +1083,14 @@ export default function LoanApplicationDetail() {
                 <div class="field">
                   <div class="label">Approved At</div>
                   <div class="field-value">${escapeHtml(formatDate(item.approvedAt))}</div>
+                </div>
+                <div class="field">
+                  <div class="label">Authorized By</div>
+                  <div class="field-value">${escapeHtml(item.authorizedBy || "-")}</div>
+                </div>
+                <div class="field">
+                  <div class="label">Authorized At</div>
+                  <div class="field-value">${escapeHtml(formatDate(item.authorizedAt))}</div>
                 </div>
                 <div class="field">
                   <div class="label">Disbursed By</div>
@@ -1243,6 +1286,7 @@ export default function LoanApplicationDetail() {
             <div class="meta-item"><strong>Admin Fee:</strong> ${escapeHtml(formatMoney(repaymentPlan.oneTimeAdminFee))}</div>
             <div class="meta-item"><strong>Verified By:</strong> ${escapeHtml(item.verifiedBy || "-")}</div>
             <div class="meta-item"><strong>Approved By:</strong> ${escapeHtml(item.approvedBy || "-")}</div>
+            <div class="meta-item"><strong>Authorized By:</strong> ${escapeHtml(item.authorizedBy || "-")}</div>
             <div class="meta-item"><strong>Disbursed By:</strong> ${escapeHtml(item.disbursedBy || "-")}</div>
             <div class="meta-item"><strong>Method:</strong> ${escapeHtml(humanizeValue(item.disbursementMethod || "-"))}</div>
           </div>
@@ -1391,7 +1435,8 @@ export default function LoanApplicationDetail() {
   const actionHistory = Array.isArray(item.actionHistory) ? item.actionHistory : [];
   const availableStatuses = (() => {
     if (item?.status === "DISBURSED") return ["CLOSED"];
-    if (item?.status === "APPROVED") return ["DISBURSED", "CLOSED"];
+    if (item?.status === "APPROVED") return ["AUTHORIZED", "CLOSED"];
+    if (item?.status === "AUTHORIZED") return ["DISBURSED", "CLOSED"];
     if (item?.status === "VERIFIED" || item?.kycStatus === "verified") return ["APPROVED", "CLOSED"];
     if (item?.status === "CLOSED") return [];
     if (hasSubmittedKyc) return ["VERIFIED", "CLOSED"];
@@ -1467,6 +1512,22 @@ export default function LoanApplicationDetail() {
       tone: "border-amber-200 bg-amber-50 text-amber-800",
     };
   })();
+  const canSendApprovedWhatsApp = item?.status === "APPROVED";
+  const approvedWhatsappNumber = toWhatsappNumber(item?.phone || "");
+  const openApprovedWhatsApp = () => {
+    if (!canSendApprovedWhatsApp) return;
+    if (!approvedWhatsappNumber) {
+      toast.error("Customer phone number is missing or invalid for WhatsApp.");
+      return;
+    }
+    const message = String(approvalWhatsAppMessage || "").trim();
+    if (!message) {
+      toast.error("WhatsApp message is empty.");
+      return;
+    }
+    const url = `https://wa.me/${approvedWhatsappNumber}?text=${encodeURIComponent(message)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <>
@@ -1937,8 +1998,8 @@ export default function LoanApplicationDetail() {
               <p className="mt-1 text-sm text-slate-600">Submitted: {formatDate(item.submittedAt)}</p>
               <p className="mt-1 text-sm text-slate-600">Verified: {formatDate(item.verifiedAt)}</p>
               <p className="mt-1 text-sm text-slate-600">Verified By: {item.verifiedBy || "-"}</p>
-              <p className="mt-1 text-sm text-slate-600">Rejected: {formatDate(item.rejectedAt)}</p>
               <p className="mt-1 text-sm text-slate-600">Approved By: {item.approvedBy || "-"}</p>
+              <p className="mt-1 text-sm text-slate-600">Authorized By: {item.authorizedBy || "-"}</p>
               <p className="mt-1 text-sm text-slate-600">Disbursed By: {item.disbursedBy || "-"}</p>
               <p className="mt-1 text-sm text-slate-600">
                 Method: {humanizeValue(item.disbursementMethod || "-")}
@@ -2075,45 +2136,43 @@ export default function LoanApplicationDetail() {
                 </div>
               </div>
             )}
-            {editMode ? (
-              <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  Add Document
-                </p>
-                <div className="mt-3">
-                  <div>
-                    <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                      Document Name
-                    </label>
-                    <input
-                      value={addDocName}
-                      onChange={(e) => setAddDocName(e.target.value)}
-                      className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800"
-                      placeholder="Enter document name"
-                    />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <label className="flex min-h-11 cursor-pointer items-center justify-between rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 transition hover:bg-slate-50">
-                    <span>Add document</span>
-                    <span className="text-xs font-medium text-slate-500">Choose file</span>
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept=".pdf,.png,.jpg,.jpeg"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) uploadAdminDoc("", file, addDocName);
-                        e.target.value = "";
-                      }}
-                    />
+            <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                Add Document
+              </p>
+              <div className="mt-3">
+                <div>
+                  <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Document Name
                   </label>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Admin can write the document name directly and then upload the file.
-                  </p>
+                  <input
+                    value={addDocName}
+                    onChange={(e) => setAddDocName(e.target.value)}
+                    className="mt-2 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-800"
+                    placeholder="Enter document name"
+                  />
                 </div>
               </div>
-            ) : null}
+              <div className="mt-3">
+                <label className="flex min-h-11 cursor-pointer items-center justify-between rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 transition hover:bg-slate-50">
+                  <span>Add document</span>
+                  <span className="text-xs font-medium text-slate-500">Choose file</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadAdminDoc("", file, addDocName);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                <p className="mt-2 text-xs text-slate-500">
+                  Admin can write the document name directly and then upload the file.
+                </p>
+              </div>
+            </div>
           </div>
 
           {repaymentPlan ? (
@@ -2313,6 +2372,20 @@ export default function LoanApplicationDetail() {
               </div>
             ) : null}
 
+            {nextStatus === "AUTHORIZED" ? (
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Authorized By
+                </label>
+                <input
+                  className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                  value={authorizedBy}
+                  onChange={(e) => setAuthorizedBy(e.target.value)}
+                  placeholder="Enter authorizer name"
+                />
+              </div>
+            ) : null}
+
             {nextStatus === "DISBURSED" ? (
               <>
                 <div className="space-y-1 md:col-span-2">
@@ -2467,7 +2540,9 @@ export default function LoanApplicationDetail() {
                 (nextStatus === "CLOSED" && !String(closeReason || "").trim()) ||
                 ((nextStatus === "VERIFIED" || nextStatus === "APPROVED") && !String(verifiedBy || "").trim()) ||
                 (nextStatus === "APPROVED" && !String(approvedBy || "").trim()) ||
-                (nextStatus === "DISBURSED" && item?.status !== "APPROVED") ||
+                (nextStatus === "AUTHORIZED" && item?.status !== "APPROVED") ||
+                (nextStatus === "AUTHORIZED" && !String(authorizedBy || "").trim()) ||
+                (nextStatus === "DISBURSED" && item?.status !== "AUTHORIZED") ||
                 (nextStatus === "DISBURSED" && !String(disbursedBy || "").trim()) ||
                 (nextStatus === "DISBURSED" && !Number(disbursementAmount || 0)) ||
                 (nextStatus === "DISBURSED" && !String(disbursementMethod || "").trim()) ||
@@ -2497,6 +2572,11 @@ export default function LoanApplicationDetail() {
               Add both verifier and approver names. Approving this inquiry will also mark the submitted KYC as verified.
             </p>
           ) : null}
+          {nextStatus === "AUTHORIZED" ? (
+            <p className="text-xs font-medium text-slate-600">
+              Add the authorizer name. Authorization is required before disbursement.
+            </p>
+          ) : null}
           {nextStatus === "DISBURSED" ? (
             <p className="text-xs font-medium text-slate-600">
               Capture the method details correctly. Bank transfer requires account details, while mobile money requires provider and number.
@@ -2516,6 +2596,36 @@ export default function LoanApplicationDetail() {
               Select a status first, then update the inquiry.
             </p>
           )}
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Approval WhatsApp Message
+            </p>
+            <textarea
+              rows={3}
+              className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+              value={approvalWhatsAppMessage}
+              onChange={(e) => setApprovalWhatsAppMessage(e.target.value)}
+              placeholder="Approved WhatsApp message template"
+            />
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-slate-500">
+                {canSendApprovedWhatsApp
+                  ? "Approved status detected. WhatsApp message is ready."
+                  : "This button activates only after status is Approved."}
+              </p>
+              <Button
+                variant="outline"
+                disabled={
+                  !canSendApprovedWhatsApp ||
+                  !approvedWhatsappNumber ||
+                  !String(approvalWhatsAppMessage || "").trim()
+                }
+                onClick={openApprovedWhatsApp}
+              >
+                Open WhatsApp
+              </Button>
+            </div>
+          </div>
         <div className="rounded-lg border p-3">
           <button
             type="button"

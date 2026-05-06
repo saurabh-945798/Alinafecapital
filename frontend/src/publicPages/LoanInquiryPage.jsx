@@ -361,6 +361,12 @@ export default function LoanInquiryPage() {
       if (!form.hrContactPhone.trim()) return "Employer HR phone number is required.";
     }
     if (requiresSalaryDate && !form.salaryDate) return "Date of salary/income is required.";
+    if (requiresSalaryDate) {
+      const salaryDay = Number(form.salaryDate);
+      if (!Number.isInteger(salaryDay) || salaryDay < 1 || salaryDay > 31) {
+        return "Date of salary/income must be a day between 1 and 31.";
+      }
+    }
     if (!form.monthlyIncome.trim()) return "Monthly salary/income is required.";
     if (!collateralFile) return "Collateral attachment is required.";
     if (!form.bankName.trim()) return "Bank name is required.";
@@ -403,9 +409,15 @@ export default function LoanInquiryPage() {
         "durationWorkedYears",
         "durationWorkedMonths",
         "monthlyIncome",
+        "salaryDate",
       ].includes(name)
     ) {
-      updateField(name, value.replace(/[^\d]/g, ""));
+      const onlyDigits = value.replace(/[^\d]/g, "");
+      if (name === "salaryDate") {
+        updateField(name, onlyDigits.slice(0, 2));
+        return;
+      }
+      updateField(name, onlyDigits);
       return;
     }
 
@@ -1077,7 +1089,15 @@ export default function LoanInquiryPage() {
                   {requiresSalaryDate ? (
                     <label>
                       <span className="mb-1.5 block text-sm font-medium text-slate-700">Date of Salary / Income</span>
-                      <input type="date" name="salaryDate" value={form.salaryDate} onChange={onChange} className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm" />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        name="salaryDate"
+                        value={form.salaryDate}
+                        onChange={onChange}
+                        className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm"
+                        placeholder="Enter salary day (1-31)"
+                      />
                     </label>
                   ) : null}
 
