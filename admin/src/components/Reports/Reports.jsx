@@ -341,11 +341,16 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold">Reports</h1>
-        <p className="text-sm text-slate-500">
-          Clean report view for disbursement, collection, and outstanding status.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Reports</h1>
+          <p className="text-sm text-slate-500">
+            Clean report view for disbursement, collection, and outstanding status.
+          </p>
+        </div>
+        <Button variant="outline" onClick={exportCsv}>
+          Download Report
+        </Button>
       </div>
 
       {error ? (

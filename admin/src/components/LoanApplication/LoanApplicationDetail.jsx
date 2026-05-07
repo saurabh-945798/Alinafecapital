@@ -1512,7 +1512,7 @@ export default function LoanApplicationDetail() {
       tone: "border-amber-200 bg-amber-50 text-amber-800",
     };
   })();
-  const canSendApprovedWhatsApp = item?.status === "APPROVED";
+  const canSendApprovedWhatsApp = item?.status === "AUTHORIZED";
   const approvedWhatsappNumber = toWhatsappNumber(item?.phone || "");
   const openApprovedWhatsApp = () => {
     if (!canSendApprovedWhatsApp) return;
@@ -2610,8 +2610,8 @@ export default function LoanApplicationDetail() {
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs text-slate-500">
                 {canSendApprovedWhatsApp
-                  ? "Approved status detected. WhatsApp message is ready."
-                  : "This button activates only after status is Approved."}
+                  ? "Authorized status detected. WhatsApp message is ready."
+                  : "This button activates only after status is Authorized."}
               </p>
               <Button
                 variant="outline"
