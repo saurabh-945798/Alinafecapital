@@ -348,8 +348,8 @@ export default function ReportsPage() {
             Clean report view for disbursement, collection, and outstanding status.
           </p>
         </div>
-        <Button variant="outline" onClick={exportCsv}>
-          Download Report
+        <Button variant="outline" onClick={printSummary}>
+          Download Report (PDF)
         </Button>
       </div>
 

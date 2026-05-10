@@ -333,6 +333,7 @@ export default function LoanApplicationDetail() {
     item?.kycStatus === "rejected" ||
     Boolean(item?.submittedAt) ||
     Array.isArray(item?.documents) && item.documents.length > 0;
+  const isDisbursed = item?.status === "DISBURSED";
 
   const resolveAssetUrl = (fileUrl = "") => {
     if (!fileUrl) return "";
@@ -740,7 +741,7 @@ export default function LoanApplicationDetail() {
       <html>
         <head>
           <meta charset="utf-8" />
-          <title>Loan Inquiry Record</title>
+          <title>Loan  Record</title>
           <style>
             * { box-sizing: border-box; }
             body {
@@ -951,7 +952,7 @@ export default function LoanApplicationDetail() {
             <div class="header">
               <div class="brand">
                 <h1>Alinafe Capital</h1>
-                <p>Loan Inquiry Record</p>
+                <p>Loan  Record</p>
               </div>
               <div class="meta">
                 <p><strong>Printed:</strong> ${escapeHtml(formatDate(new Date().toISOString()))}</p>
@@ -1097,6 +1098,10 @@ export default function LoanApplicationDetail() {
                   <div class="field-value">${escapeHtml(item.disbursedBy || "-")}</div>
                 </div>
                 <div class="field">
+                  <div class="label">Disbursement Amount</div>
+                  <div class="field-value">${escapeHtml(formatMoney(item.disbursementAmount || item.approvedDisbursedLoanAmount || item.requestedAmount || 0))}</div>
+                </div>
+                <div class="field">
                   <div class="label">Disbursement Method</div>
                   <div class="field-value">${escapeHtml(humanizeValue(item.disbursementMethod || "-"))}</div>
                 </div>
@@ -1107,6 +1112,10 @@ export default function LoanApplicationDetail() {
                 <div class="field">
                   <div class="label">Transaction Reference</div>
                   <div class="field-value">${escapeHtml(item.transactionReference || "-")}</div>
+                </div>
+                <div class="field">
+                  <div class="label">Disbursement Note</div>
+                  <div class="field-value">${escapeHtml(item.disbursementNote || "-")}</div>
                 </div>
               </div>
               ${
@@ -1205,6 +1214,7 @@ export default function LoanApplicationDetail() {
     doc.close();
 
     iframe.onload = () => {
+      toast.success("Print dialog opened. Choose 'Save as PDF' to download the schedule.");
       iframe.contentWindow?.focus();
       iframe.contentWindow?.print();
       setTimeout(() => {
@@ -1571,18 +1581,20 @@ export default function LoanApplicationDetail() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={() => setEditMode((prev) => !prev)}>
-            {editMode ? (
-              <>
-                <X size={16} /> Cancel Edit
-              </>
-            ) : (
-              <>
-                <PencilLine size={16} /> Edit Details
-              </>
-            )}
-          </Button>
-          {editMode ? (
+          {!isDisbursed ? (
+            <Button onClick={() => setEditMode((prev) => !prev)}>
+              {editMode ? (
+                <>
+                  <X size={16} /> Cancel Edit
+                </>
+              ) : (
+                <>
+                  <PencilLine size={16} /> Edit Details
+                </>
+              )}
+            </Button>
+          ) : null}
+          {editMode && !isDisbursed ? (
             <Button variant="outline" onClick={saveDetails} disabled={actionLoading}>
               <Save size={16} />
               {actionLoading ? "Saving..." : "Save Details"}
@@ -2200,7 +2212,7 @@ export default function LoanApplicationDetail() {
                 <div className="mt-4 space-y-4">
                   <div className="flex flex-wrap items-center justify-end gap-3">
                     <Button variant="outline" onClick={handleSchedulePrint}>
-                      Download Schedule
+                      Download Schedule (PDF)
                     </Button>
                   </div>
 
