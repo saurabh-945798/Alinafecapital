@@ -1,6 +1,7 @@
 import UserProfile from "../models/UserProfile.js";
 import { calculateProfileCompletion } from "../utils/profileCompletion.js";
 import fs from "fs";
+import { toPersistedUploadPath, toPublicUploadUrl } from "../utils/uploadPaths.js";
 
 const ALLOWED_DOC_TYPES = new Set([
   "national_id",
@@ -9,13 +10,6 @@ const ALLOWED_DOC_TYPES = new Set([
   "guarantor_national_id",
   "payslip_or_business_proof",
 ]);
-
-const toPublicFileUrl = (filePath = "") => {
-  const normalized = String(filePath).replace(/\\/g, "/");
-  const idx = normalized.indexOf("uploads/");
-  const relative = idx >= 0 ? normalized.slice(idx) : normalized;
-  return `/${relative}`;
-};
 
 const toPublicProfile = (profile) => {
   if (!profile) return null;
@@ -41,18 +35,12 @@ export async function getMyProfile(req, res, next) {
     const profile = await UserProfile.findOne({ userId });
 
     if (profile) {
-      // Auto-heal stale avatar references so frontend does not keep requesting 404 files.
-      if (profile.avatarPath && !fs.existsSync(profile.avatarPath)) {
-        profile.avatarPath = "";
-        profile.avatarUrl = "";
-      }
-
       const recomputed = calculateProfileCompletion(profile);
       if (profile.profileCompletion !== recomputed) {
         profile.profileCompletion = recomputed;
       }
 
-      if (profile.isModified("avatarPath") || profile.isModified("avatarUrl") || profile.isModified("profileCompletion")) {
+      if (profile.isModified("profileCompletion")) {
         await profile.save({ validateBeforeSave: false });
       }
     }
@@ -174,8 +162,8 @@ export async function uploadMyDoc(req, res, next) {
         phone: req.user.phone,
       });
 
-    const filePath = req.file.path;
-    const fileUrl = toPublicFileUrl(filePath);
+    const filePath = toPersistedUploadPath(req.file.path, "profile-doc");
+    const fileUrl = toPublicUploadUrl(filePath);
 
     // Replace existing same-type document
     profile.documents = (profile.documents || []).filter((d) => d.type !== type);
@@ -287,8 +275,8 @@ export async function uploadMyAvatar(req, res, next) {
       });
 
     const previousAvatarPath = profile.avatarPath || "";
-    const filePath = req.file.path;
-    const fileUrl = toPublicFileUrl(filePath);
+    const filePath = toPersistedUploadPath(req.file.path, "profile-avatar");
+    const fileUrl = toPublicUploadUrl(filePath);
 
     profile.avatarPath = filePath;
     profile.avatarUrl = fileUrl;

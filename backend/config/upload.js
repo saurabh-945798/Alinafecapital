@@ -6,7 +6,18 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, "..");
-export const UPLOAD_ROOT = path.resolve(PROJECT_ROOT, process.env.UPLOAD_DIR || "uploads");
+const uploadDirRaw = String(process.env.UPLOAD_DIR || "").trim();
+const isProduction = String(process.env.NODE_ENV || "").trim().toLowerCase() === "production";
+
+if (!uploadDirRaw && isProduction) {
+  throw new Error("Missing UPLOAD_DIR. Set an absolute persistent upload directory in environment.");
+}
+
+const uploadRootResolved = uploadDirRaw
+  ? path.resolve(uploadDirRaw)
+  : path.resolve(PROJECT_ROOT, "uploads");
+
+export const UPLOAD_ROOT = uploadRootResolved;
 const MAX_SIZE_MB = Number(process.env.MAX_UPLOAD_MB || 6);
 
 const ensureDir = (dirPath) => {
@@ -14,6 +25,13 @@ const ensureDir = (dirPath) => {
     fs.mkdirSync(dirPath, { recursive: true });
   }
 };
+
+ensureDir(UPLOAD_ROOT);
+console.info(`[upload] Active upload root: ${UPLOAD_ROOT}`);
+
+if (!uploadDirRaw && !isProduction) {
+  console.warn(`[upload] UPLOAD_DIR not set. Using development fallback: ${UPLOAD_ROOT}`);
+}
 
 const sanitizeFileName = (name = "file") =>
   name

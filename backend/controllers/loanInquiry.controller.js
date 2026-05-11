@@ -8,6 +8,7 @@ import { LoanAccount } from "../models/LoanAccount.model.js";
 import { SystemCounter } from "../models/SystemCounter.model.js";
 import { normalizePhone } from "../utils/normalize.js";
 import { calculateProfileCompletion } from "../utils/profileCompletion.js";
+import { toPersistedUploadPath, toPublicUploadUrl } from "../utils/uploadPaths.js";
 
 const PUBLIC_LOAN_TYPES = [
   { slug: "civil-servant-loan", name: "Civil Servant Loan" },
@@ -60,6 +61,10 @@ const publicCreateSchema = z.object({
   accountNumber: z.string().trim().min(3).optional(),
   accountPhoneNumber: z.string().trim().min(6).optional(),
   branchCode: z.string().trim().min(2).optional(),
+  reference1Name: z.string().trim().min(2).optional(),
+  reference1Phone: z.string().trim().min(6).optional(),
+  reference2Name: z.string().trim().min(2).optional(),
+  reference2Phone: z.string().trim().min(6).optional(),
   guarantorRelationship: z.string().trim().min(2).optional(),
   guarantorNationalId: z.string().trim().min(2).optional(),
   guarantorOccupation: z.string().trim().min(2).optional(),
@@ -303,38 +308,10 @@ const toDocumentKey = (value = "") =>
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "") || "document";
 
-const toPublicFileUrl = (filePath = "") => {
-  const normalized = String(filePath).replace(/\\/g, "/");
-  const idx = normalized.indexOf("uploads/");
-  const relative = idx >= 0 ? normalized.slice(idx) : normalized;
-  return `/${relative}`;
-};
-
-const fileExists = (value = "") => Boolean(value) && fs.existsSync(String(value));
-
 const sanitizeInquiryAssets = async (inquiry) => {
   if (!inquiry) return inquiry;
-
-  let changed = false;
-
-  if (inquiry.avatarPath && !fileExists(inquiry.avatarPath)) {
-    inquiry.avatarPath = "";
-    inquiry.avatarUrl = "";
-    changed = true;
-  }
-
-  const currentDocs = Array.isArray(inquiry.documents) ? inquiry.documents : [];
-  const validDocs = currentDocs.filter((doc) => fileExists(doc?.filePath));
-  if (validDocs.length !== currentDocs.length) {
-    inquiry.documents = validDocs;
-    changed = true;
-  }
-
-  if (changed) {
-    syncInquiryCompletion(inquiry);
-    await inquiry.save({ validateBeforeSave: false });
-  }
-
+  // Do not auto-delete avatar/doc metadata from DB.
+  // Missing physical files should be handled operationally, not by destructive cleanup.
   return inquiry;
 };
 
@@ -669,32 +646,28 @@ export const loanInquiryController = {
       guarantorHomeVillage: payload.guarantorHomeVillage || payload.guarantorHomeVillage,
     };
 
-    const updatedInquiry = await LoanInquiry.findByIdAndUpdate(
-      inquiry._id,
-      { $set: update },
-      { new: true }
-    );
+    const previousAvatarUrl = String(inquiry.avatarUrl || "");
+    const previousAvatarPath = String(inquiry.avatarPath || "");
+    const previousDocuments = Array.isArray(inquiry.documents) ? [...inquiry.documents] : [];
 
-    if (!updatedInquiry) {
-      return res.status(404).json({
-        success: false,
-        message: "Inquiry link is invalid or expired",
-        code: "NOT_FOUND",
-      });
+    Object.assign(inquiry, update);
+
+    // Guard rail: profile updates must never wipe already-uploaded inquiry files.
+    if (!String(inquiry.avatarUrl || "").trim() && previousAvatarUrl) {
+      inquiry.avatarUrl = previousAvatarUrl;
+      inquiry.avatarPath = previousAvatarPath;
+    }
+    if ((!Array.isArray(inquiry.documents) || inquiry.documents.length === 0) && previousDocuments.length > 0) {
+      inquiry.documents = previousDocuments;
     }
 
-    const nextCompletion = calculateProfileCompletion(updatedInquiry);
-    if (updatedInquiry.profileCompletion !== nextCompletion) {
-      await LoanInquiry.updateOne(
-        { _id: updatedInquiry._id },
-        { $set: { profileCompletion: nextCompletion } }
-      );
-      updatedInquiry.profileCompletion = nextCompletion;
-    }
+    const nextCompletion = calculateProfileCompletion(inquiry);
+    inquiry.profileCompletion = nextCompletion;
+    await inquiry.save();
 
     return res.json({
       success: true,
-      data: toPublicInquiryProfile(updatedInquiry),
+      data: toPublicInquiryProfile(inquiry),
     });
   },
 
@@ -728,36 +701,35 @@ export const loanInquiryController = {
       });
     }
 
+    const persistedFilePath = toPersistedUploadPath(req.file.path, "inquiry-public-doc");
     const nextDoc = {
       type,
-      fileUrl: toPublicFileUrl(req.file.path),
-      filePath: req.file.path,
+      fileUrl: toPublicUploadUrl(persistedFilePath),
+      filePath: persistedFilePath,
       mime: req.file.mimetype,
       uploadedAt: new Date(),
     };
-    await LoanInquiry.updateOne({ _id: inquiry._id }, { $pull: { documents: { type } } });
-    await LoanInquiry.updateOne({ _id: inquiry._id }, { $push: { documents: nextDoc } });
+    inquiry.documents = Array.isArray(inquiry.documents) ? inquiry.documents : [];
+    inquiry.documents = inquiry.documents.filter((entry) => entry?.type !== type);
+    inquiry.documents.push(nextDoc);
+    await inquiry.save();
 
-    const updatedInquiry = await LoanInquiry.findById(inquiry._id);
-    if (!updatedInquiry) {
-      return res.status(404).json({
+    if (!Array.isArray(inquiry.documents) || !inquiry.documents.some((d) => d?.type === type)) {
+      return res.status(500).json({
         success: false,
-        message: "Inquiry link is invalid or expired",
-        code: "NOT_FOUND",
+        message: "Document upload metadata was not persisted. Please retry.",
+        code: "DOC_METADATA_PERSIST_FAILED",
       });
     }
-    const nextCompletion = calculateProfileCompletion(updatedInquiry);
-    if (updatedInquiry.profileCompletion !== nextCompletion) {
-      await LoanInquiry.updateOne(
-        { _id: updatedInquiry._id },
-        { $set: { profileCompletion: nextCompletion } }
-      );
-      updatedInquiry.profileCompletion = nextCompletion;
+    const nextCompletion = calculateProfileCompletion(inquiry);
+    if (inquiry.profileCompletion !== nextCompletion) {
+      inquiry.profileCompletion = nextCompletion;
+      await inquiry.save();
     }
 
     return res.json({
       success: true,
-      data: toPublicInquiryProfile(updatedInquiry),
+      data: toPublicInquiryProfile(inquiry),
     });
   },
 
@@ -782,32 +754,23 @@ export const loanInquiryController = {
     }
 
     const previousAvatarPath = inquiry.avatarPath || "";
-    const nextAvatarPath = req.file.path;
-    const nextAvatarUrl = toPublicFileUrl(req.file.path);
-    const updatedInquiry = await LoanInquiry.findByIdAndUpdate(
-      inquiry._id,
-      {
-        $set: {
-          avatarPath: nextAvatarPath,
-          avatarUrl: nextAvatarUrl,
-        },
-      },
-      { new: true }
-    );
-    if (!updatedInquiry) {
-      return res.status(404).json({
+    const nextAvatarPath = toPersistedUploadPath(req.file.path, "inquiry-public-avatar");
+    const nextAvatarUrl = toPublicUploadUrl(nextAvatarPath);
+    inquiry.avatarPath = nextAvatarPath;
+    inquiry.avatarUrl = nextAvatarUrl;
+    await inquiry.save();
+
+    if (!String(inquiry.avatarUrl || "").trim()) {
+      return res.status(500).json({
         success: false,
-        message: "Inquiry link is invalid or expired",
-        code: "NOT_FOUND",
+        message: "Profile photo metadata was not persisted. Please retry.",
+        code: "AVATAR_METADATA_PERSIST_FAILED",
       });
     }
-    const nextCompletion = calculateProfileCompletion(updatedInquiry);
-    if (updatedInquiry.profileCompletion !== nextCompletion) {
-      await LoanInquiry.updateOne(
-        { _id: updatedInquiry._id },
-        { $set: { profileCompletion: nextCompletion } }
-      );
-      updatedInquiry.profileCompletion = nextCompletion;
+    const nextCompletion = calculateProfileCompletion(inquiry);
+    if (inquiry.profileCompletion !== nextCompletion) {
+      inquiry.profileCompletion = nextCompletion;
+      await inquiry.save();
     }
 
     if (previousAvatarPath && previousAvatarPath !== nextAvatarPath && fs.existsSync(previousAvatarPath)) {
@@ -820,7 +783,7 @@ export const loanInquiryController = {
 
     return res.json({
       success: true,
-      data: toPublicInquiryProfile(updatedInquiry),
+      data: toPublicInquiryProfile(inquiry),
     });
   },
 
@@ -937,23 +900,6 @@ export const loanInquiryController = {
     const patchedItems = await Promise.all(
       items.map(async (item) => {
         const updates = {};
-        const nextItem = { ...item };
-        if (item.avatarPath && !fileExists(item.avatarPath)) {
-          updates.avatarPath = "";
-          updates.avatarUrl = "";
-          nextItem.avatarPath = "";
-          nextItem.avatarUrl = "";
-        }
-        if (Array.isArray(item.documents)) {
-          const validDocs = item.documents.filter((doc) => fileExists(doc?.filePath));
-          if (validDocs.length !== item.documents.length) {
-            updates.documents = validDocs;
-            nextItem.documents = validDocs;
-          }
-        }
-        if (Object.keys(updates).length > 0) {
-          updates.profileCompletion = calculateProfileCompletion(nextItem);
-        }
         const nextToken = generatePublicAccessToken();
         if (!item.publicAccessToken) {
           updates.publicAccessToken = nextToken;
@@ -1060,11 +1006,12 @@ export const loanInquiryController = {
 
     const previousDoc = (doc.documents || []).find((entry) => entry.type === type);
     doc.documents = (doc.documents || []).filter((entry) => entry.type !== type);
+    const persistedFilePath = toPersistedUploadPath(req.file.path, "inquiry-admin-doc");
     doc.documents.push({
       type,
       displayName,
-      fileUrl: toPublicFileUrl(req.file.path),
-      filePath: req.file.path,
+      fileUrl: toPublicUploadUrl(persistedFilePath),
+      filePath: persistedFilePath,
       mime: req.file.mimetype,
       uploadedAt: new Date(),
     });

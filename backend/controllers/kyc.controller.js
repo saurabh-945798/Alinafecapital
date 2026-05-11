@@ -1,6 +1,5 @@
 import UserProfile from "../models/UserProfile.js";
 import { LoanInquiry } from "../models/LoanInquiry.model.js";
-import fs from "fs";
 
 const safeRegex = (value = "") => {
   const safe = String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -8,7 +7,7 @@ const safeRegex = (value = "") => {
 };
 
 const toPublicDocuments = (documents = []) =>
-  (documents || []).filter((d) => d?.filePath && fs.existsSync(String(d.filePath))).map((d) => ({
+  (documents || []).map((d) => ({
     type: d.type,
     fileUrl: d.fileUrl,
     mime: d.mime,
@@ -33,7 +32,7 @@ const mapUserProfileRecord = (profile) => {
     bankName: obj.bankName || "",
     accountNumber: obj.accountNumber || "",
     branchCode: obj.branchCode || "",
-    avatarUrl: obj.avatarPath && fs.existsSync(String(obj.avatarPath)) ? obj.avatarUrl || "" : "",
+    avatarUrl: obj.avatarUrl || "",
     documents: toPublicDocuments(obj.documents),
     profileCompletion: obj.profileCompletion ?? 0,
     kycStatus: obj.kycStatus || "not_started",
@@ -65,7 +64,7 @@ const mapInquiryRecord = (inquiry) => {
     bankName: obj.bankName || "",
     accountNumber: obj.accountNumber || "",
     branchCode: obj.branchCode || "",
-    avatarUrl: obj.avatarPath && fs.existsSync(String(obj.avatarPath)) ? obj.avatarUrl || "" : "",
+    avatarUrl: obj.avatarUrl || "",
     documents: toPublicDocuments(obj.documents),
     profileCompletion: obj.profileCompletion ?? 0,
     kycStatus: obj.kycStatus || "not_started",

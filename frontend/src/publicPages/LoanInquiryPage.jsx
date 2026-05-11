@@ -11,6 +11,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../services/api";
 
 const BRAND_NAVY = "#002D5B";
+const INQUIRY_DRAFT_TOKEN_KEY = "alinafe_inquiry_draft_token_v1";
 
 const PUBLIC_LOAN_OPTIONS = [
   { slug: "civil-servant-loan", name: "Civil Servant Loan" },
@@ -186,6 +187,11 @@ export default function LoanInquiryPage() {
   const [loanProducts, setLoanProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [submitStage, setSubmitStage] = useState("");
+  const [retryAccessToken, setRetryAccessToken] = useState("");
+  const [canRetryUploads, setCanRetryUploads] = useState(false);
+  const [serverAvatarUrl, setServerAvatarUrl] = useState("");
+  const [serverDocTypes, setServerDocTypes] = useState([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -298,6 +304,35 @@ export default function LoanInquiryPage() {
     }
   }, [form.loanProductSlug, initialSlug]);
 
+  useEffect(() => {
+    let active = true;
+    const hydrateDraft = async () => {
+      const savedToken = window.localStorage.getItem(INQUIRY_DRAFT_TOKEN_KEY) || "";
+      if (!savedToken) return;
+      try {
+        const { data } = await api.get(`/inquiries/access/${savedToken}/profile`);
+        const profile = data?.data || {};
+        if (!active) return;
+        setRetryAccessToken(savedToken);
+        setServerAvatarUrl(String(profile?.avatarUrl || ""));
+        const docTypes = Array.isArray(profile?.documents)
+          ? profile.documents.map((d) => String(d?.type || "").trim()).filter(Boolean)
+          : [];
+        setServerDocTypes(docTypes);
+      } catch {
+        if (!active) return;
+        window.localStorage.removeItem(INQUIRY_DRAFT_TOKEN_KEY);
+        setRetryAccessToken("");
+        setServerAvatarUrl("");
+        setServerDocTypes([]);
+      }
+    };
+    hydrateDraft();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const updateField = (name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
@@ -312,6 +347,8 @@ export default function LoanInquiryPage() {
     const requiresPayslip = !(isFarmer || isSelfEmployed);
     const requiresSalaryDate = isGovernmentEmployee || isPrivateCompanyEmployee || isSelfEmployed;
     const requiresEmployerSection = !isFarmer;
+    const hasServerAvatar = Boolean(serverAvatarUrl);
+    const hasServerDoc = (type) => serverDocTypes.includes(type);
 
     if (form.fullName.trim().length < 2) return "Full name must be at least 2 characters.";
     if (form.address.trim().length < 5) return "Address must be at least 5 characters.";
@@ -336,10 +373,10 @@ export default function LoanInquiryPage() {
     if (!form.preferredTenureMonths) return "Please select tenure.";
     if (form.description.trim().length < 3) return "Description must be at least 3 characters.";
     if (!form.applicantNationalIdNumber.trim()) return "Applicant national ID number is required.";
-    if (!profilePhotoFile) return "Profile photo is required.";
-    if (!applicantNationalIdFile) return "Applicant national ID attachment is required.";
-    if (!bankStatementFile) return "Bank statement (3 months) is required.";
-    if (requiresPayslip && !payslipFile) return "Payslip or business proof is required.";
+    if (!profilePhotoFile && !hasServerAvatar) return "Profile photo is required.";
+    if (!applicantNationalIdFile && !hasServerDoc("national_id")) return "Applicant national ID attachment is required.";
+    if (!bankStatementFile && !hasServerDoc("bank_statement_3_months")) return "Bank statement (3 months) is required.";
+    if (requiresPayslip && !payslipFile && !hasServerDoc("payslip_or_business_proof")) return "Payslip or business proof is required.";
     if (!form.applicantOccupation.trim()) return "Applicant occupation is required.";
     if (!form.homeVillage.trim()) return "Home village is required.";
     if (!form.traditionalAuthority.trim()) return "T/A is required.";
@@ -352,13 +389,12 @@ export default function LoanInquiryPage() {
     if (requiresEmployerSection && !isBusiness) {
       if (!form.employerNameOrBusinessAddress.trim()) return "Employer full address is required.";
       if (!form.jobTitle.trim()) return "Job title is required.";
-      if (!isPrivateCompanyEmployee && !isSelfEmployed && !form.employmentNumber.trim()) {
+      if (isGovernmentEmployee && !form.employmentNumber.trim()) {
         return "Employment number is required.";
       }
       if (!form.durationWorkedYears.trim() && !form.durationWorkedMonths.trim()) {
         return "Duration worked is required.";
       }
-      if (!form.hrContactPhone.trim()) return "Employer HR phone number is required.";
     }
     if (requiresSalaryDate && !form.salaryDate) return "Date of salary/income is required.";
     if (requiresSalaryDate) {
@@ -368,7 +404,7 @@ export default function LoanInquiryPage() {
       }
     }
     if (!form.monthlyIncome.trim()) return "Monthly salary/income is required.";
-    if (!collateralFile) return "Collateral attachment is required.";
+    if (!collateralFile && !hasServerDoc("security_offer")) return "Collateral attachment is required.";
     if (!form.bankName.trim()) return "Bank name is required.";
     if (!form.accountHolderName.trim()) return "Account holder name is required.";
     if (!form.accountNumber.trim()) return "Account number is required.";
@@ -377,11 +413,7 @@ export default function LoanInquiryPage() {
     if (!form.guarantorPhone.trim()) return "Guarantor phone is required.";
     if (!form.guarantorRelationship.trim()) return "Guarantor relationship is required.";
     if (!form.guarantorNationalId.trim()) return "Guarantor national ID is required.";
-    if (!guarantorNationalIdFile) return "Guarantor national ID attachment is required.";
-    if (!form.guarantorOccupation.trim()) return "Guarantor occupation is required.";
-    if (!form.guarantorHomeVillage.trim()) return "Guarantor home village is required.";
-    if (!form.guarantorTA.trim()) return "Guarantor T/A is required.";
-    if (!form.guarantorDistrict.trim()) return "Guarantor district is required.";
+    if (!guarantorNationalIdFile && !hasServerDoc("guarantor_national_id")) return "Guarantor national ID attachment is required.";
     if (!form.declarationAccepted) return "Please accept applicant declaration.";
     if (!form.guarantorDeclarationAccepted) return "Please accept guarantor declaration.";
     return "";
@@ -489,23 +521,139 @@ export default function LoanInquiryPage() {
     setPayslipFile(null);
     setCollateralFile(null);
     setGuarantorNationalIdFile(null);
+    setRetryAccessToken("");
+    setCanRetryUploads(false);
+    setServerAvatarUrl("");
+    setServerDocTypes([]);
+    window.localStorage.removeItem(INQUIRY_DRAFT_TOKEN_KEY);
   };
 
   const uploadAvatarByToken = async (token, file) => {
     const payload = new FormData();
     payload.append("file", file);
-    await api.post(`/inquiries/access/${token}/avatar`, payload, {
+    const { data } = await api.post(`/inquiries/access/${token}/avatar`, payload, {
       headers: { "Content-Type": "multipart/form-data" },
     });
+    return data?.data || null;
   };
 
   const uploadDocByToken = async (token, type, file) => {
     const payload = new FormData();
     payload.append("type", type);
     payload.append("file", file);
-    await api.post(`/inquiries/access/${token}/doc`, payload, {
+    const { data } = await api.post(`/inquiries/access/${token}/doc`, payload, {
       headers: { "Content-Type": "multipart/form-data" },
     });
+    return data?.data || null;
+  };
+
+  const completeInquiryWithUploads = async (accessToken) => {
+    const normalizedEmploymentType = String(form.employmentType || "").trim().toLowerCase();
+    const isSelfEmployed = normalizedEmploymentType === "self-employed";
+    const isFarmer = normalizedEmploymentType === "farmer";
+    const requiresPayslip = !(isFarmer || isSelfEmployed);
+
+    if (profilePhotoFile) {
+      setSubmitStage("Uploading profile photo...");
+      const avatarData = await uploadAvatarByToken(accessToken, profilePhotoFile);
+      setServerAvatarUrl(String(avatarData?.avatarUrl || ""));
+    }
+
+    if (applicantNationalIdFile) {
+      setSubmitStage("Uploading applicant National ID...");
+      await uploadDocByToken(accessToken, "national_id", applicantNationalIdFile);
+      setServerDocTypes((prev) => (prev.includes("national_id") ? prev : [...prev, "national_id"]));
+    }
+
+    if (bankStatementFile) {
+      setSubmitStage("Uploading bank statement...");
+      await uploadDocByToken(accessToken, "bank_statement_3_months", bankStatementFile);
+      setServerDocTypes((prev) =>
+        prev.includes("bank_statement_3_months") ? prev : [...prev, "bank_statement_3_months"]
+      );
+    }
+
+    if (requiresPayslip && payslipFile) {
+      setSubmitStage("Uploading payslip/business proof...");
+      await uploadDocByToken(accessToken, "payslip_or_business_proof", payslipFile);
+      setServerDocTypes((prev) =>
+        prev.includes("payslip_or_business_proof") ? prev : [...prev, "payslip_or_business_proof"]
+      );
+    }
+
+    if (collateralFile) {
+      setSubmitStage("Uploading collateral/security offer...");
+      await uploadDocByToken(accessToken, "security_offer", collateralFile);
+      setServerDocTypes((prev) => (prev.includes("security_offer") ? prev : [...prev, "security_offer"]));
+    }
+
+    if (guarantorNationalIdFile) {
+      setSubmitStage("Uploading guarantor National ID...");
+      await uploadDocByToken(accessToken, "guarantor_national_id", guarantorNationalIdFile);
+      setServerDocTypes((prev) =>
+        prev.includes("guarantor_national_id") ? prev : [...prev, "guarantor_national_id"]
+      );
+    }
+
+    // Verify persisted server state before final submit.
+    setSubmitStage("Verifying uploaded documents...");
+    const profileRes = await api.get(`/inquiries/access/${accessToken}/profile`);
+    const serverProfile = profileRes?.data?.data || {};
+    const latestAvatarUrl = String(serverProfile?.avatarUrl || "").trim();
+    const latestDocTypes = Array.isArray(serverProfile?.documents)
+      ? serverProfile.documents
+          .map((d) => String(d?.type || "").trim())
+          .filter(Boolean)
+      : [];
+
+    setServerAvatarUrl(latestAvatarUrl);
+    setServerDocTypes(latestDocTypes);
+
+    if (!latestAvatarUrl) {
+      throw new Error("Profile photo upload did not complete. Please upload profile photo again.");
+    }
+
+    setSubmitStage("Finalizing submission...");
+    await api.post(`/inquiries/access/${accessToken}/submit`);
+    setSuccess("Inquiry submitted successfully. Our team will contact you shortly.");
+    setShowSuccessModal(true);
+    resetForm();
+  };
+
+  const onRetryUploads = async () => {
+    setError("");
+    setSuccess("");
+
+    if (!retryAccessToken) {
+      setError("Retry token is missing. Please submit the form again.");
+      return;
+    }
+
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitStage("Retrying failed upload steps...");
+    try {
+      await completeInquiryWithUploads(retryAccessToken);
+      setCanRetryUploads(false);
+    } catch (err) {
+      const backend = err?.response?.data;
+      const firstDetail = Array.isArray(backend?.details) ? backend.details[0] : null;
+      const detailMsg = firstDetail
+        ? toFriendlyValidationMessage(firstDetail)
+        : (Array.isArray(firstDetail?.errors) && firstDetail.errors[0]?.message) || "";
+      const rootMsg = detailMsg || backend?.message || "Retry failed. Please try again.";
+      const stagePrefix = submitStage ? `${submitStage} ` : "";
+      setError(`${stagePrefix}${rootMsg}`.trim());
+      setCanRetryUploads(true);
+    } finally {
+      setSubmitting(false);
+      setSubmitStage("");
+    }
   };
 
   const onSubmit = async (e) => {
@@ -520,14 +668,15 @@ export default function LoanInquiryPage() {
     }
 
     setSubmitting(true);
+    setSubmitStage("Creating inquiry...");
+    setCanRetryUploads(false);
+    let createdAccessToken = "";
 
     try {
       const normalizedEmploymentType = String(form.employmentType || "").trim().toLowerCase();
       const isBusiness = normalizedEmploymentType === "business";
       const isPrivateCompanyEmployee = normalizedEmploymentType === "private company employee";
       const isSelfEmployed = normalizedEmploymentType === "self-employed";
-      const isFarmer = normalizedEmploymentType === "farmer";
-      const requiresPayslip = !(isFarmer || isSelfEmployed);
       const requiresEmploymentNumber = !isPrivateCompanyEmployee && !isSelfEmployed && normalizedEmploymentType !== "farmer" && !isBusiness;
       const selectedLoanName =
         mergedLoanOptions.find((item) => item.slug === form.loanProductSlug)?.name || undefined;
@@ -589,28 +738,26 @@ export default function LoanInquiryPage() {
       if (!accessToken) {
         throw new Error("Missing access token for document upload.");
       }
-
-      await uploadAvatarByToken(accessToken, profilePhotoFile);
-      await uploadDocByToken(accessToken, "national_id", applicantNationalIdFile);
-      await uploadDocByToken(accessToken, "bank_statement_3_months", bankStatementFile);
-      if (requiresPayslip && payslipFile) {
-        await uploadDocByToken(accessToken, "payslip_or_business_proof", payslipFile);
-      }
-      await uploadDocByToken(accessToken, "security_offer", collateralFile);
-      await uploadDocByToken(accessToken, "guarantor_national_id", guarantorNationalIdFile);
-
-      setSuccess("Inquiry submitted successfully. Our team will contact you shortly.");
-      setShowSuccessModal(true);
-      resetForm();
+      createdAccessToken = accessToken;
+      setRetryAccessToken(accessToken);
+      window.localStorage.setItem(INQUIRY_DRAFT_TOKEN_KEY, accessToken);
+      await completeInquiryWithUploads(accessToken);
+      setCanRetryUploads(false);
     } catch (err) {
       const backend = err?.response?.data;
       const firstDetail = Array.isArray(backend?.details) ? backend.details[0] : null;
       const detailMsg = firstDetail
         ? toFriendlyValidationMessage(firstDetail)
         : (Array.isArray(firstDetail?.errors) && firstDetail.errors[0]?.message) || "";
-      setError(detailMsg || backend?.message || "Failed to submit inquiry.");
+      const rootMsg = detailMsg || backend?.message || "Failed to submit inquiry.";
+      const stagePrefix = submitStage ? `${submitStage} ` : "";
+      setError(`${stagePrefix}${rootMsg}`.trim());
+      if (createdAccessToken || retryAccessToken) {
+        setCanRetryUploads(true);
+      }
     } finally {
       setSubmitting(false);
+      setSubmitStage("");
     }
   };
 
@@ -626,6 +773,11 @@ export default function LoanInquiryPage() {
             <p className="mt-2 text-xs text-slate-600">
               Please do not refresh or close this page until submission completes.
             </p>
+            {submitStage ? (
+              <p className="mt-2 text-xs font-medium text-slate-800">
+                Current step: {submitStage}
+              </p>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -1186,7 +1338,7 @@ export default function LoanInquiryPage() {
                       className="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
                     />
                     <span className="mt-2 block text-xs text-slate-600">{profilePhotoFile?.name || "No file selected"}</span>
-                    {profilePhotoFile ? (
+                    {profilePhotoFile || serverAvatarUrl ? (
                       <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
                         Uploaded successfully
                       </span>
@@ -1204,7 +1356,7 @@ export default function LoanInquiryPage() {
                       className="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
                     />
                     <span className="mt-2 block text-xs text-slate-600">{applicantNationalIdFile?.name || "No file selected"}</span>
-                    {applicantNationalIdFile ? (
+                    {applicantNationalIdFile || serverDocTypes.includes("national_id") ? (
                       <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
                         Uploaded successfully
                       </span>
@@ -1222,7 +1374,7 @@ export default function LoanInquiryPage() {
                       className="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
                     />
                     <span className="mt-2 block text-xs text-slate-600">{bankStatementFile?.name || "No file selected"}</span>
-                    {bankStatementFile ? (
+                    {bankStatementFile || serverDocTypes.includes("bank_statement_3_months") ? (
                       <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
                         Uploaded successfully
                       </span>
@@ -1240,7 +1392,7 @@ export default function LoanInquiryPage() {
                       className="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
                     />
                     <span className="mt-2 block text-xs text-slate-600">{collateralFile?.name || "No file selected"}</span>
-                    {collateralFile ? (
+                    {collateralFile || serverDocTypes.includes("security_offer") ? (
                       <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
                         Uploaded successfully
                       </span>
@@ -1259,7 +1411,7 @@ export default function LoanInquiryPage() {
                         className="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
                       />
                       <span className="mt-2 block text-xs text-slate-600">{payslipFile?.name || "No file selected"}</span>
-                      {payslipFile ? (
+                      {payslipFile || serverDocTypes.includes("payslip_or_business_proof") ? (
                         <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
                           Uploaded successfully
                         </span>
@@ -1278,7 +1430,7 @@ export default function LoanInquiryPage() {
                       className="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
                     />
                     <span className="mt-2 block text-xs text-slate-600">{guarantorNationalIdFile?.name || "No file selected"}</span>
-                    {guarantorNationalIdFile ? (
+                    {guarantorNationalIdFile || serverDocTypes.includes("guarantor_national_id") ? (
                       <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
                         Uploaded successfully
                       </span>
@@ -1386,14 +1538,31 @@ export default function LoanInquiryPage() {
                 <p className="max-w-2xl text-sm leading-6 text-slate-600">
                   Once you submit, your inquiry goes directly to our admin team for review.
                 </p>
-                <button
-                  type="submit"
-                  disabled={submitting || !isFormComplete}
-                  title={!isFormComplete ? formValidationError : ""}
-                  className="w-full rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60 sm:w-auto"
-                >
-                  {submitting ? "Submitting..." : "Submit"}
-                </button>
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                  {canRetryUploads ? (
+                    <button
+                      type="button"
+                      onClick={onRetryUploads}
+                      disabled={submitting}
+                      className="w-full rounded-xl border border-amber-300 bg-amber-50 px-6 py-3 text-sm font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-60 sm:w-auto"
+                    >
+                      Retry Uploads
+                    </button>
+                  ) : null}
+                  {retryAccessToken ? (
+                    <span className="self-center text-xs font-medium text-slate-500">
+                      Draft saved
+                    </span>
+                  ) : null}
+                  <button
+                    type="submit"
+                    disabled={submitting || !isFormComplete}
+                    title={!isFormComplete ? formValidationError : ""}
+                    className="w-full rounded-xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60 sm:w-auto"
+                  >
+                    {submitting ? "Submitting..." : "Submit"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

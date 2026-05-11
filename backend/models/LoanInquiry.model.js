@@ -152,5 +152,31 @@ LoanInquirySchema.index({ createdAt: -1 });
 LoanInquirySchema.index({ status: 1, createdAt: -1 });
 LoanInquirySchema.index({ status: 1, updatedAt: -1 });
 
+// Safety guard: prevent accidental wipe of uploaded avatar/documents on later partial saves.
+LoanInquirySchema.pre("save", async function preserveUploadedAssets() {
+  if (this.isNew) return;
+
+  const current = await this.constructor
+    .findById(this._id)
+    .select("avatarUrl avatarPath documents")
+    .lean();
+
+  if (!current) return;
+
+  const currentAvatarUrl = String(current.avatarUrl || "").trim();
+  const currentDocs = Array.isArray(current.documents) ? current.documents : [];
+  const nextAvatarUrl = String(this.avatarUrl || "").trim();
+  const nextDocs = Array.isArray(this.documents) ? this.documents : [];
+
+  if (!nextAvatarUrl && currentAvatarUrl) {
+    this.avatarUrl = current.avatarUrl || "";
+    this.avatarPath = current.avatarPath || "";
+  }
+
+  if (nextDocs.length === 0 && currentDocs.length > 0) {
+    this.documents = currentDocs;
+  }
+});
+
 export const LoanInquiry =
   mongoose.models.LoanInquiry || mongoose.model("LoanInquiry", LoanInquirySchema);

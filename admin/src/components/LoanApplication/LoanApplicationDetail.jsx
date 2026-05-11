@@ -6,7 +6,7 @@ import Badge from "../ui/Badge";
 import { inquiriesApi } from "../../services/api/inquiries.api";
 import { complianceApi } from "../../services/api/compliance.api";
 import { useToast } from "../../context/ToastContext.jsx";
-import { ADMIN_FILE_BASE_URL } from "../../config/api";
+import { ADMIN_API_BASE_URL, ADMIN_FILE_BASE_URL } from "../../config/api";
 import { formatMWK } from "../../utils/money.js";
 
 const STATUS_TONE = {
@@ -338,7 +338,12 @@ export default function LoanApplicationDetail() {
   const resolveAssetUrl = (fileUrl = "") => {
     if (!fileUrl) return "";
     if (fileUrl.startsWith("http")) return fileUrl;
-    return `${ADMIN_FILE_BASE_URL}${fileUrl.startsWith("/") ? fileUrl : `/${fileUrl}`}`;
+    const normalizedPath = fileUrl.startsWith("/") ? fileUrl : `/${fileUrl}`;
+    const fileBase = String(ADMIN_FILE_BASE_URL || "").replace(/\/+$/, "");
+    const apiBase = String(ADMIN_API_BASE_URL || "").replace(/\/+$/, "");
+    const apiHostBase = apiBase.replace(/\/api\/v\d+$/i, "");
+    const chosenBase = fileBase || apiHostBase;
+    return `${chosenBase}${normalizedPath}`;
   };
 
   const loadDetail = async () => {
@@ -1635,7 +1640,7 @@ export default function LoanApplicationDetail() {
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-lg font-bold text-slate-700">
                 {String(item.fullName || "U").trim().charAt(0).toUpperCase() || "U"}
               </div>
-            )}
+            )}  
 
             <div className="min-w-0">
               <p className="text-xs text-slate-500">Customer</p>

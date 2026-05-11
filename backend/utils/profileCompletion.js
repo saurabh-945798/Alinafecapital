@@ -1,6 +1,14 @@
-﻿export function calculateProfileCompletion(profile = {}) {
+export function calculateProfileCompletion(profile = {}) {
   const hasText = (value) => typeof value === "string" && value.trim().length > 0;
   const hasNumber = (value) => typeof value === "number" && Number.isFinite(value) && value > 0;
+  const hasNonNegativeNumber = (value) =>
+    typeof value === "number" && Number.isFinite(value) && value >= 0;
+  const firstText = (...values) => {
+    for (const value of values) {
+      if (hasText(value)) return String(value).trim();
+    }
+    return "";
+  };
 
   let score = 0;
 
@@ -15,7 +23,10 @@
   }
 
   // Address: 25
-  if (hasText(profile.addressLine1) && hasText(profile.city) && hasText(profile.district)) {
+  // Support both legacy profile fields and new single-form inquiry fields.
+  const addressLine = firstText(profile.addressLine1, profile.address);
+  const districtValue = firstText(profile.district, profile.residenceDistrict);
+  if (hasText(addressLine) && hasText(districtValue)) {
     score += 25;
   }
 
@@ -32,10 +43,10 @@
     isSelfEmployed;
   const employmentStatus = String(profile.employmentStatus || "").trim().toLowerCase();
   const requiresContractDuration = employmentStatus === "fixed_contract";
-  const hasNonNegativeNumber = (value) =>
-    typeof value === "number" && Number.isFinite(value) && value >= 0;
+
   const hasEmploymentCore = isBusiness
-    ? hasText(profile.businessName) && hasText(profile.businessActivityNature)
+    ? hasText(firstText(profile.businessName, profile.employerNameOrBusinessAddress)) &&
+      hasText(profile.businessActivityNature)
     : isFarmer
     ? true
     : hasText(profile.jobTitle) &&
@@ -47,11 +58,13 @@
       hasNonNegativeNumber(profile.durationWorkedYears) &&
       hasNonNegativeNumber(profile.durationWorkedMonths) &&
       hasText(profile.hrContactPhone);
+
   if (
     hasText(profile.employmentType) &&
     hasEmploymentCore &&
     hasNumber(profile.monthlyIncome) &&
-    (!requiresGovernmentId || hasText(profile.governmentId)) &&
+    (!requiresGovernmentId ||
+      hasText(firstText(profile.governmentId, profile.applicantNationalIdNumber))) &&
     (!requiresSalaryDate || hasText(profile.salaryDate))
   ) {
     score += 15;
