@@ -56,10 +56,20 @@ const loginLimiter = rateLimitFactory({
   },
 });
 
+const refreshLimiter = rateLimitFactory({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: {
+    success: false,
+    message: "Too many token refresh attempts. Try again later.",
+    code: "RATE_LIMITED",
+  },
+});
+
 router.post("/register", registerLimiter, registerUser);
 router.post("/login", loginLimiter, loginUser);
 router.post("/admin/login", loginLimiter, adminLoginUser);
-router.post("/refresh", refreshAccessToken);
+router.post("/refresh", refreshLimiter, refreshAccessToken);
 router.post("/logout", logoutUser);
 
 export default router;

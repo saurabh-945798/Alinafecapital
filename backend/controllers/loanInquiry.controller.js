@@ -9,6 +9,8 @@ import { SystemCounter } from "../models/SystemCounter.model.js";
 import { normalizePhone } from "../utils/normalize.js";
 import { calculateProfileCompletion } from "../utils/profileCompletion.js";
 import { toPersistedUploadPath, toPublicUploadUrl } from "../utils/uploadPaths.js";
+import { canTransitionInquiry, getInquiryStage } from "../utils/workflowPolicy.js";
+import { writeAdminAudit } from "../utils/adminAudit.js";
 
 const PUBLIC_LOAN_TYPES = [
   { slug: "civil-servant-loan", name: "Civil Servant Loan" },
@@ -87,6 +89,7 @@ const adminListSchema = z.object({
 
 const adminUpdateSchema = z.object({
   status: z.enum(["NEW", "CONTACTED", "KYC_SENT", "KYC_REJECTED", "APPROVED", "AUTHORIZED", "DISBURSED", "CLOSED", "QUALIFIED"]).optional(),
+  expectedCurrentStatus: z.enum(["NEW", "CONTACTED", "KYC_SENT", "KYC_REJECTED", "APPROVED", "AUTHORIZED", "DISBURSED", "CLOSED", "QUALIFIED"]).optional(),
   adminNote: z.string().trim().max(1000).optional(),
   closeReason: z.string().trim().max(200).optional(),
   approvedBy: z.string().trim().max(120).optional(),
@@ -1073,6 +1076,47 @@ export const loanInquiryController = {
     return res.json({ success: true, data: doc.toObject() });
   },
 
+  adminDelete: async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid inquiry id",
+        code: "VALIDATION_ERROR",
+      });
+    }
+
+    const doc = await LoanInquiry.findById(req.params.id);
+    if (!doc) {
+      return res.status(404).json({
+        success: false,
+        message: "Inquiry not found",
+        code: "NOT_FOUND",
+      });
+    }
+
+    const oldValue = {
+      id: doc._id,
+      applicationCode: doc.applicationCode || "",
+      fullName: doc.fullName || "",
+      status: doc.status || "",
+      kycStatus: doc.kycStatus || "",
+    };
+
+    await LoanInquiry.deleteOne({ _id: doc._id });
+    await writeAdminAudit(req, {
+      action: "INQUIRY_DELETED",
+      targetType: "LoanInquiry",
+      targetId: doc._id,
+      oldValue,
+      newValue: { deleted: true },
+    });
+
+    return res.json({
+      success: true,
+      data: { id: String(doc._id) },
+    });
+  },
+
   adminUpdate: async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({
@@ -1103,11 +1147,34 @@ export const loanInquiryController = {
 
     const previousStatus = doc.status;
     const previousAdminNote = doc.adminNote || "";
+    if (
+      parsed.data.expectedCurrentStatus &&
+      String(doc.status || "").toUpperCase() !== String(parsed.data.expectedCurrentStatus || "").toUpperCase()
+    ) {
+      return res.status(409).json({
+        success: false,
+        message: `Inquiry status changed by another user. Current status is ${doc.status}. Please refresh and retry.`,
+        code: "STATUS_CONFLICT",
+      });
+    }
     const selectedDisbursementMethod = String(
       parsed.data.disbursementMethod ?? doc.disbursementMethod ?? ""
     ).trim();
 
     if (parsed.data.status) {
+      const currentStage = getInquiryStage(doc);
+      const transition = canTransitionInquiry({
+        fromStage: currentStage,
+        toStage: parsed.data.status,
+        role: req.user?.role,
+      });
+      if (!transition.ok) {
+        return res.status(403).json({
+          success: false,
+          message: transition.message,
+          code: transition.code,
+        });
+      }
       if (parsed.data.status === "APPROVED" && doc.kycStatus !== "verified") {
         return res.status(400).json({
           success: false,
@@ -1395,7 +1462,27 @@ export const loanInquiryController = {
       await ensureLoanAccountForInquiry(doc);
     }
 
+    const before = {
+      status: previousStatus,
+      kycStatus: doc.kycStatus,
+      approvedBy: doc.approvedBy,
+      authorizedBy: doc.authorizedBy,
+      disbursedBy: doc.disbursedBy,
+    };
     await doc.save();
+    await writeAdminAudit(req, {
+      action: "INQUIRY_STATUS_UPDATED",
+      targetType: "LoanInquiry",
+      targetId: doc._id,
+      oldValue: before,
+      newValue: {
+        status: doc.status,
+        kycStatus: doc.kycStatus,
+        approvedBy: doc.approvedBy,
+        authorizedBy: doc.authorizedBy,
+        disbursedBy: doc.disbursedBy,
+      },
+    });
 
     return res.json({ success: true, data: doc.toObject() });
   },

@@ -2,6 +2,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import { loanProductService } from "../services/loanProduct.service.js";
 import { createLoanProductSchema, updateLoanProductSchema } from "../validators/loanProduct.validator.js";
+import { writeAdminAudit } from "../utils/adminAudit.js";
 
 export const loanProductController = {
   // PUBLIC
@@ -28,6 +29,12 @@ export const loanProductController = {
     }
 
     const created = await loanProductService.create(parsed.data);
+    await writeAdminAudit(req, {
+      action: "LOAN_PRODUCT_CREATED",
+      targetType: "LoanProduct",
+      targetId: created?._id,
+      newValue: created,
+    });
     res.status(201).json(new ApiResponse({ message: "Loan product created", data: created }));
   },
 
@@ -38,11 +45,23 @@ export const loanProductController = {
     }
 
     const updated = await loanProductService.adminUpdate(req.params.id, parsed.data);
+    await writeAdminAudit(req, {
+      action: "LOAN_PRODUCT_UPDATED",
+      targetType: "LoanProduct",
+      targetId: updated?._id || req.params.id,
+      newValue: updated,
+    });
     res.json(new ApiResponse({ message: "Loan product updated", data: updated }));
   },
 
   adminDelete: async (req, res) => {
     const updated = await loanProductService.adminSoftDelete(req.params.id);
+    await writeAdminAudit(req, {
+      action: "LOAN_PRODUCT_DELETED",
+      targetType: "LoanProduct",
+      targetId: updated?._id || req.params.id,
+      newValue: updated,
+    });
     res.json(new ApiResponse({ message: "Loan product deactivated", data: updated }));
   },
 };

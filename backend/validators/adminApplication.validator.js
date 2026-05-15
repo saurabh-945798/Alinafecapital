@@ -28,6 +28,7 @@ export const listAdminApplicationsSchema = z.object({
 export const adminUpdateStatusSchema = z
   .object({
     status: ADMIN_STATUS_ENUM,
+    expectedCurrentStatus: ADMIN_STATUS_ENUM.optional(),
     note: z.string().trim().max(500).optional().default(""),
     reasonCode: z.string().trim().max(64).optional().default(""),
     disbursementReference: z.string().trim().max(100).optional().default(""),

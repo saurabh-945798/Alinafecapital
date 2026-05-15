@@ -1,4 +1,5 @@
 import { LoanInquiry } from "../models/LoanInquiry.model.js";
+import { normalizeRole } from "../utils/rbac.js";
 
 const unresolvedStatuses = ["NEW", "CONTACTED", "KYC_SENT", "KYC_REJECTED"];
 
@@ -65,5 +66,20 @@ export const getAdminDashboardSummary = async (req, res) => {
   return res.json({
     success: true,
     data,
+  });
+};
+
+export const getAdminWhoAmI = async (req, res) => {
+  return res.json({
+    success: true,
+    data: {
+      userId: req.user?._id || null,
+      fullName: req.user?.fullName || "",
+      email: req.user?.email || "",
+      phone: req.user?.phone || "",
+      role: req.user?.role || "",
+      normalizedRole: normalizeRole(req.user?.role),
+      isActive: Boolean(req.user?.isActive),
+    },
   });
 };

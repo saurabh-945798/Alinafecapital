@@ -7,17 +7,8 @@ import {
   adminUpdateStatusSchema,
   listAdminApplicationsSchema,
 } from "../validators/adminApplication.validator.js";
-
-const STATUS_TRANSITIONS = {
-  PRE_APPLICATION: ["SUBMITTED", "CANCELLED"],
-  SUBMITTED: ["UNDER_REVIEW", "REJECTED", "CANCELLED"],
-  PENDING: ["UNDER_REVIEW", "REJECTED", "CANCELLED"],
-  UNDER_REVIEW: ["APPROVED", "REJECTED", "CANCELLED"],
-  APPROVED: ["DISBURSED", "CANCELLED"],
-  REJECTED: [],
-  DISBURSED: [],
-  CANCELLED: [],
-};
+import { canTransitionLoanApplication } from "../utils/workflowPolicy.js";
+import { writeAdminAudit } from "../utils/adminAudit.js";
 
 const SLA_HOURS = 24;
 
@@ -217,6 +208,7 @@ export const adminApplicationController = {
 
     const {
       status,
+      expectedCurrentStatus,
       note,
       reasonCode,
       disbursementReference,
@@ -230,16 +222,31 @@ export const adminApplicationController = {
     if (doc.status === status) {
       throw new ApiError(400, "Status is already set", "NO_STATUS_CHANGE");
     }
-
-    const nextAllowed = STATUS_TRANSITIONS[doc.status] || [];
-    if (!nextAllowed.includes(status)) {
+    if (expectedCurrentStatus && String(doc.status || "").toUpperCase() !== String(expectedCurrentStatus || "").toUpperCase()) {
       throw new ApiError(
-        400,
-        `Invalid status transition: ${doc.status} -> ${status}`,
-        "INVALID_STATUS_TRANSITION"
+        409,
+        `Application status changed by another user. Current status is ${doc.status}. Please refresh and retry.`,
+        "STATUS_CONFLICT"
       );
     }
 
+    const transition = canTransitionLoanApplication({
+      fromStage: doc.status,
+      toStage: status,
+      role: req.user?.role,
+    });
+    if (!transition.ok) {
+      throw new ApiError(
+        transition.code === "ROLE_ACTION_FORBIDDEN" ? 403 : 400,
+        transition.message,
+        transition.code
+      );
+    }
+
+    const oldValue = {
+      status: doc.status,
+      disbursement: doc.disbursement || null,
+    };
     doc.status = status;
 
     const adminActor =
@@ -276,6 +283,13 @@ export const adminApplicationController = {
     }
 
     await doc.save();
+    await writeAdminAudit(req, {
+      action: "APPLICATION_STATUS_UPDATED",
+      targetType: "LoanApplication",
+      targetId: doc._id,
+      oldValue,
+      newValue: { status: doc.status, disbursement: doc.disbursement || null },
+    });
 
     res.json(
       new ApiResponse({

@@ -31,4 +31,9 @@ export const inquiriesApi = {
     const { data } = await api.delete(`/admin/inquiries/${id}/doc/${type}`);
     return normalize(data);
   },
+
+  async remove(id) {
+    const { data } = await api.delete(`/admin/inquiries/${id}`);
+    return normalize(data);
+  },
 };

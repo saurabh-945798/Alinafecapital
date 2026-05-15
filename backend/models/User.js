@@ -1,5 +1,8 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import { ADMIN_ROLES } from "../utils/rbac.js";
+
+const USER_ROLES = ["user", "admin", ...ADMIN_ROLES];
 
 const UserSchema = new mongoose.Schema(
   {
@@ -34,7 +37,7 @@ const UserSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["user", "admin"],
+      enum: USER_ROLES,
       default: "user",
     },
 

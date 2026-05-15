@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { z } from "zod";
 import { LoanAccount } from "../models/LoanAccount.model.js";
+import { writeAdminAudit } from "../utils/adminAudit.js";
 
 const listSchema = z.object({
   status: z.string().trim().optional(),
@@ -300,6 +301,12 @@ export const loanAccountController = {
     }
 
     doc.repaymentEntries = Array.isArray(doc.repaymentEntries) ? doc.repaymentEntries : [];
+    const oldValue = {
+      totalPaidAmount: Number(doc.totalPaidAmount || 0),
+      outstandingBalance: Number(doc.outstandingBalance || 0),
+      status: String(doc.status || ""),
+      repaymentEntriesCount: doc.repaymentEntries.length,
+    };
     doc.repaymentEntries.push({
       paymentDate: new Date(parsed.data.paymentDate),
       amount: Number(parsed.data.amount),
@@ -312,6 +319,18 @@ export const loanAccountController = {
     applyPaymentSummaryToDoc(doc);
 
     await doc.save();
+    await writeAdminAudit(req, {
+      action: "ACCOUNT_PAYMENT_ADDED",
+      targetType: "LoanAccount",
+      targetId: doc._id,
+      oldValue,
+      newValue: {
+        totalPaidAmount: Number(doc.totalPaidAmount || 0),
+        outstandingBalance: Number(doc.outstandingBalance || 0),
+        status: String(doc.status || ""),
+        repaymentEntriesCount: Array.isArray(doc.repaymentEntries) ? doc.repaymentEntries.length : 0,
+      },
+    });
 
     return res.json({
       success: true,
@@ -356,6 +375,13 @@ export const loanAccountController = {
       });
     }
 
+    const oldEntry = {
+      paymentDate: entry.paymentDate,
+      amount: Number(entry.amount || 0),
+      method: entry.method,
+      reference: entry.reference || "",
+      note: entry.note || "",
+    };
     entry.paymentDate = new Date(parsed.data.paymentDate);
     entry.amount = Number(parsed.data.amount);
     entry.method = parsed.data.method;
@@ -364,6 +390,19 @@ export const loanAccountController = {
 
     applyPaymentSummaryToDoc(doc);
     await doc.save();
+    await writeAdminAudit(req, {
+      action: "ACCOUNT_PAYMENT_UPDATED",
+      targetType: "LoanAccountPayment",
+      targetId: `${doc._id}:${req.params.paymentId}`,
+      oldValue: oldEntry,
+      newValue: {
+        paymentDate: entry.paymentDate,
+        amount: Number(entry.amount || 0),
+        method: entry.method,
+        reference: entry.reference || "",
+        note: entry.note || "",
+      },
+    });
 
     return res.json({
       success: true,
@@ -398,9 +437,28 @@ export const loanAccountController = {
       });
     }
 
+    const oldEntry = {
+      paymentDate: entry.paymentDate,
+      amount: Number(entry.amount || 0),
+      method: entry.method,
+      reference: entry.reference || "",
+      note: entry.note || "",
+    };
     entry.deleteOne();
     applyPaymentSummaryToDoc(doc);
     await doc.save();
+    await writeAdminAudit(req, {
+      action: "ACCOUNT_PAYMENT_DELETED",
+      targetType: "LoanAccountPayment",
+      targetId: `${doc._id}:${req.params.paymentId}`,
+      oldValue: oldEntry,
+      newValue: {
+        deleted: true,
+        totalPaidAmount: Number(doc.totalPaidAmount || 0),
+        outstandingBalance: Number(doc.outstandingBalance || 0),
+        status: String(doc.status || ""),
+      },
+    });
 
     return res.json({
       success: true,

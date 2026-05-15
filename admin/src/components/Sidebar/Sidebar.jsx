@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { ChevronsLeft, ChevronsRight, LogOut, Menu, X } from "lucide-react";
 import { sidebarNav } from "./sidebarNav";
 import { clearAdminSession, getAdminUser } from "../../utils/adminAuth";
 import { inquiriesApi } from "../../services/api/inquiries.api";
+import { hasAnyRole, normalizeAdminRole } from "../../utils/adminRbac";
+import { useToast } from "../../context/ToastContext.jsx";
 
 const cx = (...a) => a.filter(Boolean).join(" ");
 
-function NavItems({ collapsed, onNavigate, badges = {} }) {
+function NavItems({ collapsed, onNavigate, badges = {}, role = "" }) {
   const nav = useMemo(() => sidebarNav, []);
   return (
     <nav className="flex-1 overflow-y-auto px-3 pb-4">
@@ -20,7 +22,9 @@ function NavItems({ collapsed, onNavigate, badges = {} }) {
           )}
 
           <div className="space-y-1">
-            {group.items.map((item) => {
+            {group.items
+              .filter((item) => !Array.isArray(item.roles) || hasAnyRole(role, item.roles))
+              .map((item) => {
               const Icon = item.icon;
               return (
                 <NavLink
@@ -66,10 +70,13 @@ function NavItems({ collapsed, onNavigate, badges = {} }) {
 
 export default function Sidebar() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [badges, setBadges] = useState({ applications: 0 });
+  const badgeErrorNotifiedRef = useRef(false);
   const adminUser = useMemo(() => getAdminUser(), []);
+  const adminRole = normalizeAdminRole(adminUser?.role);
 
   const width = collapsed ? "w-20" : "w-72";
 
@@ -84,14 +91,22 @@ export default function Sidebar() {
 
     const loadBadges = async () => {
       try {
-        const statuses = ["NEW", "CONTACTED", "KYC_SENT", "KYC_REJECTED"];
-        const responses = await Promise.all(
-          statuses.map((status) => inquiriesApi.list({ status, page: 1, limit: 1 }))
-        );
-        const applications = responses.reduce(
-          (sum, entry) => sum + Number(entry?.pagination?.total || 0),
-          0
-        );
+        // Use one shared query and compute counts client-side.
+        // This avoids role-specific 403 noise on restricted status endpoints.
+        const response = await inquiriesApi.list({ status: "ALL", page: 1, limit: 100 });
+        const items = Array.isArray(response?.items) ? response.items : [];
+        const applications = items.filter((item) => {
+          const s = String(item?.status || "").toUpperCase();
+          const k = String(item?.kycStatus || "").toLowerCase();
+          return (
+            s === "NEW" ||
+            s === "CONTACTED" ||
+            s === "KYC_SENT" ||
+            s === "KYC_REJECTED" ||
+            k === "pending" ||
+            k === "rejected"
+          );
+        }).length;
 
         if (active) {
           setBadges({ applications });
@@ -99,6 +114,10 @@ export default function Sidebar() {
       } catch {
         if (active) {
           setBadges({ applications: 0 });
+          if (!badgeErrorNotifiedRef.current) {
+            toast.warning("Unable to refresh sidebar counts right now.");
+            badgeErrorNotifiedRef.current = true;
+          }
         }
       }
     };
@@ -136,7 +155,7 @@ export default function Sidebar() {
         </button>
       </div>
 
-      <NavItems collapsed={collapsed} onNavigate={() => setMobileOpen(false)} badges={badges} />
+      <NavItems collapsed={collapsed} onNavigate={() => setMobileOpen(false)} badges={badges} role={adminRole} />
 
       <div className="border-t border-slate-200 p-3">
         <div className="flex items-center gap-3 rounded-xl p-2 hover:bg-slate-50">

@@ -1,12 +1,17 @@
 import { Router } from "express";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
-import { requireAdmin } from "../middlewares/requireAdmin.js";
+import { requireRole } from "../middlewares/requireRole.js";
 import { complaintController } from "../controllers/complaint.controller.js";
+import { strictAdminWriteLimiter } from "../middlewares/rateLimiters.js";
 
 const router = Router();
 
-router.use(requireAdmin);
-router.get("/complaints", asyncHandler(complaintController.adminList));
-router.patch("/complaints/:id", asyncHandler(complaintController.adminUpdate));
+router.get("/complaints", requireRole("SUPER_ADMIN", "VERIFIER"), asyncHandler(complaintController.adminList));
+router.patch(
+  "/complaints/:id",
+  requireRole("SUPER_ADMIN", "VERIFIER"),
+  strictAdminWriteLimiter,
+  asyncHandler(complaintController.adminUpdate)
+);
 
 export default router;

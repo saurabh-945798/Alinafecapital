@@ -4,7 +4,7 @@ import { clearAdminSession, getAdminToken } from "../../utils/adminAuth";
 
 export const api = axios.create({
   baseURL: ADMIN_API_BASE_URL,
-  timeout: 20000,
+  timeout: 45000,
   withCredentials: true,
 });
 
@@ -19,7 +19,13 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error?.code === "ECONNABORTED") {
+      error.message =
+        "Request timed out. Backend took too long to respond. Please check server/API URL and try again.";
+    }
+
     const status = error?.response?.status;
+    const code = String(error?.response?.data?.code || "");
     const url = String(error?.config?.url || "");
     const isAuthEndpoint = url.includes("/auth/login") || url.includes("/auth/refresh");
 
@@ -32,7 +38,12 @@ api.interceptors.response.use(
       }
     }
 
+    if (status === 403 && code === "ROLE_FORBIDDEN" && typeof window !== "undefined") {
+      if (window.location.pathname.startsWith("/admin/user-access")) {
+        window.location.replace("/admin/applications");
+      }
+    }
+
     return Promise.reject(error);
   }
 );
-

@@ -3,15 +3,24 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { registerSchema, loginSchema } from "../utils/validators/auth.validators.js";
 import { isValidE164Phone, normalizeEmail, normalizePhone } from "../utils/normalize.js";
+import { isAdminRole, normalizeRole } from "../utils/rbac.js";
 
 const MAX_LOGIN_ATTEMPTS = Number(process.env.MAX_LOGIN_ATTEMPTS || 5);
 const LOCK_MINUTES = Number(process.env.LOCK_MINUTES || 30);
 
-const issueAccessToken = (userId) =>
-  jwt.sign({ id: userId }, process.env.JWT_SECRET, { expiresIn: "15m" });
+const issueAccessToken = (user) =>
+  jwt.sign(
+    {
+      id: user._id,
+      role: normalizeRole(user.role),
+      isActive: Boolean(user.isActive),
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: "15m" }
+  );
 
-const issueRefreshToken = (userId) =>
-  jwt.sign({ id: userId }, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET, {
+const issueRefreshToken = (user) =>
+  jwt.sign({ id: user._id, role: normalizeRole(user.role) }, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
   });
 
@@ -39,7 +48,6 @@ const authError = (res, message, code = "AUTH_ERROR", status = 401) =>
   res.status(status).json({ success: false, message, code });
 
 const sendAuthSuccess = (res, data, status = 200) => res.status(status).json({ success: true, data });
-const isAdminRole = (role) => String(role || "").toLowerCase() === "admin";
 
 export const registerUser = async (req, res, next) => {
   try {
@@ -82,8 +90,8 @@ export const registerUser = async (req, res, next) => {
 
     const user = await User.create({ fullName, email, phone, password });
 
-    const accessToken = issueAccessToken(user._id);
-    const refreshToken = issueRefreshToken(user._id);
+    const accessToken = issueAccessToken(user);
+    const refreshToken = issueRefreshToken(user);
     const refreshTokenHash = hashRefreshToken(refreshToken);
 
     user.refreshTokenHash = refreshTokenHash;
@@ -103,7 +111,7 @@ export const registerUser = async (req, res, next) => {
           fullName: user.fullName,
           email: user.email,
           phone: user.phone,
-          role: user.role,
+          role: normalizeRole(user.role),
         },
       },
       201
@@ -188,8 +196,8 @@ const loginCore = async (req, res, next, { adminOnly = false } = {}) => {
     user.loginAttempts = 0;
     user.lockUntil = null;
 
-    const accessToken = issueAccessToken(user._id);
-    const refreshToken = issueRefreshToken(user._id);
+    const accessToken = issueAccessToken(user);
+    const refreshToken = issueRefreshToken(user);
     user.refreshTokenHash = hashRefreshToken(refreshToken);
     await user.save({ validateBeforeSave: false });
 
@@ -203,7 +211,7 @@ const loginCore = async (req, res, next, { adminOnly = false } = {}) => {
         fullName: user.fullName,
         email: user.email,
         phone: user.phone,
-        role: user.role,
+        role: normalizeRole(user.role),
       },
     });
   } catch (error) {
@@ -239,14 +247,20 @@ export const refreshAccessToken = async (req, res, next) => {
     if (!user || !user.refreshTokenHash) {
       return authError(res, "Unauthorized", "AUTH_ERROR", 401);
     }
+    if (!user.isActive) {
+      return authError(res, "Account disabled", "ACCOUNT_DISABLED", 403);
+    }
+    if (isAdminRole(normalizeRole(user.role)) && !["SUPER_ADMIN", "VERIFIER", "APPROVAL", "AUTHORIZED", "DISBURSED"].includes(normalizeRole(user.role))) {
+      return authError(res, "Unauthorized role", "ROLE_INVALID", 403);
+    }
 
     const incomingHash = hashRefreshToken(refreshToken);
     if (incomingHash !== user.refreshTokenHash) {
       return authError(res, "Invalid refresh token", "INVALID_REFRESH_TOKEN", 401);
     }
 
-    const newAccessToken = issueAccessToken(user._id);
-    const newRefreshToken = issueRefreshToken(user._id);
+    const newAccessToken = issueAccessToken(user);
+    const newRefreshToken = issueRefreshToken(user);
     user.refreshTokenHash = hashRefreshToken(newRefreshToken);
     await user.save({ validateBeforeSave: false });
 

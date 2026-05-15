@@ -4,6 +4,7 @@ import Button from "../ui/Button";
 import Badge from "../ui/Badge";
 import { accountsApi } from "../../services/api/accounts.api";
 import { formatMWK, formatMWKCompact } from "../../utils/money.js";
+import { useToast } from "../../context/ToastContext.jsx";
 
 const STATUS_TONE = {
   ACTIVE: "green",
@@ -38,9 +39,12 @@ const ymKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).pad
 
 export default function ReportsPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [allAccounts, setAllAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [csvLoading, setCsvLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [quickRange, setQuickRange] = useState("ALL");
@@ -73,7 +77,11 @@ export default function ReportsPage() {
         const extra = chunks.flatMap((entry) => (Array.isArray(entry?.items) ? entry.items : []));
         if (active) setAllAccounts([...firstItems, ...extra]);
       } catch (err) {
-        if (active) setError(err?.response?.data?.message || "Failed to load reports.");
+        if (active) {
+          const msg = err?.response?.data?.message || "Failed to load reports.";
+          setError(msg);
+          toast.error(msg);
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -246,41 +254,54 @@ export default function ReportsPage() {
   }, [chartData, monthlyGapFilter, monthlySort]);
 
   const exportCsv = () => {
-    const headers = [
-      "Account No",
-      "Customer",
-      "Disbursed",
-      "Collected",
-      "Outstanding",
-      "Next Due Date",
-      "Status",
-    ];
-    const rows = filtered.map((item) => [
-      item?.accountNumber || "",
-      item?.customerName || "",
-      Number(item?.disbursedAmount || 0),
-      Number(item?.totalPaidAmount || 0),
-      Number(item?.outstandingBalance || 0),
-      item?.nextDueDate ? new Date(item.nextDueDate).toISOString().slice(0, 10) : "",
-      item?.status || "",
-    ]);
+    try {
+      setCsvLoading(true);
+      const headers = [
+        "Account No",
+        "Customer",
+        "Disbursed",
+        "Collected",
+        "Outstanding",
+        "Next Due Date",
+        "Status",
+      ];
+      const rows = filtered.map((item) => [
+        item?.accountNumber || "",
+        item?.customerName || "",
+        Number(item?.disbursedAmount || 0),
+        Number(item?.totalPaidAmount || 0),
+        Number(item?.outstandingBalance || 0),
+        item?.nextDueDate ? new Date(item.nextDueDate).toISOString().slice(0, 10) : "",
+        item?.status || "",
+      ]);
 
-    const escaped = [headers, ...rows]
-      .map((row) => row.map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`).join(","))
-      .join("\n");
+      const escaped = [headers, ...rows]
+        .map((row) => row.map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`).join(","))
+        .join("\n");
 
-    const blob = new Blob([escaped], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `reports_${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+      const blob = new Blob([escaped], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `reports_${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success("CSV export completed.");
+    } catch {
+      toast.error("Failed to export CSV report.");
+    } finally {
+      setCsvLoading(false);
+    }
   };
 
   const printSummary = () => {
-    const popup = window.open("", "_blank", "width=1024,height=768");
-    if (!popup) return;
+    try {
+      setPdfLoading(true);
+      const popup = window.open("", "_blank", "width=1024,height=768");
+      if (!popup) {
+        toast.warning("Popup blocked. Allow popups to download report PDF.");
+        return;
+      }
     const now = new Date().toLocaleString();
     popup.document.write(`
       <html>
@@ -337,6 +358,12 @@ export default function ReportsPage() {
     popup.document.close();
     popup.focus();
     popup.print();
+    toast.success("Report PDF opened for print/download.");
+    } catch {
+      toast.error("Failed to generate report PDF.");
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   return (
@@ -348,8 +375,8 @@ export default function ReportsPage() {
             Clean report view for disbursement, collection, and outstanding status.
           </p>
         </div>
-        <Button variant="outline" onClick={printSummary}>
-          Download Report (PDF)
+        <Button variant="outline" onClick={printSummary} disabled={pdfLoading}>
+          {pdfLoading ? "Preparing PDF..." : "Download Report (PDF)"}
         </Button>
       </div>
 
@@ -504,11 +531,11 @@ export default function ReportsPage() {
             </select>
           </label>
           <div className="flex items-end gap-2">
-            <Button variant="outline" onClick={exportCsv}>
-              Export CSV
+            <Button variant="outline" onClick={exportCsv} disabled={csvLoading}>
+              {csvLoading ? "Exporting..." : "Export CSV"}
             </Button>
-            <Button variant="outline" onClick={printSummary}>
-              Print Summary
+            <Button variant="outline" onClick={printSummary} disabled={pdfLoading}>
+              {pdfLoading ? "Preparing..." : "Print Summary"}
             </Button>
           </div>
         </div>

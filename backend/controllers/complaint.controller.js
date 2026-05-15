@@ -2,6 +2,7 @@ import { z } from "zod";
 import { Complaint } from "../models/Complaint.model.js";
 import { SystemCounter } from "../models/SystemCounter.model.js";
 import { normalizePhone } from "../utils/normalize.js";
+import { writeAdminAudit } from "../utils/adminAudit.js";
 
 const publicCreateSchema = z.object({
   fullName: z.string().trim().min(2).max(120),
@@ -141,6 +142,12 @@ export const complaintController = {
       });
     }
 
+    const oldValue = {
+      status: complaint.status,
+      adminNote: complaint.adminNote || "",
+      resolvedAt: complaint.resolvedAt || null,
+    };
+
     if (parsed.data.status !== undefined) {
       complaint.status = parsed.data.status;
       complaint.resolvedAt =
@@ -154,6 +161,17 @@ export const complaintController = {
     }
 
     await complaint.save();
+    await writeAdminAudit(req, {
+      action: "COMPLAINT_UPDATED",
+      targetType: "Complaint",
+      targetId: complaint._id,
+      oldValue,
+      newValue: {
+        status: complaint.status,
+        adminNote: complaint.adminNote || "",
+        resolvedAt: complaint.resolvedAt || null,
+      },
+    });
 
     return res.json({
       success: true,

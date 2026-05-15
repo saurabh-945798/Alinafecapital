@@ -1,5 +1,6 @@
 import UserProfile from "../models/UserProfile.js";
 import { LoanInquiry } from "../models/LoanInquiry.model.js";
+import { writeAdminAudit } from "../utils/adminAudit.js";
 
 const safeRegex = (value = "") => {
   const safe = String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -192,6 +193,12 @@ export async function verifyKyc(req, res, next) {
       });
     }
 
+    const oldValue = {
+      kycStatus: review.doc.kycStatus || "not_started",
+      kycRemarks: review.doc.kycRemarks || "",
+      verifiedAt: review.doc.verifiedAt || null,
+      rejectedAt: review.doc.rejectedAt || null,
+    };
     review.doc.kycStatus = "verified";
     review.doc.kycRemarks = "";
     review.doc.verifiedAt = new Date();
@@ -209,6 +216,18 @@ export async function verifyKyc(req, res, next) {
       });
     }
     await review.doc.save();
+    await writeAdminAudit(req, {
+      action: "KYC_VERIFIED",
+      targetType: review.recordType === "profile" ? "UserProfile" : "LoanInquiry",
+      targetId: review.recordType === "profile" ? review.doc.userId : review.doc._id,
+      oldValue,
+      newValue: {
+        kycStatus: review.doc.kycStatus,
+        kycRemarks: review.doc.kycRemarks || "",
+        verifiedAt: review.doc.verifiedAt || null,
+        rejectedAt: review.doc.rejectedAt || null,
+      },
+    });
 
     return res.json({
       success: true,
@@ -235,6 +254,12 @@ export async function rejectKyc(req, res, next) {
       });
     }
 
+    const oldValue = {
+      kycStatus: review.doc.kycStatus || "not_started",
+      kycRemarks: review.doc.kycRemarks || "",
+      verifiedAt: review.doc.verifiedAt || null,
+      rejectedAt: review.doc.rejectedAt || null,
+    };
     review.doc.kycStatus = "rejected";
     review.doc.kycRemarks = remarks;
     review.doc.rejectedAt = new Date();
@@ -252,6 +277,18 @@ export async function rejectKyc(req, res, next) {
       });
     }
     await review.doc.save();
+    await writeAdminAudit(req, {
+      action: "KYC_REJECTED",
+      targetType: review.recordType === "profile" ? "UserProfile" : "LoanInquiry",
+      targetId: review.recordType === "profile" ? review.doc.userId : review.doc._id,
+      oldValue,
+      newValue: {
+        kycStatus: review.doc.kycStatus,
+        kycRemarks: review.doc.kycRemarks || "",
+        verifiedAt: review.doc.verifiedAt || null,
+        rejectedAt: review.doc.rejectedAt || null,
+      },
+    });
 
     return res.json({
       success: true,

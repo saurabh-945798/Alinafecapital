@@ -3,25 +3,25 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import Button from "../ui/Button";
 import { adminAuthApi } from "../../services/api/auth.api";
 import { setAdminToken, setAdminUser } from "../../utils/adminAuth";
+import { ADMIN_ROLES, normalizeAdminRole } from "../../utils/adminRbac";
+import { useToast } from "../../context/ToastContext.jsx";
 
 export default function AdminAccessPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [searchParams] = useSearchParams();
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const nextPath = searchParams.get("next") || "/admin";
 
-  const normalizeMwPhoneForLogin = (value) => {
-    const raw = String(value || "").trim().replace(/[^\d+]/g, "");
-    if (!raw) return "";
-    if (raw.startsWith("+265")) return raw;
-    if (raw.startsWith("265")) return `+${raw}`;
-    if (raw.startsWith("0")) return `+265${raw.slice(1)}`;
-    if (/^\d{9}$/.test(raw)) return `+265${raw}`;
-    return raw;
+  const roleHome = (role) => {
+    const r = normalizeAdminRole(role);
+    if (r === "SUPER_ADMIN") return "/admin";
+    if (r === "DISBURSED") return "/admin/payments";
+    return "/admin/applications";
   };
 
   const submit = async (e) => {
@@ -29,8 +29,8 @@ export default function AdminAccessPage() {
     setError("");
     setLoading(true);
     try {
-      const normalizedPhone = normalizeMwPhoneForLogin(phone);
-      const res = await adminAuthApi.login({ phone: normalizedPhone, password });
+      const normalizedEmail = String(email || "").trim().toLowerCase();
+      const res = await adminAuthApi.login({ email: normalizedEmail, password });
       const payload = res?.data || res || {};
       const token = payload.accessToken || payload.token || "";
       const user = payload.user || null;
@@ -38,15 +38,24 @@ export default function AdminAccessPage() {
       if (!token) {
         throw new Error("Login response did not include access token.");
       }
-      if (!user || user.role !== "admin") {
+      const userRole = normalizeAdminRole(user?.role);
+      if (!user || !ADMIN_ROLES.includes(userRole)) {
         throw new Error("You are not authorized to access admin panel.");
       }
+      user.role = userRole;
 
       setAdminToken(token);
       setAdminUser(user);
-      navigate(nextPath, { replace: true });
+      const defaultPath = roleHome(user.role);
+      const safeNext =
+        nextPath && nextPath.startsWith("/admin") && !nextPath.startsWith("/admin/user-access")
+          ? nextPath
+          : defaultPath;
+      navigate(safeNext, { replace: true });
     } catch (err) {
-      setError(err?.response?.data?.message || err?.message || "Login failed");
+      const msg = err?.response?.data?.message || err?.message || "Login failed";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -66,10 +75,10 @@ export default function AdminAccessPage() {
 
         <form onSubmit={submit} className="space-y-3">
           <input
-            type="text"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Phone (e.g. 881234567)"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Email"
             className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-slate-400"
             required
           />

@@ -12,6 +12,7 @@ import LoanApplicationDetailPage from "./components/LoanApplication/LoanApplicat
 import LoanProductsPage from "./components/LoanProducts/LoanProducts.jsx";
 import ReportsPage from "./components/Reports/Reports.jsx";
 import SettingsPage from "./components/Settings/Settings.jsx";
+import UserAccessPage from "./components/UserAccess/UserAccess.jsx";
 import AdminLayout from "./layout/AdminLayout.jsx"; 
 
 export default function AppRoutes() {
@@ -26,17 +27,16 @@ export default function AppRoutes() {
           <Route index element={<Dashboard />} />
           <Route path="applications" element={<LoanApplicationsPage />} />
           <Route path="applications/:id" element={<LoanApplicationDetailPage />} />
-          <Route path="payments" element={<AccountsPage />} />
-          <Route path="payments/:id" element={<AccountDetailPage />} />
-          <Route path="reports" element={<ReportsPage />} />
-          <Route path="accounts" element={<AccountsPage />} />
-          <Route path="accounts/:id" element={<AccountDetailPage />} />
+          <Route path="payments" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "DISBURSED"]}><AccountsPage /></AdminProtectedRoute>} />
+          <Route path="payments/:id" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "DISBURSED"]}><AccountDetailPage /></AdminProtectedRoute>} />
+          <Route path="reports" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN"]}><ReportsPage /></AdminProtectedRoute>} />
           <Route path="inquiries" element={<InquiriesPage />} />
-          <Route path="loan-products" element={<LoanProductsPage />} />
-          <Route path="complaints" element={<ComplaintsPage />} />
+          <Route path="loan-products" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN"]}><LoanProductsPage /></AdminProtectedRoute>} />
+          <Route path="complaints" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "VERIFIER"]}><ComplaintsPage /></AdminProtectedRoute>} />
           <Route path="customers" element={<Navigate to="/admin" replace />} />
-          <Route path="compliance" element={<CompliancePage />} />
-          <Route path="settings" element={<SettingsPage />} />
+          <Route path="compliance" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "VERIFIER"]}><CompliancePage /></AdminProtectedRoute>} />
+          <Route path="user-access" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN"]}><UserAccessPage /></AdminProtectedRoute>} />
+          <Route path="settings" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN"]}><SettingsPage /></AdminProtectedRoute>} />
         </Route>
       </Route>
 

@@ -5,6 +5,8 @@ import Badge from "../ui/Badge";
 import { inquiriesApi } from "../../services/api/inquiries.api";
 import { useToast } from "../../context/ToastContext.jsx";
 import { ADMIN_FILE_BASE_URL } from "../../config/api";
+import { getAdminUser } from "../../utils/adminAuth";
+import { normalizeAdminRole } from "../../utils/adminRbac";
 
 const STATUS_TONE = {
   NEW: "amber",
@@ -55,6 +57,14 @@ const HUMAN_KYC = {
   pending: "Pending",
   verified: "Verified",
   rejected: "Rejected",
+};
+
+const ROLE_TABS = {
+  SUPER_ADMIN: ["ALL", "PENDING_GROUP", "VERIFIED", "APPROVED", "AUTHORIZED", "DISBURSED", "KYC_REJECTED", "CLOSED"],
+  VERIFIER: ["PENDING_GROUP", "KYC_REJECTED", "CLOSED"],
+  APPROVAL: ["VERIFIED", "APPROVED", "KYC_REJECTED", "CLOSED"],
+  AUTHORIZED: ["APPROVED", "AUTHORIZED", "CLOSED"],
+  DISBURSED: ["AUTHORIZED", "DISBURSED", "CLOSED"],
 };
 
 const filterItemsByTab = (items = [], tab = "ALL") => {
@@ -141,7 +151,12 @@ export default function LoanApplication() {
     KYC_REJECTED: 0,
     CLOSED: 0,
   });
+  const adminRole = normalizeAdminRole(getAdminUser()?.role);
+  const allowedTabs = ROLE_TABS[adminRole] || ROLE_TABS.SUPER_ADMIN;
+  const visibleTabs = SIMPLE_TABS.filter((tab) => allowedTabs.includes(tab.value));
   const fetchIdRef = useRef(0);
+  const countsErrorNotifiedRef = useRef(false);
+  const [deletingId, setDeletingId] = useState("");
 
   const resolveAssetUrl = (fileUrl = "") => {
     if (!fileUrl) return "";
@@ -231,7 +246,10 @@ export default function LoanApplication() {
 
       setCounts((prev) => ({ ...prev, ...nextCounts }));
     } catch {
-      // counts are secondary UI data; keep the page usable even if they fail
+      if (!countsErrorNotifiedRef.current) {
+        toast.warning("Unable to refresh inquiry badge counts right now.");
+        countsErrorNotifiedRef.current = true;
+      }
     }
   };
 
@@ -255,6 +273,25 @@ export default function LoanApplication() {
     navigate(`/admin/applications/${item._id}`);
   };
 
+  const removeInquiry = async (item) => {
+    const label = item?.applicationCode || item?.fullName || "this application";
+    const ok = window.confirm(`Delete ${label}? This action cannot be undone.`);
+    if (!ok) return;
+
+    try {
+      setDeletingId(item._id);
+      await inquiriesApi.remove(item._id);
+      toast.success("Application deleted.");
+      await fetchList(pagination.page);
+      fetchCounts();
+    } catch (err) {
+      const msg = err?.response?.data?.message || "Failed to delete application.";
+      toast.error(msg);
+    } finally {
+      setDeletingId("");
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div>
@@ -272,7 +309,7 @@ export default function LoanApplication() {
 
       <div className="rounded-xl border bg-white p-4 space-y-4">
         <div className="flex flex-wrap gap-2">
-          {SIMPLE_TABS.map((tab) => (
+            {visibleTabs.map((tab) => (
             <button
               key={tab.value}
               type="button"
@@ -401,6 +438,16 @@ export default function LoanApplication() {
                 <Button size="sm" onClick={() => openDetails(item)}>
                   View Details
                 </Button>
+                {adminRole === "SUPER_ADMIN" ? (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => removeInquiry(item)}
+                    disabled={deletingId === item._id}
+                  >
+                    {deletingId === item._id ? "Deleting..." : "Delete"}
+                  </Button>
+                ) : null}
               </div>
               </article>
             );

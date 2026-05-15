@@ -1,22 +1,21 @@
 import { Router } from "express";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
-import { requireAdmin } from "../middlewares/requireAdmin.js";
+import { requireRole } from "../middlewares/requireRole.js";
 import { loanProductController } from "../controllers/loanProduct.controller.js";
+import { strictAdminWriteLimiter } from "../middlewares/rateLimiters.js";
 
 const router = Router();
 
-router.use(requireAdmin);
-
 // GET /api/v1/admin/loan-products
-router.get("/loan-products", asyncHandler(loanProductController.adminListAll));
+router.get("/loan-products", requireRole("SUPER_ADMIN"), asyncHandler(loanProductController.adminListAll));
 
 // POST /api/v1/admin/loan-products
-router.post("/loan-products", asyncHandler(loanProductController.adminCreate));
+router.post("/loan-products", requireRole("SUPER_ADMIN"), strictAdminWriteLimiter, asyncHandler(loanProductController.adminCreate));
 
 // PATCH /api/v1/admin/loan-products/:id
-router.patch("/loan-products/:id", asyncHandler(loanProductController.adminUpdate));
+router.patch("/loan-products/:id", requireRole("SUPER_ADMIN"), strictAdminWriteLimiter, asyncHandler(loanProductController.adminUpdate));
 
 // DELETE /api/v1/admin/loan-products/:id  (soft delete -> inactive)
-router.delete("/loan-products/:id", asyncHandler(loanProductController.adminDelete));
+router.delete("/loan-products/:id", requireRole("SUPER_ADMIN"), strictAdminWriteLimiter, asyncHandler(loanProductController.adminDelete));
 
 export default router;

@@ -8,6 +8,8 @@ import { complianceApi } from "../../services/api/compliance.api";
 import { useToast } from "../../context/ToastContext.jsx";
 import { ADMIN_API_BASE_URL, ADMIN_FILE_BASE_URL } from "../../config/api";
 import { formatMWK } from "../../utils/money.js";
+import { getAdminUser } from "../../utils/adminAuth";
+import { canTakeStatusAction, normalizeAdminRole } from "../../utils/adminRbac";
 
 const STATUS_TONE = {
   NEW: "amber",
@@ -323,6 +325,7 @@ export default function LoanApplicationDetail() {
   const [kycOpen, setKycOpen] = useState(true);
   const [repaymentOpen, setRepaymentOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const adminRole = normalizeAdminRole(getAdminUser()?.role);
   const [statusNotice, setStatusNotice] = useState(null);
   const [docActionLoading, setDocActionLoading] = useState("");
   const [addDocName, setAddDocName] = useState("");
@@ -414,7 +417,9 @@ export default function LoanApplicationDetail() {
       setAvatarBroken(false);
       setEditMode(false);
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to load inquiry details.");
+      const msg = err?.response?.data?.message || "Failed to load inquiry details.";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -562,6 +567,9 @@ export default function LoanApplicationDetail() {
     setError("");
     const actionStatus = nextStatus;
     try {
+      if (!canTakeStatusAction(adminRole, actionStatus)) {
+        throw new Error("You are not allowed to perform this action.");
+      }
       if ((actionStatus === "APPROVED" || actionStatus === "KYC_REJECTED" || actionStatus === "VERIFIED") && !hasSubmittedKyc) {
         throw new Error("Customer has not submitted Profile + KYC yet.");
       }
@@ -1456,7 +1464,7 @@ export default function LoanApplicationDetail() {
     if (item?.status === "CLOSED") return [];
     if (hasSubmittedKyc) return ["VERIFIED", "CLOSED"];
     return ["CLOSED"];
-  })();
+  })().filter((status) => canTakeStatusAction(adminRole, status));
   const repaymentPlan =
     item?.kycStatus === "verified" || item?.status === "APPROVED" || item?.status === "DISBURSED"
       ? buildRepaymentPlan(item)
