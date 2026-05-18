@@ -75,8 +75,8 @@ const publicCreateSchema = z.object({
   guarantorDistrict: z.string().trim().min(2).optional(),
   guarantorResidenceArea: z.string().trim().min(2).optional(),
   guarantorResidenceDistrict: z.string().trim().min(2).optional(),
-  declarationAccepted: z.boolean().optional(),
-  guarantorDeclarationAccepted: z.boolean().optional(),
+  declarationAccepted: z.coerce.boolean().optional(),
+  guarantorDeclarationAccepted: z.coerce.boolean().optional(),
   notes: z.string().trim().min(3).max(1000),
 });
 
@@ -471,7 +471,7 @@ const pushActionHistory = (inquiry, entry) => {
 
 export const loanInquiryController = {
   createPublic: async (req, res) => {
-    const parsed = publicCreateSchema.safeParse(req.body);
+    const parsed = publicCreateSchema.safeParse(req.body || {});
     if (!parsed.success) {
       return res.status(400).json({
         success: false,
@@ -496,7 +496,38 @@ export const loanInquiryController = {
       });
     }
 
-    const inquiry = await LoanInquiry.create({
+    const files = req.files || {};
+    const firstFile = (key) => (Array.isArray(files[key]) ? files[key][0] : null);
+    const profilePhoto = firstFile("profilePhoto");
+    const applicantNationalIdFile = firstFile("applicantNationalIdFile");
+    const bankStatementFile = firstFile("bankStatementFile");
+    const payslipFile = firstFile("payslipFile");
+    const collateralFile = firstFile("collateralFile");
+    const guarantorNationalIdFile = firstFile("guarantorNationalIdFile");
+
+    const employmentType = String(payload.employmentType || "").trim().toLowerCase();
+    const requiresPayslip = !(employmentType === "farmer" || employmentType === "self-employed");
+
+    if (!profilePhoto) {
+      return res.status(400).json({ success: false, message: "Profile photo is required.", code: "AVATAR_REQUIRED" });
+    }
+    if (!applicantNationalIdFile) {
+      return res.status(400).json({ success: false, message: "Applicant national ID attachment is required.", code: "NATIONAL_ID_REQUIRED" });
+    }
+    if (!bankStatementFile) {
+      return res.status(400).json({ success: false, message: "Bank statement (3 months) is required.", code: "BANK_STATEMENT_REQUIRED" });
+    }
+    if (requiresPayslip && !payslipFile) {
+      return res.status(400).json({ success: false, message: "Payslip or business proof is required.", code: "PAYSLIP_REQUIRED" });
+    }
+    if (!collateralFile) {
+      return res.status(400).json({ success: false, message: "Collateral attachment is required.", code: "COLLATERAL_REQUIRED" });
+    }
+    if (!guarantorNationalIdFile) {
+      return res.status(400).json({ success: false, message: "Guarantor national ID attachment is required.", code: "GUARANTOR_NID_REQUIRED" });
+    }
+
+    const inquiry = new LoanInquiry({
       applicationCode: await nextInquiryApplicationCode(new Date()),
       fullName: payload.fullName,
       phone: normalizePhone(payload.phone),
@@ -559,19 +590,48 @@ export const loanInquiryController = {
       guarantorDeclarationAccepted: !!payload.guarantorDeclarationAccepted,
       notes: payload.notes || "",
       source: "website",
-      status: "NEW",
+      status: "KYC_SENT",
+      kycStatus: "pending",
+      submittedAt: new Date(),
+      kycSentAt: new Date(),
       publicAccessToken: generatePublicAccessToken(),
       actionHistory: [
         {
           type: "inquiry_created",
           title: "Inquiry Created",
-          note: "Customer submitted a new loan inquiry.",
-          status: "NEW",
+          note: "Customer submitted a new loan inquiry with required documents.",
+          status: "KYC_SENT",
           actor: "Customer",
           createdAt: new Date(),
         },
       ],
     });
+
+    const avatarPath = toPersistedUploadPath(profilePhoto.path, "inquiry-create-avatar");
+    inquiry.avatarPath = avatarPath;
+    inquiry.avatarUrl = toPublicUploadUrl(avatarPath);
+
+    const docs = [];
+    const pushDoc = (type, file) => {
+      const persistedPath = toPersistedUploadPath(file.path, `inquiry-create-${type}`);
+      docs.push({
+        type,
+        fileUrl: toPublicUploadUrl(persistedPath),
+        filePath: persistedPath,
+        mime: file.mimetype,
+        uploadedAt: new Date(),
+      });
+    };
+
+    pushDoc("national_id", applicantNationalIdFile);
+    pushDoc("bank_statement_3_months", bankStatementFile);
+    if (requiresPayslip) pushDoc("payslip_or_business_proof", payslipFile);
+    pushDoc("security_offer", collateralFile);
+    pushDoc("guarantor_national_id", guarantorNationalIdFile);
+    inquiry.documents = docs;
+    syncInquiryCompletion(inquiry);
+
+    await inquiry.save();
 
     return res.status(201).json({
       success: true,

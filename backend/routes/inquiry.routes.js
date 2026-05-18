@@ -23,7 +23,19 @@ const handleUploadError = (err, req, res, next) => {
   });
 };
 
-router.post("/", asyncHandler(loanInquiryController.createPublic));
+router.post(
+  "/",
+  upload.fields([
+    { name: "profilePhoto", maxCount: 1 },
+    { name: "applicantNationalIdFile", maxCount: 1 },
+    { name: "bankStatementFile", maxCount: 1 },
+    { name: "payslipFile", maxCount: 1 },
+    { name: "collateralFile", maxCount: 1 },
+    { name: "guarantorNationalIdFile", maxCount: 1 },
+  ]),
+  handleUploadError,
+  asyncHandler(loanInquiryController.createPublic)
+);
 router.get("/access/:token/profile", requireInquiryAccess, asyncHandler(loanInquiryController.publicProfile));
 router.put("/access/:token/profile", requireInquiryAccess, asyncHandler(loanInquiryController.publicProfileUpdate));
 router.post(
