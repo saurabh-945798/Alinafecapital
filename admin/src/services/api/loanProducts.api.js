@@ -3,6 +3,11 @@ import { api } from "./axios";
 const normalize = (payload) => payload?.data || payload;
 
 export const loanProductsApi = {
+  async listPublic(params = {}) {
+    const { data } = await api.get("/loan-products", { params });
+    return normalize(data);
+  },
+
   async list(params = {}) {
     const { data } = await api.get("/admin/loan-products", { params });
     return normalize(data);
@@ -23,4 +28,3 @@ export const loanProductsApi = {
     return normalize(data);
   },
 };
-

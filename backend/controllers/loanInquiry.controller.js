@@ -20,6 +20,20 @@ const PUBLIC_LOAN_TYPES = [
   { slug: "business-loan", name: "Business Loan" },
 ];
 
+const resolveEditableLoanProduct = async (slug = "") => {
+  const normalizedSlug = String(slug || "").trim().toLowerCase();
+  if (!normalizedSlug) return null;
+
+  const loanProduct = await LoanProduct.findOne({ slug: normalizedSlug, status: "active" })
+    .select("slug name")
+    .lean();
+  if (loanProduct) {
+    return { slug: loanProduct.slug, name: loanProduct.name };
+  }
+
+  return PUBLIC_LOAN_TYPES.find((item) => item.slug === normalizedSlug) || null;
+};
+
 const publicCreateSchema = z.object({
   fullName: z.string().trim().min(2),
   phone: z.string().trim().min(6),
@@ -1213,6 +1227,31 @@ export const loanInquiryController = {
 
     const previousStatus = doc.status;
     const previousAdminNote = doc.adminNote || "";
+    const previousLoanProduct = {
+      loanProductSlug: doc.loanProductSlug || "",
+      loanProductName: doc.loanProductName || "",
+    };
+    let selectedLoanProduct = null;
+
+    if (parsed.data.loanProductSlug !== undefined) {
+      if (doc.status === "DISBURSED") {
+        return res.status(400).json({
+          success: false,
+          message: "Loan type cannot be changed after disbursement.",
+          code: "LOAN_TYPE_LOCKED",
+        });
+      }
+
+      selectedLoanProduct = await resolveEditableLoanProduct(parsed.data.loanProductSlug);
+      if (!selectedLoanProduct) {
+        return res.status(400).json({
+          success: false,
+          message: "Selected loan type is not valid or active.",
+          code: "INVALID_LOAN_PRODUCT",
+        });
+      }
+    }
+
     if (
       parsed.data.expectedCurrentStatus &&
       String(doc.status || "").toUpperCase() !== String(parsed.data.expectedCurrentStatus || "").toUpperCase()
@@ -1429,8 +1468,10 @@ export const loanInquiryController = {
     if (parsed.data.traditionalAuthority !== undefined) doc.traditionalAuthority = parsed.data.traditionalAuthority;
     if (parsed.data.residenceArea !== undefined) doc.residenceArea = parsed.data.residenceArea;
     if (parsed.data.residenceDistrict !== undefined) doc.residenceDistrict = parsed.data.residenceDistrict;
-    if (parsed.data.loanProductSlug !== undefined) doc.loanProductSlug = parsed.data.loanProductSlug;
-    if (parsed.data.loanProductName !== undefined) doc.loanProductName = parsed.data.loanProductName;
+    if (selectedLoanProduct) {
+      doc.loanProductSlug = selectedLoanProduct.slug;
+      doc.loanProductName = selectedLoanProduct.name;
+    }
     if (parsed.data.requestedAmount !== undefined) doc.requestedAmount = parsed.data.requestedAmount;
     if (parsed.data.preferredTenureMonths !== undefined) doc.preferredTenureMonths = parsed.data.preferredTenureMonths;
     if (parsed.data.notes !== undefined) doc.notes = parsed.data.notes;
@@ -1522,14 +1563,32 @@ export const loanInquiryController = {
         status: doc.status,
         actor: "Admin",
       });
+    } else if (
+      previousLoanProduct.loanProductSlug !== String(doc.loanProductSlug || "") ||
+      previousLoanProduct.loanProductName !== String(doc.loanProductName || "")
+    ) {
+      pushActionHistory(doc, {
+        type: "loan_type_updated",
+        title: "Loan Type Updated",
+        note: `${previousLoanProduct.loanProductName || previousLoanProduct.loanProductSlug || "-"} -> ${
+          doc.loanProductName || doc.loanProductSlug || "-"
+        }`,
+        status: doc.status,
+        actor: "Admin",
+      });
     }
 
     if (doc.status === "DISBURSED") {
       await ensureLoanAccountForInquiry(doc);
     }
 
+    const loanProductChanged =
+      previousLoanProduct.loanProductSlug !== String(doc.loanProductSlug || "") ||
+      previousLoanProduct.loanProductName !== String(doc.loanProductName || "");
     const before = {
       status: previousStatus,
+      loanProductSlug: previousLoanProduct.loanProductSlug,
+      loanProductName: previousLoanProduct.loanProductName,
       kycStatus: doc.kycStatus,
       approvedBy: doc.approvedBy,
       authorizedBy: doc.authorizedBy,
@@ -1537,12 +1596,14 @@ export const loanInquiryController = {
     };
     await doc.save();
     await writeAdminAudit(req, {
-      action: "INQUIRY_STATUS_UPDATED",
+      action: parsed.data.status ? "INQUIRY_STATUS_UPDATED" : loanProductChanged ? "INQUIRY_LOAN_TYPE_UPDATED" : "INQUIRY_DETAILS_UPDATED",
       targetType: "LoanInquiry",
       targetId: doc._id,
       oldValue: before,
       newValue: {
         status: doc.status,
+        loanProductSlug: doc.loanProductSlug,
+        loanProductName: doc.loanProductName,
         kycStatus: doc.kycStatus,
         approvedBy: doc.approvedBy,
         authorizedBy: doc.authorizedBy,

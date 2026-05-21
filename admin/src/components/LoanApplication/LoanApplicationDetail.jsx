@@ -4,6 +4,7 @@ import { CheckCircle2, ChevronDown, PencilLine, Save, X } from "lucide-react";
 import Button from "../ui/Button";
 import Badge from "../ui/Badge";
 import { inquiriesApi } from "../../services/api/inquiries.api";
+import { loanProductsApi } from "../../services/api/loanProducts.api";
 import { complianceApi } from "../../services/api/compliance.api";
 import { useToast } from "../../context/ToastContext.jsx";
 import { ADMIN_API_BASE_URL, ADMIN_FILE_BASE_URL } from "../../config/api";
@@ -319,6 +320,8 @@ export default function LoanApplicationDetail() {
   const [disbursementNote, setDisbursementNote] = useState("");
   const [editMode, setEditMode] = useState(false);
   const [detailsForm, setDetailsForm] = useState(null);
+  const [loanProducts, setLoanProducts] = useState([]);
+  const [loanProductsLoading, setLoanProductsLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [avatarBroken, setAvatarBroken] = useState(false);
   const [inquiryDetailsOpen, setInquiryDetailsOpen] = useState(true);
@@ -337,6 +340,12 @@ export default function LoanApplicationDetail() {
     Boolean(item?.submittedAt) ||
     Array.isArray(item?.documents) && item.documents.length > 0;
   const isDisbursed = item?.status === "DISBURSED";
+  const currentLoanProductOption =
+    detailsForm?.loanProductSlug &&
+    !loanProducts.some((product) => product.slug === detailsForm.loanProductSlug)
+      ? [{ slug: detailsForm.loanProductSlug, name: detailsForm.loanProductName || detailsForm.loanProductSlug }]
+      : [];
+  const editableLoanProducts = [...currentLoanProductOption, ...loanProducts];
 
   const resolveAssetUrl = (fileUrl = "") => {
     if (!fileUrl) return "";
@@ -430,6 +439,29 @@ export default function LoanApplicationDetail() {
   }, [id]);
 
   useEffect(() => {
+    let isMounted = true;
+    const loadLoanProducts = async () => {
+      setLoanProductsLoading(true);
+      try {
+        const products = await loanProductsApi.listPublic({ status: "active" });
+        if (isMounted) setLoanProducts(Array.isArray(products) ? products : []);
+      } catch (err) {
+        if (isMounted) {
+          setLoanProducts([]);
+          toast.error(err?.response?.data?.message || "Failed to load loan products.");
+        }
+      } finally {
+        if (isMounted) setLoanProductsLoading(false);
+      }
+    };
+
+    loadLoanProducts();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!item?._id) return;
     const customerName = String(item.fullName || "Customer").trim();
     const loanName = String(item.loanProductName || item.loanProductSlug || "loan").trim();
@@ -440,6 +472,15 @@ export default function LoanApplicationDetail() {
 
   const updateDetailsField = (name, value) => {
     setDetailsForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const updateLoanProductField = (slug) => {
+    const selected = loanProducts.find((product) => product.slug === slug);
+    setDetailsForm((prev) => ({
+      ...prev,
+      loanProductSlug: slug,
+      loanProductName: selected?.name || prev?.loanProductName || "",
+    }));
   };
 
   const saveDetails = async () => {
@@ -1829,6 +1870,30 @@ export default function LoanApplicationDetail() {
               ) : (
                 <p className="mt-1 text-sm font-medium text-slate-900">
                   {humanizeValue(item.borrowerType)}
+                </p>
+              )}
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Loan Type
+              </p>
+              {editMode ? (
+                <select
+                  className="mt-2 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                  value={detailsForm?.loanProductSlug || ""}
+                  onChange={(e) => updateLoanProductField(e.target.value)}
+                  disabled={loanProductsLoading}
+                >
+                  <option value="">{loanProductsLoading ? "Loading loan products..." : "Select loan type"}</option>
+                  {editableLoanProducts.map((product) => (
+                    <option key={product.slug} value={product.slug}>
+                      {product.name || product.slug}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="mt-1 text-sm font-medium text-slate-900">
+                  {item.loanProductName || item.loanProductSlug || "-"}
                 </p>
               )}
             </div>
