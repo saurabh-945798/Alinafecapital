@@ -7,7 +7,7 @@ import fs from "fs";
 import path from "path";
 
 import { connectDB } from "./config/config.js";
-import { getCorsOrigins, validateEnv } from "./config/env.js";
+import { getCorsOrigins, normalizeCorsOrigin, validateEnv } from "./config/env.js";
 import loanProductRoutes from "./routes/loanProduct.routes.js";
 import adminLoanProductRoutes from "./routes/admin.loanProduct.routes.js";
 import emiCalculatorRoutes from "./routes/emiCalculator.routes.js";
@@ -36,7 +36,7 @@ const allowedOrigins = getCorsOrigins();
 const corsOptions = {
   origin(origin, callback) {
     if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (allowedOrigins.includes(normalizeCorsOrigin(origin))) return callback(null, true);
     return callback(new Error("CORS origin not allowed"));
   },
   credentials: true,
@@ -45,8 +45,14 @@ const corsOptions = {
 const app = express();
 app.set("trust proxy", 1);
 
-app.use(express.json());
 app.use(cors(corsOptions));
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    return cors(corsOptions)(req, res, next);
+  }
+  return next();
+});
+app.use(express.json());
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },

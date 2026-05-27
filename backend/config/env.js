@@ -1,4 +1,14 @@
-﻿const requiredEnv = ["MONGO_URI", "PORT", "CORS_ORIGINS"];
+const requiredEnv = ["MONGO_URI", "PORT", "CORS_ORIGINS"];
+
+const defaultCorsOrigins = [
+  "https://alinafecapital.com",
+  "https://www.alinafecapital.com",
+  "https://admin.alinafecapital.com",
+];
+
+export function normalizeCorsOrigin(origin = "") {
+  return String(origin || "").trim().replace(/\/+$/, "");
+}
 
 export function validateEnv() {
   const missing = requiredEnv.filter((key) => !String(process.env[key] || "").trim());
@@ -8,8 +18,10 @@ export function validateEnv() {
 }
 
 export function getCorsOrigins() {
-  return String(process.env.CORS_ORIGINS || "")
+  const configuredOrigins = String(process.env.CORS_ORIGINS || "")
     .split(",")
-    .map((origin) => origin.trim())
+    .map(normalizeCorsOrigin)
     .filter(Boolean);
+
+  return Array.from(new Set([...configuredOrigins, ...defaultCorsOrigins.map(normalizeCorsOrigin)]));
 }
