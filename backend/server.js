@@ -1,5 +1,5 @@
+import "dotenv/config";
 import express from "express";
-import dotenv from "dotenv";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
@@ -29,7 +29,6 @@ import { UPLOAD_ROOT } from "./config/upload.js";
 import { notFound } from "./middlewares/notFound.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 
-dotenv.config();
 validateEnv();
 
 const allowedOrigins = getCorsOrigins();
