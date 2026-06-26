@@ -28,6 +28,7 @@ export const sidebarNav = [
     items: [
       { label: "Payments", to: "/admin/payments", icon: Wallet, roles: ["SUPER_ADMIN", "DISBURSED"] },
       { label: "Reports", to: "/admin/reports", icon: BarChart3, roles: ["SUPER_ADMIN"] },
+      { label: "Analytics", to: "/admin/analytics", icon: BarChart3, roles: ["SUPER_ADMIN"] },
       { label: "Loan Products", to: "/admin/loan-products", icon: Package, roles: ["SUPER_ADMIN"] },
       { label: "Complaints", to: "/admin/complaints", icon: MessageSquareWarning, roles: ["SUPER_ADMIN", "VERIFIER"] },
     ],
@@ -40,3 +41,5 @@ export const sidebarNav = [
     ],
   },
 ];
+
+

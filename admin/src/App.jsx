@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import AdminAccessPage from "./components/Auth/AdminAccess.jsx";
 import AdminProtectedRoute from "./components/Auth/AdminProtectedRoute.jsx";
+import AnalyticsPage from "./components/Analytics/Analytics.jsx";
 import CompliancePage from "./components/Compliance/Compliance.jsx";
 import ComplaintsPage from "./components/Complaints/Complaints.jsx";
 import AccountsPage from "./components/Accounts/Accounts.jsx";
@@ -30,6 +31,7 @@ export default function AppRoutes() {
           <Route path="payments" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "DISBURSED"]}><AccountsPage /></AdminProtectedRoute>} />
           <Route path="payments/:id" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "DISBURSED"]}><AccountDetailPage /></AdminProtectedRoute>} />
           <Route path="reports" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN"]}><ReportsPage /></AdminProtectedRoute>} />
+          <Route path="analytics" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN"]}><AnalyticsPage /></AdminProtectedRoute>} />
           <Route path="inquiries" element={<InquiriesPage />} />
           <Route path="loan-products" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN"]}><LoanProductsPage /></AdminProtectedRoute>} />
           <Route path="complaints" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "VERIFIER"]}><ComplaintsPage /></AdminProtectedRoute>} />
@@ -44,3 +46,5 @@ export default function AppRoutes() {
     </Routes>
   );
 }
+
+

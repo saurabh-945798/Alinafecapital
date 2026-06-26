@@ -1,4 +1,4 @@
-﻿import express from "express";
+import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import helmet from "helmet";
@@ -21,6 +21,7 @@ import inquiryRoutes from "./routes/inquiry.routes.js";
 import complaintRoutes from "./routes/complaint.routes.js";
 import adminInquiryRoutes from "./routes/admin.inquiry.routes.js";
 import adminDashboardRoutes from "./routes/admin.dashboard.routes.js";
+import adminAnalyticsRoutes from "./routes/admin.analytics.routes.js";
 import adminAccountRoutes from "./routes/admin.account.routes.js";
 import adminComplaintRoutes from "./routes/admin.complaint.routes.js";
 import adminUserRoutes from "./routes/admin.user.routes.js";
@@ -103,6 +104,7 @@ app.use("/api/v1/admin", adminKycRoutes);
 app.use("/api/v1/admin", adminCustomerRoutes);
 app.use("/api/v1/admin", adminInquiryRoutes);
 app.use("/api/v1/admin", adminDashboardRoutes);
+app.use("/api/v1/admin", adminAnalyticsRoutes);
 app.use("/api/v1/admin", adminAccountRoutes);
 app.use("/api/v1/admin", adminComplaintRoutes);
 app.use("/api/v1/admin", adminUserRoutes);
@@ -120,3 +122,5 @@ if (!Number.isFinite(PORT) || PORT <= 0) {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+
