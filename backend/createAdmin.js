@@ -1,32 +1,28 @@
 /**
  * Script: Create or Promote Admin User
  * Usage:
- *   node scripts/createAdmin.js
+ *   node createAdmin.js
+ *
+ * Optional .env values:
+ *   ADMIN_PHONE=+26598765432
+ *   ADMIN_PASSWORD=change-this-password
  */
 
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
+import { connectDB } from "./config/config.js";
 
 dotenv.config();
 
-// ====== CONFIG ======
-const PHONE = "+26598765432"
-const PASSWORD = "Alinafe";
+const PHONE = process.env.ADMIN_PHONE || "+26598765432";
+const PASSWORD = process.env.ADMIN_PASSWORD;
 const SALT_ROUNDS = 10;
 
-// ====== Connect MongoDB ======
-async function connectDB() {
-  try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log("✅ MongoDB Connected");
-  } catch (err) {
-    console.error("❌ MongoDB Connection Failed:", err.message);
-    process.exit(1);
-  }
+if (!PASSWORD) {
+  throw new Error("ADMIN_PASSWORD is required in backend/.env before running createAdmin.js");
 }
 
-// ====== User Schema (Minimal if not importing existing model) ======
 const userSchema = new mongoose.Schema(
   {
     phone: { type: String, required: true, unique: true },
@@ -38,45 +34,33 @@ const userSchema = new mongoose.Schema(
 
 const User = mongoose.models.User || mongoose.model("User", userSchema);
 
-// ====== Create / Promote Admin ======
 async function createOrPromoteAdmin() {
   try {
     const existingUser = await User.findOne({ phone: PHONE });
 
     if (existingUser) {
-      console.log("⚡ User found. Promoting to admin...");
-
+      console.log("User found. Promoting to admin...");
       existingUser.role = "admin";
-
-      // Optional: reset password as well
-      const hashedPassword = await bcrypt.hash(PASSWORD, SALT_ROUNDS);
-      existingUser.password = hashedPassword;
-
+      existingUser.password = await bcrypt.hash(PASSWORD, SALT_ROUNDS);
       await existingUser.save();
-
-      console.log("✅ User promoted to admin successfully");
-    } else {
-      console.log("⚡ User not found. Creating new admin user...");
-
-      const hashedPassword = await bcrypt.hash(PASSWORD, SALT_ROUNDS);
-
-      await User.create({
-        phone: PHONE,
-        password: hashedPassword,
-        role: "admin",
-      });
-
-      console.log("✅ Admin user created successfully");
+      console.log("Admin user promoted successfully.");
+      return;
     }
-  } catch (err) {
-    console.error("❌ Error:", err.message);
+
+    console.log("User not found. Creating new admin user...");
+    await User.create({
+      phone: PHONE,
+      password: await bcrypt.hash(PASSWORD, SALT_ROUNDS),
+      role: "admin",
+    });
+    console.log("Admin user created successfully.");
+  } catch (error) {
+    console.error("Admin creation failed:", error.message);
+    process.exitCode = 1;
   } finally {
-    mongoose.connection.close();
+    await mongoose.connection.close();
   }
 }
 
-// ====== Run ======
-(async () => {
-  await connectDB();
-  await createOrPromoteAdmin();
-})();
+await connectDB();
+await createOrPromoteAdmin();

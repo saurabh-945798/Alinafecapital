@@ -3,6 +3,7 @@ import { API_URL } from "../config/api";
 
 export const api = axios.create({
   baseURL: API_URL,
+  timeout: 45000,
   withCredentials: true,
 });
 
@@ -29,6 +30,16 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error?.config;
     const status = error?.response?.status;
+
+    if (!error?.response && (error?.code === "ERR_NETWORK" || error?.message === "Network Error")) {
+      error.message =
+        "Network Error: the customer app could not reach the backend API. Confirm the backend is running on port 5000, then restart the frontend. For local testing, VITE_API_URL should be /api/v1 and VITE_DEV_PROXY_TARGET should be http://localhost:5000.";
+    }
+
+    if (error?.code === "ECONNABORTED") {
+      error.message =
+        "Request timed out. The backend took too long to respond. Confirm MongoDB and the backend server are running.";
+    }
 
     if (!originalRequest || status !== 401 || originalRequest._retry) {
       return Promise.reject(error);

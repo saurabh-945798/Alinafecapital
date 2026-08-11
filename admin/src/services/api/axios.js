@@ -19,6 +19,11 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (!error?.response && (error?.code === "ERR_NETWORK" || error?.message === "Network Error")) {
+      error.message =
+        "Network Error: the admin app could not reach the backend API. Confirm the backend is running on port 5000, then restart the admin app. For local testing, VITE_ADMIN_API_BASE_URL should be /api/v1 and VITE_DEV_PROXY_TARGET should be http://localhost:5000.";
+    }
+
     if (error?.code === "ECONNABORTED") {
       error.message =
         "Request timed out. Backend took too long to respond. Please check server/API URL and try again.";

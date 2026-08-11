@@ -2,6 +2,9 @@ import mongoose from "mongoose";
 import { z } from "zod";
 import { LoanAccount } from "../models/LoanAccount.model.js";
 import { writeAdminAudit } from "../utils/adminAudit.js";
+import { normalizeMoneyForValidation, parseMoneyInput } from "../utils/numberInput.js";
+
+const moneyNumberField = (schema) => z.preprocess(normalizeMoneyForValidation, schema);
 
 const listSchema = z.object({
   status: z.string().trim().optional(),
@@ -12,7 +15,7 @@ const listSchema = z.object({
 
 const paymentEntrySchema = z.object({
   paymentDate: z.string().trim().min(8),
-  amount: z.coerce.number().gt(0),
+  amount: moneyNumberField(z.coerce.number().gt(0)),
   method: z.enum(["cash", "bank_transfer", "mobile_money"]),
   reference: z.string().trim().max(120).optional().or(z.literal("")),
   note: z.string().trim().max(1000).optional().or(z.literal("")),
@@ -309,7 +312,7 @@ export const loanAccountController = {
     };
     doc.repaymentEntries.push({
       paymentDate: new Date(parsed.data.paymentDate),
-      amount: Number(parsed.data.amount),
+      amount: parseMoneyInput(parsed.data.amount),
       method: parsed.data.method,
       reference: String(parsed.data.reference || "").trim(),
       note: String(parsed.data.note || "").trim(),
@@ -383,7 +386,7 @@ export const loanAccountController = {
       note: entry.note || "",
     };
     entry.paymentDate = new Date(parsed.data.paymentDate);
-    entry.amount = Number(parsed.data.amount);
+    entry.amount = parseMoneyInput(parsed.data.amount);
     entry.method = parsed.data.method;
     entry.reference = String(parsed.data.reference || "").trim();
     entry.note = String(parsed.data.note || "").trim();

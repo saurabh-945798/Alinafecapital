@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import dotenv from "dotenv";
+import { connectDB } from "../config/config.js";
 import { SystemCounter } from "../models/SystemCounter.model.js";
 
 dotenv.config();
@@ -24,7 +25,7 @@ const run = async () => {
     throw new Error("MONGO_URI is missing in environment.");
   }
 
-  await mongoose.connect(process.env.MONGO_URI);
+  await connectDB();
 
   const results = [];
   for (const key of keys) {

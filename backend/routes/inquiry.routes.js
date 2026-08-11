@@ -3,6 +3,7 @@ import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { upload, uploadAvatar } from "../config/upload.js";
 import { requireInquiryAccess } from "../middlewares/requireInquiryAccess.js";
 import { loanInquiryController } from "../controllers/loanInquiry.controller.js";
+import { optionalAuth } from "../middlewares/optionalAuth.js";
 
 const router = Router();
 const handleUploadError = (err, req, res, next) => {
@@ -25,6 +26,7 @@ const handleUploadError = (err, req, res, next) => {
 
 router.post(
   "/",
+  optionalAuth,
   upload.fields([
     { name: "profilePhoto", maxCount: 1 },
     { name: "applicantNationalIdFile", maxCount: 1 },

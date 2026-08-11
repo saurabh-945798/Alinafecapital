@@ -2,8 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import Button from "../ui/Button";
 import { usersApi } from "../../services/api/users.api";
 import { useToast } from "../../context/ToastContext.jsx";
+import { formatAdminRole } from "../../utils/adminRbac.js";
 
-const ROLE_OPTIONS = ["SUPER_ADMIN", "VERIFIER", "APPROVAL", "AUTHORIZED", "DISBURSED"];
+const ROLE_OPTIONS = [
+  { value: "VERIFIER", label: "VERIFIER", description: "Reviews and verifies KYC details." },
+  { value: "APPROVAL", label: "APPROVER", description: "Approves loan applications after KYC verification." },
+  { value: "AUTHORIZED", label: "AUTHORIZER", description: "Reviews approved loans and authorizes them for disbursement." },
+  { value: "DISBURSED", label: "DISBURSER", description: "Captures disbursement details and monitors loan accounts." },
+  { value: "SUPER_ADMIN", label: "SUPER ADMIN", description: "Full access to settings, users, reports and operations." },
+];
 
 const defaultForm = {
   fullName: "",
@@ -126,13 +133,21 @@ export default function UserAccessPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">User Access</h1>
-        <p className="text-sm text-slate-500">Create and manage worker roles: verifier, approval, authorized, and disbursed.</p>
+        <p className="text-sm text-slate-500">Create staff accounts for KYC verification, loan approval, authorization and disbursement.</p>
       </div>
 
       {error ? <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
 
       <section className="rounded-xl border bg-white p-4">
-        <h2 className="text-sm font-semibold text-slate-900">Create Admin User</h2>
+        <h2 className="text-sm font-semibold text-slate-900">Create Staff User</h2>
+        <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+          {ROLE_OPTIONS.map((role) => (
+            <div key={role.value} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-xs font-bold text-slate-900">{role.label}</p>
+              <p className="mt-1 text-[11px] leading-4 text-slate-500">{role.description}</p>
+            </div>
+          ))}
+        </div>
         <form onSubmit={createUser} className="mt-3 grid gap-3 md:grid-cols-3">
           <input
             className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
@@ -165,8 +180,8 @@ export default function UserAccessPage() {
             onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value }))}
           >
             {ROLE_OPTIONS.map((role) => (
-              <option key={role} value={role}>
-                {role}
+              <option key={role.value} value={role.value}>
+                {role.label}
               </option>
             ))}
           </select>
@@ -208,8 +223,8 @@ export default function UserAccessPage() {
                         onChange={(e) => updateRole(user._id || user.id, e.target.value)}
                       >
                         {ROLE_OPTIONS.map((role) => (
-                          <option key={role} value={role}>
-                            {role}
+                          <option key={role.value} value={role.value}>
+                            {role.label}
                           </option>
                         ))}
                       </select>

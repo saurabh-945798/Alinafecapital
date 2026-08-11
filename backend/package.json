@@ -6,7 +6,19 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "db:test": "node scripts/testMongoConnection.js",
+    "mpgs:check": "node scripts/checkMastercardConfig.js",
+    "customers:sync-kyc": "node scripts/syncInquiryKycToCustomers.js",
+    "customers:sync-dashboard": "node scripts/syncInquiryKycToCustomers.js",
+    "customer:reset-password": "node scripts/resetCustomerPassword.js",
+    "mpgs:sanitize-records": "node scripts/sanitizeMastercardPaymentRecords.js",
+    "airtel:check": "node scripts/checkAirtelConfig.js",
+    "airtel:auth-test": "node scripts/testAirtelAuth.js",
+    "airtel:repair-pending": "node scripts/repairPendingAirtelRepayments.js",
+    "legacy:link-customers": "node scripts/linkLegacyCustomersToPortal.js",
+    "legacy:link-customers:apply": "node scripts/linkLegacyCustomersToPortal.js --apply",
+    "repayments:audit-schedules": "node scripts/auditRepaymentSchedules.js"
   },
   "keywords": [],
   "author": "AlinafeCapital",

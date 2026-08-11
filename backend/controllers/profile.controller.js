@@ -239,6 +239,9 @@ export async function submitKyc(req, res, next) {
     }
 
     profile.kycStatus = "pending";
+    if (["draft", "rejected"].includes(String(profile.kycUpdateStatus || "").toLowerCase())) {
+      profile.kycUpdateStatus = "pending_review";
+    }
     profile.submittedAt = new Date();
     profile.verifiedAt = null;
     profile.rejectedAt = null;
@@ -246,6 +249,53 @@ export async function submitKyc(req, res, next) {
 
     return res.json({
       success: true,
+      data: toPublicProfile(profile),
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+
+export async function requestKycUpdate(req, res, next) {
+  try {
+    const userId = req.user._id;
+    const profile = await UserProfile.findOne({ userId });
+
+    if (!profile) {
+      return res.status(404).json({
+        success: false,
+        message: "Profile not found. Complete your profile first.",
+        code: "PROFILE_NOT_FOUND",
+      });
+    }
+
+    if (String(profile.kycStatus || "").toLowerCase() !== "verified") {
+      return res.status(400).json({
+        success: false,
+        message: "KYC update requests are available after your KYC has been verified.",
+        code: "KYC_NOT_VERIFIED",
+      });
+    }
+
+    const reason = String(req.body?.reason || "")
+      .trim()
+      .slice(0, 500);
+
+    profile.kycStatus = "not_started";
+    profile.kycUpdateStatus = "draft";
+    profile.kycUpdateReason = reason;
+    profile.kycUpdateRequestedAt = new Date();
+    profile.kycRemarks = reason
+      ? `Customer requested KYC update: ${reason}`
+      : "Customer requested KYC update.";
+    profile.profileCompletion = calculateProfileCompletion(profile);
+
+    await profile.save({ validateBeforeSave: false });
+
+    return res.json({
+      success: true,
+      message: "KYC update request started. Update the details or documents that have changed, then submit for admin review.",
       data: toPublicProfile(profile),
     });
   } catch (error) {

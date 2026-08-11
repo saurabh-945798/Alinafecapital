@@ -27,6 +27,8 @@ export const sidebarNav = [
     section: "Operations",
     items: [
       { label: "Payments", to: "/admin/payments", icon: Wallet, roles: ["SUPER_ADMIN", "DISBURSED"] },
+      { label: "Customers", to: "/admin/customers", icon: Users, roles: ["SUPER_ADMIN", "VERIFIER", "APPROVAL", "AUTHORIZED", "DISBURSED"] },
+      { label: "KYC Review", to: "/admin/compliance", icon: FileText, roles: ["SUPER_ADMIN", "VERIFIER"] },
       { label: "Reports", to: "/admin/reports", icon: BarChart3, roles: ["SUPER_ADMIN"] },
       { label: "Analytics", to: "/admin/analytics", icon: BarChart3, roles: ["SUPER_ADMIN"] },
       { label: "Loan Products", to: "/admin/loan-products", icon: Package, roles: ["SUPER_ADMIN"] },

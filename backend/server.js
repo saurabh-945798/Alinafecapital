@@ -25,6 +25,9 @@ import adminAnalyticsRoutes from "./routes/admin.analytics.routes.js";
 import adminAccountRoutes from "./routes/admin.account.routes.js";
 import adminComplaintRoutes from "./routes/admin.complaint.routes.js";
 import adminUserRoutes from "./routes/admin.user.routes.js";
+import customerLoanAccountRoutes from "./routes/customer.loanAccount.routes.js";
+import mastercardRepaymentRoutes from "./routes/mastercardRepayment.routes.js";
+import airtelRepaymentRoutes from "./routes/airtelRepayment.routes.js";
 import { UPLOAD_ROOT } from "./config/upload.js";
 import { notFound } from "./middlewares/notFound.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
@@ -43,6 +46,7 @@ const corsOptions = {
 };
 
 const app = express();
+app.disable("x-powered-by");
 app.set("trust proxy", 1);
 
 app.use(cors(corsOptions));
@@ -52,7 +56,7 @@ app.use((req, res, next) => {
   }
   return next();
 });
-app.use(express.json());
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "1mb" }));
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -84,8 +88,6 @@ app.use(
   express.static(UPLOAD_ROOT)
 );
 
-connectDB();
-
 app.get("/", (req, res) => {
   res.json({ success: true, data: { message: "AlinafeCapital Backend Running" } });
 });
@@ -96,6 +98,9 @@ app.use("/api/v1/calc", emiCalculatorRoutes);
 app.use("/api/v1/applications", loanApplicationRoutes);
 app.use("/api/v1/inquiries", inquiryRoutes);
 app.use("/api/v1/complaints", complaintRoutes);
+app.use("/api/v1/accounts", customerLoanAccountRoutes);
+app.use("/api/v1/payments", mastercardRepaymentRoutes);
+app.use("/api/v1/payments", airtelRepaymentRoutes);
 
 app.use("/api/v1/admin", adminLoanProductRoutes);
 app.use("/api/v1/admin", adminApplicationRoutes);
@@ -118,8 +123,15 @@ if (!Number.isFinite(PORT) || PORT <= 0) {
   throw new Error("Invalid PORT value");
 }
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+try {
+  await connectDB();
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+} catch (error) {
+  console.error("Failed to start server because MongoDB connection failed:");
+  console.error(error);
+  process.exit(1);
+}
 
 

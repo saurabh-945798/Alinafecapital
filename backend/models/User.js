@@ -1,8 +1,8 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
-import { ADMIN_ROLES } from "../utils/rbac.js";
+import { ADMIN_DB_ROLE_VALUES } from "../utils/rbac.js";
 
-const USER_ROLES = ["user", "admin", ...ADMIN_ROLES];
+const USER_ROLES = ["user", ...ADMIN_DB_ROLE_VALUES];
 
 const UserSchema = new mongoose.Schema(
   {

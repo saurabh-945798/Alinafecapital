@@ -1,4 +1,4 @@
-﻿import mongoose from "mongoose";
+import mongoose from "mongoose";
 
 const DocumentSchema = new mongoose.Schema(
   {
@@ -75,6 +75,14 @@ const UserProfileSchema = new mongoose.Schema(
       index: true,
     },
     kycRemarks: { type: String, trim: true, default: "" },
+    kycUpdateStatus: {
+      type: String,
+      enum: ["none", "draft", "pending_review", "approved", "rejected"],
+      default: "none",
+      index: true,
+    },
+    kycUpdateReason: { type: String, trim: true, default: "" },
+    kycUpdateRequestedAt: { type: Date, default: null },
     submittedAt: { type: Date, default: null },
     verifiedAt: { type: Date, default: null },
     rejectedAt: { type: Date, default: null },

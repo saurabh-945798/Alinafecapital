@@ -328,11 +328,14 @@ export default function LoanApplicationDetail() {
   const [kycOpen, setKycOpen] = useState(true);
   const [repaymentOpen, setRepaymentOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const adminRole = normalizeAdminRole(getAdminUser()?.role);
   const [statusNotice, setStatusNotice] = useState(null);
   const [docActionLoading, setDocActionLoading] = useState("");
   const [addDocName, setAddDocName] = useState("");
   const [approvalWhatsAppMessage, setApprovalWhatsAppMessage] = useState("");
+  const adminUser = getAdminUser() || {};
+  const adminRole = normalizeAdminRole(adminUser?.role);
+  const adminDisplayName =
+    adminUser.name || adminUser.fullName || adminUser.email || "Admin";
   const hasSubmittedKyc =
     item?.kycStatus === "pending" ||
     item?.kycStatus === "verified" ||
@@ -1523,9 +1526,16 @@ export default function LoanApplicationDetail() {
     }
     if (item.status === "APPROVED") {
       return {
-        title: "Ready for loan disbursement",
-        note: "Approval is complete. Capture disbursement details next to move this case into Accounts.",
+        title: "Ready for authorization",
+        note: "Approval is complete. Authorize the loan first. The Disburse Loan action appears immediately after authorization.",
         tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
+      };
+    }
+    if (item.status === "AUTHORIZED") {
+      return {
+        title: "Ready for loan disbursement",
+        note: "Authorization is complete. Capture disbursement details to create the loan account for repayments.",
+        tone: "border-blue-200 bg-blue-50 text-blue-800",
       };
     }
     if (item.status === "CLOSED") {
@@ -1591,6 +1601,30 @@ export default function LoanApplicationDetail() {
     }
     const url = `https://wa.me/${approvedWhatsappNumber}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const scrollToWorkflowActions = () => {
+    window.setTimeout(() => {
+      document
+        .getElementById("admin-next-actions")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  };
+
+  const prepareWorkflowStatus = (status) => {
+    setNextStatus(status);
+    if (status === "AUTHORIZED" && !String(authorizedBy || "").trim()) {
+      setAuthorizedBy(adminDisplayName);
+    }
+    if (status === "DISBURSED") {
+      if (!String(disbursedBy || "").trim()) {
+        setDisbursedBy(adminDisplayName);
+      }
+      if (!String(disbursementAmount || "").trim()) {
+        setDisbursementAmount(item?.disbursementAmount ?? item?.requestedAmount ?? "");
+      }
+    }
+    scrollToWorkflowActions();
   };
 
   return (
@@ -1674,6 +1708,79 @@ export default function LoanApplicationDetail() {
         <h2 className="mt-1 text-lg font-semibold">{currentStage.title}</h2>
         <p className="mt-1 text-sm">{currentStage.note}</p>
       </div>
+
+      {(item.status === "APPROVED" || item.status === "AUTHORIZED" || item.status === "DISBURSED") ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Disbursement Workflow
+              </p>
+              <h3 className="mt-1 text-lg font-bold text-slate-900">
+                {item.status === "APPROVED"
+                  ? "Next step: Authorize this loan"
+                  : item.status === "AUTHORIZED"
+                  ? "Next step: Disburse this loan"
+                  : "Loan disbursed and moved to Accounts"}
+              </h3>
+              <p className="mt-1 max-w-3xl text-sm text-slate-600">
+                {item.status === "APPROVED"
+                  ? "The loan is approved, but repayment will not appear for the customer until it is Authorized and then Disbursed."
+                  : item.status === "AUTHORIZED"
+                  ? "Authorization is complete. Capture disbursement details to create the active loan account for card repayments."
+                  : "The active loan account should now be available under Payments/Accounts and the customer Repayments dashboard."}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">1. Approved</span>
+                <span className={item.status === "APPROVED" ? "rounded-full bg-slate-100 px-3 py-1 text-slate-500" : "rounded-full bg-blue-50 px-3 py-1 text-blue-700"}>
+                  2. Authorized
+                </span>
+                <span className={item.status === "DISBURSED" ? "rounded-full bg-blue-50 px-3 py-1 text-blue-700" : "rounded-full bg-slate-100 px-3 py-1 text-slate-500"}>
+                  3. Disbursed
+                </span>
+                <span className={item.status === "DISBURSED" ? "rounded-full bg-slate-900 px-3 py-1 text-white" : "rounded-full bg-slate-100 px-3 py-1 text-slate-500"}>
+                  4. Customer Repayments
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {item.status === "APPROVED" ? (
+                <Button
+                  disabled={!canTakeStatusAction(adminRole, "AUTHORIZED")}
+                  onClick={() => prepareWorkflowStatus("AUTHORIZED")}
+                >
+                  Prepare Authorization
+                </Button>
+              ) : null}
+              {item.status === "AUTHORIZED" ? (
+                <Button
+                  disabled={!canTakeStatusAction(adminRole, "DISBURSED")}
+                  onClick={() => prepareWorkflowStatus("DISBURSED")}
+                >
+                  Prepare Disbursement
+                </Button>
+              ) : null}
+              {item.status === "DISBURSED" ? (
+                <Button variant="outline" onClick={() => navigate("/admin/payments")}>
+                  Open Payments / Accounts
+                </Button>
+              ) : null}
+            </div>
+          </div>
+
+          {item.status === "APPROVED" && !canTakeStatusAction(adminRole, "AUTHORIZED") ? (
+            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+              Your current admin role cannot authorize loans. Sign in as Super Admin or an Authorized officer.
+            </p>
+          ) : null}
+          {item.status === "AUTHORIZED" && !canTakeStatusAction(adminRole, "DISBURSED") ? (
+            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+              Your current admin role cannot disburse loans. Sign in as Super Admin or a Disbursement officer.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-3 text-sm">
         <div className="rounded-lg border bg-white p-4">
@@ -2381,7 +2488,7 @@ export default function LoanApplicationDetail() {
 
         </div>
 
-        <div className="rounded-lg border p-3 space-y-3">
+        <div id="admin-next-actions" className="rounded-lg border p-3 space-y-3 scroll-mt-6">
           <h3 className="text-sm font-semibold">Next Actions</h3>
           {!hasSubmittedKyc ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800">

@@ -6,14 +6,39 @@ export const ADMIN_ROLES = [
   "DISBURSED",
 ];
 
+export const ADMIN_ROLE_LABELS = {
+  SUPER_ADMIN: "SUPER ADMIN",
+  VERIFIER: "VERIFIER",
+  APPROVAL: "APPROVER",
+  APPROVER: "APPROVER",
+  AUTHORIZED: "AUTHORIZER",
+  AUTHORIZER: "AUTHORIZER",
+  DISBURSED: "DISBURSER",
+  DISBURSER: "DISBURSER",
+};
+
+export const ADMIN_ROLE_ALIASES = {
+  ADMIN: String(process.env.LEGACY_ADMIN_FALLBACK_ROLE || "APPROVAL").trim().toUpperCase(),
+  APPROVER: "APPROVAL",
+  AUTHORIZER: "AUTHORIZED",
+  DISBURSER: "DISBURSED",
+};
+
+export const ADMIN_DB_ROLE_VALUES = Array.from(
+  new Set(["admin", ...ADMIN_ROLES, "APPROVER", "AUTHORIZER", "DISBURSER"])
+);
+
 export const normalizeRole = (role = "") => {
   const value = String(role || "").trim();
   if (!value) return "";
-  if (value.toLowerCase() === "admin") {
-    return String(process.env.LEGACY_ADMIN_FALLBACK_ROLE || "APPROVAL").trim().toUpperCase();
-  }
   if (value.toLowerCase() === "user") return "user";
-  return value.toUpperCase();
+  const upper = value.toUpperCase();
+  return ADMIN_ROLE_ALIASES[upper] || upper;
+};
+
+export const formatRole = (role = "") => {
+  const normalized = normalizeRole(role);
+  return ADMIN_ROLE_LABELS[normalized] || normalized || "-";
 };
 
 export const isAdminRole = (role = "") => ADMIN_ROLES.includes(normalizeRole(role));

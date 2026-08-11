@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Menu, X } from "lucide-react";
+import { ChevronDown, ChevronRight, LogOut, Menu, UserRound, X } from "lucide-react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import logoImage from "../../../images/logo.png";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useLanguage } from "../../context/LanguageContext.jsx";
+import { useProfile } from "../../hooks/useProfile.js";
+import { FILE_BASE_URL } from "../../config/api.js";
+import TransitionOverlay from "../Preloader/TransitionOverlay.jsx";
 
 const BRAND_NAVY = "#002D5B";
 const BRAND_GOLD = "#B38E46";
@@ -306,12 +309,14 @@ export default function Navbar() {
   const location = useLocation();
   const { isAuthenticated, user, logout } = useAuth();
   const { t } = useLanguage();
+  const { profile } = useProfile(isAuthenticated);
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(() =>
     typeof window === "undefined" ? true : window.innerWidth >= DESKTOP_BREAKPOINT
   );
   const [navVisible, setNavVisible] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     const updateViewport = () => {
@@ -369,17 +374,28 @@ export default function Navbar() {
   }, [mobileOpen]);
 
   const firstName = useMemo(() => {
-    const raw = user?.fullName || user?.name || "";
+    const raw = profile?.fullName || user?.fullName || user?.name || "";
     return raw.trim().split(/\s+/)[0] || "";
-  }, [user]);
+  }, [profile?.fullName, user]);
+
+  const avatarSrc = useMemo(() => {
+    const raw = String(profile?.avatarUrl || "").trim();
+    if (!raw) return "";
+    if (/^https?:\/\//i.test(raw)) return raw;
+    return `${FILE_BASE_URL}${raw.startsWith("/") ? raw : `/${raw}`}`;
+  }, [profile?.avatarUrl]);
 
   const handleApply = () => {
     navigate("/apply");
   };
 
   const handleLogout = () => {
-    logout();
-    navigate("/");
+    setLoggingOut(true);
+    setMobileOpen(false);
+    window.setTimeout(() => {
+      logout();
+      navigate("/");
+    }, 650);
   };
 
   const navLinkClass = ({ isActive }) =>
@@ -389,31 +405,33 @@ export default function Navbar() {
     ].join(" ");
 
   return (
+    <>
+    <TransitionOverlay visible={loggingOut} title="Signing you out" message="Taking you back to the main menu." />
     <header
       className={[
-        "sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur transition-transform duration-300 ease-out",
+        "sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur-xl transition-transform duration-300 ease-out",
         navVisible ? "translate-y-0" : "-translate-y-full",
       ].join(" ")}
     >
       <div className="bg-white">
-        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-6 px-4 py-3 sm:px-6 lg:px-5 lg:py-3.5 xl:px-6">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-6">
           <Link
             to="/"
-            className="flex min-w-0 items-center gap-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 lg:w-[270px] lg:flex-none xl:w-[320px]"
+            className="flex min-w-0 items-center gap-3 rounded-full bg-white/80 py-1 pr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300 lg:w-[230px] lg:flex-none xl:w-[250px]"
             aria-label="Alinafe Capital home"
           >
             <div className="shrink-0">
               <img
                 src={logoImage}
                 alt="Alinafe Capital"
-                className="h-[6.5rem] w-auto object-contain sm:h-[6rem] lg:h-[5.7rem] xl:h-[6.4rem]"
+                className="h-11 w-auto object-contain sm:h-12 lg:h-12 xl:h-14"
               />
             </div>
-            <div className="-ml-10 min-w-0 sm:-ml-7 lg:-ml-6 xl:-ml-7">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-800 sm:text-[11px] lg:text-[11px] lg:tracking-[0.16em] xl:text-[13px] xl:tracking-[0.2em]">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-800 sm:text-[11px] xl:text-[12px]">
                 Alinafe Capital
               </p>
-              <div className="mt-1.5 h-[2px] w-28 overflow-hidden rounded-full bg-slate-200 sm:w-32 lg:mt-1.5 lg:w-36 xl:mt-2 xl:w-48">
+              <div className="mt-1.5 h-[2px] w-24 overflow-hidden rounded-full bg-slate-200 sm:w-32 xl:w-36">
                 <div
                   className="h-full w-full animate-[brandDividerShift_3.4s_ease-in-out_infinite]"
                   style={{
@@ -422,14 +440,14 @@ export default function Navbar() {
                   }}
                 />
               </div>
-              <p className="mt-1 text-[8px] font-semibold uppercase tracking-[0.16em] text-slate-500 sm:text-[9px] lg:text-[8px] lg:tracking-[0.14em] xl:text-[10px] xl:tracking-[0.18em]">
+              <p className="mt-1 text-[8px] font-semibold uppercase tracking-[0.18em] text-slate-500 sm:text-[9px]">
                 Financial Services
               </p>
             </div>
           </Link>
 
           <nav
-            className="hidden min-w-0 flex-1 items-center justify-center rounded-full border border-slate-200 bg-white px-2.5 py-1.5 shadow-sm lg:flex lg:gap-1.5 xl:mx-4 xl:gap-3 xl:px-3.5"
+            className="hidden min-w-0 flex-1 items-center justify-center rounded-full border border-slate-200 bg-white/95 px-2 py-1.5 shadow-sm lg:flex lg:gap-1 xl:mx-2 xl:gap-1.5 xl:px-2.5"
             aria-label="Primary navigation"
           >
             {MAIN_LINKS.map((item) => (
@@ -438,7 +456,7 @@ export default function Navbar() {
                 to={item.to}
                 className={({ isActive }) =>
                   [
-                    "inline-flex min-h-11 items-center rounded-full px-3 py-2.5 text-[13px] font-semibold transition-colors xl:px-4 xl:text-sm",
+                    "inline-flex min-h-10 items-center rounded-full px-3 py-2 text-center text-[12px] font-semibold leading-tight transition-colors xl:px-4 xl:text-[13px]",
                     isActive
                       ? "bg-slate-900/95 text-white shadow-sm"
                       : "text-slate-700 hover:bg-slate-50 hover:text-slate-950",
@@ -459,43 +477,56 @@ export default function Navbar() {
             />
           </nav>
 
-          <div className="hidden items-center justify-end gap-2 lg:w-[210px] lg:flex lg:flex-none xl:w-[230px] xl:gap-2.5">
-            {isAuthenticated && firstName ? (
-              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                <span className="text-slate-500">
-                  {t("navbar.hi")}, {firstName}
-                </span>
-              </div>
-            ) : null}
-
+          <div className="hidden items-center justify-end gap-2 lg:w-[245px] lg:flex lg:flex-none xl:w-[310px]">
             {isAuthenticated ? (
               <>
+                {firstName ? (
+                  <div className="hidden min-h-10 items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] font-semibold text-slate-700 xl:inline-flex">
+                    <span className="inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-white text-[#002D5B] shadow-sm">
+                      {avatarSrc ? (
+                        <img src={avatarSrc} alt={firstName || "Customer"} className="h-full w-full object-cover" />
+                      ) : (
+                        <UserRound size={14} />
+                      )}
+                    </span>
+                    <span className="max-w-[92px] truncate">{firstName}</span>
+                  </div>
+                ) : null}
                 <Link
                   to="/dashboard"
-                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
+                  className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#B38E46]/35 bg-white px-4 py-2 text-[13px] font-bold text-[#002D5B] shadow-sm transition hover:border-[#B38E46] hover:bg-[#B38E46]/10"
                 >
                   {t("navbar.dashboard")}
                 </Link>
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
+                  className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-2 text-[13px] font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-950"
                 >
-                  {t("navbar.logout")}
+                  <LogOut size={14} />
+                  <span>{t("navbar.logout")}</span>
                 </button>
               </>
-            ) : null}
-
-            <button
-              type="button"
-              onClick={handleApply}
-              className="inline-flex min-h-11 items-center justify-center rounded-2xl px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5"
-              style={{
-                background: `linear-gradient(135deg, ${BRAND_NAVY}, #13427b 70%, ${BRAND_GOLD})`,
-              }}
-            >
-              {t("navbar.applyLoan")}
-            </button>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#B38E46]/35 bg-white px-4 py-2 text-[13px] font-bold text-[#002D5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#B38E46] hover:bg-[#B38E46]/10"
+                >
+                  Customer Login
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleApply}
+                  className="inline-flex min-h-10 items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-bold text-white shadow-sm transition hover:-translate-y-0.5"
+                  style={{
+                    background: `linear-gradient(135deg, ${BRAND_NAVY}, #13427b 70%, ${BRAND_GOLD})`,
+                  }}
+                >
+                  {t("navbar.applyLoan")}
+                </button>
+              </>
+            )}
           </div>
 
           <button
@@ -568,7 +599,7 @@ export default function Navbar() {
                 <>
                   <Link
                     to="/dashboard"
-                    className="min-h-11 rounded-2xl border border-slate-200 px-4 py-3 text-center text-sm font-semibold text-slate-700"
+                    className="min-h-11 rounded-2xl border border-[#B38E46]/35 bg-white px-4 py-3 text-center text-sm font-semibold text-[#002D5B]"
                   >
                     {t("navbar.dashboard")}
                   </Link>
@@ -580,22 +611,31 @@ export default function Navbar() {
                     {t("navbar.logout")}
                   </button>
                 </>
-              ) : null}
-
-              <button
-                type="button"
-                onClick={handleApply}
-                className="min-h-11 rounded-2xl px-4 py-3 text-sm font-semibold text-white sm:col-span-2"
-                style={{
-                  background: `linear-gradient(135deg, ${BRAND_NAVY}, #13427b 70%, ${BRAND_GOLD})`,
-                }}
-              >
-                {t("navbar.applyLoan")}
-              </button>
+              ) : (
+                <>
+                  <Link
+                    to="/login"
+                    className="min-h-11 rounded-2xl border border-slate-200 px-4 py-3 text-center text-sm font-semibold text-slate-700"
+                  >
+                    Customer Login
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={handleApply}
+                    className="min-h-11 rounded-2xl px-4 py-3 text-sm font-semibold text-white"
+                    style={{
+                      background: `linear-gradient(135deg, ${BRAND_NAVY}, #13427b 70%, ${BRAND_GOLD})`,
+                    }}
+                  >
+                    {t("navbar.applyLoan")}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
       ) : null}
     </header>
+    </>
   );
 }

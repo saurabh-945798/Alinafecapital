@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
-import { ChevronsLeft, ChevronsRight, LogOut, Menu, X } from "lucide-react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { ChevronsLeft, ChevronsRight, LogOut, Menu, ShieldCheck, X } from "lucide-react";
 import { sidebarNav } from "./sidebarNav";
 import { clearAdminSession, getAdminUser } from "../../utils/adminAuth";
 import { inquiriesApi } from "../../services/api/inquiries.api";
 import { hasAnyRole, normalizeAdminRole } from "../../utils/adminRbac";
 import { useToast } from "../../context/ToastContext.jsx";
+import alinafeLogo from "../../assets/alinafe-logo.png";
+import restockLogo from "../../assets/restock-tech-logo.png";
+import AdminLoadingScreen from "../Loading/AdminLoadingScreen.jsx";
 
 const cx = (...a) => a.filter(Boolean).join(" ");
 
@@ -30,7 +33,7 @@ function NavItems({ collapsed, onNavigate, badges = {}, role = "" }) {
                 <NavLink
                   key={item.to}
                   to={item.to}
-                  onClick={onNavigate}
+                  onClick={() => onNavigate?.(item.label, item.to)}
                   className={({ isActive }) =>
                     cx(
                       "group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
@@ -70,9 +73,12 @@ function NavItems({ collapsed, onNavigate, badges = {}, role = "" }) {
 
 export default function Sidebar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [transitionMessage, setTransitionMessage] = useState("");
+  const [signOutConfirmOpen, setSignOutConfirmOpen] = useState(false);
   const [badges, setBadges] = useState({ applications: 0 });
   const badgeErrorNotifiedRef = useRef(false);
   const adminUser = useMemo(() => getAdminUser(), []);
@@ -80,10 +86,34 @@ export default function Sidebar() {
 
   const width = collapsed ? "w-20" : "w-72";
 
-  const handleLogout = () => {
-    clearAdminSession();
+  const showTransition = (message, duration = 450) => {
+    setTransitionMessage(message);
+    window.setTimeout(() => setTransitionMessage(""), duration);
+  };
+
+  const handleNavigate = (label, to) => {
     setMobileOpen(false);
-    navigate("/admin/login", { replace: true });
+    if (to && to !== location.pathname) {
+      showTransition(`Opening ${label || "page"}...`, 420);
+    }
+  };
+
+  const requestLogout = () => {
+    setMobileOpen(false);
+    setSignOutConfirmOpen(true);
+  };
+
+  const cancelLogout = () => {
+    setSignOutConfirmOpen(false);
+  };
+
+  const confirmLogout = () => {
+    setSignOutConfirmOpen(false);
+    setTransitionMessage("Signing out securely...");
+    window.setTimeout(() => {
+      clearAdminSession();
+      navigate("/admin/login", { replace: true });
+    }, 750);
   };
 
   useEffect(() => {
@@ -135,12 +165,12 @@ export default function Sidebar() {
     <div className={cx("flex h-full flex-col", width)}>
       <div className="flex items-center justify-between px-4 py-4">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-semibold">
-            A
+          <div className="h-10 w-10 rounded-xl border border-slate-200 bg-white flex items-center justify-center shadow-sm">
+            <img src={alinafeLogo} alt="Alinafe Capital" className="h-7 w-auto object-contain" />
           </div>
           {!collapsed && (
             <div className="leading-tight">
-              <p className="text-sm font-semibold text-slate-900">AlinafeCapital</p>
+              <p className="text-sm font-semibold text-slate-900">Alinafe Capital</p>
               <p className="text-xs text-slate-500">Admin Panel</p>
             </div>
           )}
@@ -155,9 +185,15 @@ export default function Sidebar() {
         </button>
       </div>
 
-      <NavItems collapsed={collapsed} onNavigate={() => setMobileOpen(false)} badges={badges} role={adminRole} />
+      <NavItems collapsed={collapsed} onNavigate={handleNavigate} badges={badges} role={adminRole} />
 
       <div className="border-t border-slate-200 p-3">
+        {!collapsed ? (
+          <div className="mb-3 flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Powered by</span>
+            <img src={restockLogo} alt="Restock Tech" className="h-8 w-auto object-contain" />
+          </div>
+        ) : null}
         <div className="flex items-center gap-3 rounded-xl p-2 hover:bg-slate-50">
           <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700 font-semibold">
             AD
@@ -173,7 +209,7 @@ export default function Sidebar() {
           <button
             className="rounded-lg p-2 hover:bg-slate-100 text-slate-700"
             title="Logout"
-            onClick={handleLogout}
+            onClick={requestLogout}
           >
             <LogOut size={18} />
           </button>
@@ -184,9 +220,15 @@ export default function Sidebar() {
 
   return (
     <>
+      {transitionMessage ? (
+        <AdminLoadingScreen
+          message={transitionMessage}
+          subtext="Please wait while the admin console completes this step."
+        />
+      ) : null}
       <div className="sticky top-0 z-40 border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-slate-900">AlinafeCapital Admin</p>
+          <p className="text-sm font-semibold text-slate-900">Alinafe Capital Admin</p>
           <button
             className="rounded-lg p-2 text-slate-700 hover:bg-slate-100"
             onClick={() => setMobileOpen(true)}
@@ -205,6 +247,50 @@ export default function Sidebar() {
       >
         {shell}
       </aside>
+
+      {signOutConfirmOpen ? (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/55 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-950/25">
+            <div className="bg-[radial-gradient(circle_at_top_left,#0b3768_0%,#07152d_52%,#020817_100%)] px-6 py-6 text-white">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15">
+                  <ShieldCheck size={22} />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-white/55">Confirm sign out</p>
+                  <h2 className="mt-1 text-xl font-black">Do you want to sign out?</h2>
+                </div>
+              </div>
+              <p className="mt-4 text-sm leading-6 text-white/72">
+                Your current admin session will be closed and you will return to the login page.
+              </p>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
+                Make sure any pending verification, approval, authorization or disbursement changes have been saved before leaving.
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={cancelLogout}
+                  className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                >
+                  Stay signed in
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmLogout}
+                  className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-slate-950/15 transition hover:bg-slate-800"
+                >
+                  Yes, sign out
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {mobileOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden">

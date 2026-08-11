@@ -1,6 +1,7 @@
 import UserProfile from "../models/UserProfile.js";
 import { LoanInquiry } from "../models/LoanInquiry.model.js";
 import { writeAdminAudit } from "../utils/adminAudit.js";
+import { syncInquiryToCustomerProfile } from "../services/customerAccountLink.service.js";
 
 const safeRegex = (value = "") => {
   const safe = String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -216,6 +217,9 @@ export async function verifyKyc(req, res, next) {
       });
     }
     await review.doc.save();
+    if (review.recordType === "inquiry") {
+      await syncInquiryToCustomerProfile(review.doc);
+    }
     await writeAdminAudit(req, {
       action: "KYC_VERIFIED",
       targetType: review.recordType === "profile" ? "UserProfile" : "LoanInquiry",
@@ -277,6 +281,9 @@ export async function rejectKyc(req, res, next) {
       });
     }
     await review.doc.save();
+    if (review.recordType === "inquiry") {
+      await syncInquiryToCustomerProfile(review.doc);
+    }
     await writeAdminAudit(req, {
       action: "KYC_REJECTED",
       targetType: review.recordType === "profile" ? "UserProfile" : "LoanInquiry",

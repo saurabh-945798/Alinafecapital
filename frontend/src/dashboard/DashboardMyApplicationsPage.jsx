@@ -265,8 +265,8 @@ export default function DashboardMyApplicationsPage() {
                     key={app._id}
                     className={`border-t ${isCreated ? "bg-emerald-50/50" : "hover:bg-slate-50"}`}
                   >
-                    <td className="p-4 text-xs">{app._id}</td>
-                    <td className="p-4">{app.productSlug || "-"}</td>
+                    <td className="p-4 text-xs">{app.applicationCode || app._id}</td>
+                    <td className="p-4">{app.productName || app.loanProductName || app.productSlug || "-"}</td>
                     <td className="p-4">{money(app.requestedAmount)}</td>
                     <td className="p-4">{formatDate(app.createdAt)}</td>
                     <td className="p-4">
@@ -343,17 +343,20 @@ export default function DashboardMyApplicationsPage() {
               <div className="grid gap-3 md:grid-cols-3 text-sm">
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-slate-500">Product</p>
-                  <p className="font-semibold">{selected.productSlug || "-"}</p>
+                  <p className="font-semibold">{selected.productName || selected.loanProductName || selected.productSlug || "-"}</p>
                   <p className="text-xs text-slate-500 mt-1">Amount</p>
                   <p>{money(selected.requestedAmount)}</p>
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-slate-500">Tenure</p>
-                  <p className="font-semibold">{selected.tenureMonths} months</p>
+                  <p className="font-semibold">{selected.tenureMonths || selected.preferredTenureMonths || "-"} months</p>
                   <p className="text-xs text-slate-500 mt-1">Status</p>
                   <span className={statusBadgeClass(selected.status)}>
                     {STATUS_LABEL[selected.status] || selected.status}
                   </span>
+                  {selected.rawStatus && selected.rawStatus !== selected.status ? (
+                    <p className="mt-2 text-xs text-slate-500">Admin stage: {selected.rawStatus}</p>
+                  ) : null}
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-slate-500">Created</p>

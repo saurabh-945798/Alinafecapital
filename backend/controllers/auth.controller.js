@@ -4,6 +4,7 @@ import User from "../models/User.js";
 import { registerSchema, loginSchema } from "../utils/validators/auth.validators.js";
 import { isValidE164Phone, normalizeEmail, normalizePhone } from "../utils/normalize.js";
 import { isAdminRole, normalizeRole } from "../utils/rbac.js";
+import { syncLatestInquiryToCustomerProfile } from "../services/customerAccountLink.service.js";
 
 const MAX_LOGIN_ATTEMPTS = Number(process.env.MAX_LOGIN_ATTEMPTS || 5);
 const LOCK_MINUTES = Number(process.env.LOCK_MINUTES || 30);
@@ -89,6 +90,11 @@ export const registerUser = async (req, res, next) => {
     }
 
     const user = await User.create({ fullName, email, phone, password });
+
+    // If this borrower already submitted a public loan inquiry, copy that KYC/profile
+    // information into the login account so the customer dashboard and admin customer
+    // records show the same KYC state.
+    await syncLatestInquiryToCustomerProfile(user);
 
     const accessToken = issueAccessToken(user);
     const refreshToken = issueRefreshToken(user);
@@ -200,6 +206,10 @@ const loginCore = async (req, res, next, { adminOnly = false } = {}) => {
     const refreshToken = issueRefreshToken(user);
     user.refreshTokenHash = hashRefreshToken(refreshToken);
     await user.save({ validateBeforeSave: false });
+
+    if (!adminOnly) {
+      await syncLatestInquiryToCustomerProfile(user);
+    }
 
     res.cookie("refreshToken", refreshToken, getCookieOptions());
 

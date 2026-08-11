@@ -1,10 +1,32 @@
 export const ADMIN_ROLES = ["SUPER_ADMIN", "VERIFIER", "APPROVAL", "AUTHORIZED", "DISBURSED"];
 
+export const ADMIN_ROLE_LABELS = {
+  SUPER_ADMIN: "SUPER ADMIN",
+  VERIFIER: "VERIFIER",
+  APPROVAL: "APPROVER",
+  APPROVER: "APPROVER",
+  AUTHORIZED: "AUTHORIZER",
+  AUTHORIZER: "AUTHORIZER",
+  DISBURSED: "DISBURSER",
+  DISBURSER: "DISBURSER",
+};
+
+const ROLE_ALIASES = {
+  ADMIN: "APPROVAL",
+  APPROVER: "APPROVAL",
+  AUTHORIZER: "AUTHORIZED",
+  DISBURSER: "DISBURSED",
+};
+
 export const normalizeAdminRole = (role = "") => {
-  const value = String(role || "").trim();
+  const value = String(role || "").trim().toUpperCase();
   if (!value) return "";
-  if (value.toLowerCase() === "admin") return "APPROVAL";
-  return value.toUpperCase();
+  return ROLE_ALIASES[value] || value;
+};
+
+export const formatAdminRole = (role = "") => {
+  const normalized = normalizeAdminRole(role);
+  return ADMIN_ROLE_LABELS[normalized] || normalized || "-";
 };
 
 export const hasAnyRole = (role, allowedRoles = []) => {

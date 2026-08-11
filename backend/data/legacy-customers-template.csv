@@ -1,0 +1,2 @@
+accountNumber,applicationCode,fullName,email,phone,loanProductName,disbursedAmount,tenureMonths,monthlyRate,disbursedAt,outstandingBalance,notes
+ACC000001,ACL000001,Jane Example,jane@example.com,0999000000,Emergency Loan,100000,3,0.1,2026-07-01,120000,Use admin records as source of truth

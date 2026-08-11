@@ -1,4 +1,4 @@
-﻿import { Router } from "express";
+import { Router } from "express";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { upload, uploadAvatar } from "../config/upload.js";
 import {
@@ -8,6 +8,7 @@ import {
   submitKyc,
   uploadMyAvatar,
   removeMyAvatar,
+  requestKycUpdate,
 } from "../controllers/profile.controller.js";
 
 const router = Router();
@@ -35,5 +36,6 @@ router.post("/me/avatar", requireAuth, uploadAvatar.single("file"), handleUpload
 router.delete("/me/avatar", requireAuth, removeMyAvatar);
 router.post("/me/doc", requireAuth, upload.single("file"), handleUploadError, uploadMyDoc);
 router.post("/me/submit", requireAuth, submitKyc);
+router.post("/me/request-kyc-update", requireAuth, requestKycUpdate);
 
 export default router;

@@ -6,7 +6,7 @@ const RepaymentEntrySchema = new mongoose.Schema(
     amount: { type: Number, required: true, min: 0 },
     method: {
       type: String,
-      enum: ["cash", "bank_transfer", "mobile_money"],
+      enum: ["cash", "bank_transfer", "mobile_money", "card"],
       default: "cash",
     },
     reference: { type: String, trim: true, default: "" },
@@ -32,6 +32,12 @@ const LoanAccountSchema = new mongoose.Schema(
       unique: true,
       index: true,
     },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true,
+    },
     applicationCode: { type: String, trim: true, default: "" },
     customerName: { type: String, required: true, trim: true },
     phone: { type: String, trim: true, default: "" },
@@ -55,6 +61,9 @@ const LoanAccountSchema = new mongoose.Schema(
     disbursementMobileNumber: { type: String, trim: true, default: "" },
     transactionReference: { type: String, trim: true, default: "" },
     disbursementNote: { type: String, trim: true, default: "" },
+    legacyCustomerReference: { type: String, trim: true, default: "", index: true },
+    migrationSource: { type: String, trim: true, default: "" },
+    migratedAt: { type: Date, default: null },
     approvedAt: { type: Date, default: null },
     disbursedAt: { type: Date, default: null },
     nextDueDate: { type: Date, default: null },
@@ -76,6 +85,8 @@ const LoanAccountSchema = new mongoose.Schema(
 
 LoanAccountSchema.index({ createdAt: -1 });
 LoanAccountSchema.index({ status: 1, createdAt: -1 });
+LoanAccountSchema.index({ userId: 1, createdAt: -1 });
+LoanAccountSchema.index({ email: 1, phone: 1 });
 
 export const LoanAccount =
   mongoose.models.LoanAccount || mongoose.model("LoanAccount", LoanAccountSchema);

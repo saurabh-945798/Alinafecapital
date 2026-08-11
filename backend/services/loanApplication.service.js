@@ -1,9 +1,12 @@
+import mongoose from "mongoose";
 import { LoanProduct } from "../models/LoanProduct.model.js";
 import { LoanApplication } from "../models/LoanApplication.model.js";
+import { LoanInquiry } from "../models/LoanInquiry.model.js";
 import UserProfile from "../models/UserProfile.js";
 import { emiCalculatorService } from "./emiCalculator.service.js";
 import { ApiError } from "../utils/ApiError.js";
 import { calculateProfileCompletion } from "../utils/profileCompletion.js";
+import { normalizeEmail, normalizePhone } from "../utils/normalize.js";
 
 /**
  * Create immutable snapshot of product at time of application
@@ -44,6 +47,160 @@ const ACTIVE_REVIEW_STATUSES = [
   "PENDING", // legacy
   "UNDER_REVIEW",
 ];
+
+const INQUIRY_TO_DASHBOARD_STATUS = {
+  NEW: "UNDER_REVIEW",
+  CONTACTED: "UNDER_REVIEW",
+  KYC_SENT: "PENDING",
+  QUALIFIED: "UNDER_REVIEW",
+  KYC_REJECTED: "REJECTED",
+  APPROVED: "APPROVED",
+  AUTHORIZED: "APPROVED",
+  DISBURSED: "DISBURSED",
+  CLOSED: "CANCELLED",
+};
+
+const normalizeDashboardStatus = (status) => {
+  const raw = String(status || "").toUpperCase();
+  return INQUIRY_TO_DASHBOARD_STATUS[raw] || raw || "PENDING";
+};
+
+const unique = (values = []) => [...new Set(values.filter(Boolean).map((value) => String(value)))];
+
+const buildCustomerOwnership = (user = {}) => {
+  const userId = user?._id ? String(user._id) : "";
+  const email = normalizeEmail(user?.email || "");
+  const phone = normalizePhone(user?.phone || "");
+  const rawPhone = String(user?.phone || "").trim();
+
+  const appOr = [];
+  if (userId && mongoose.Types.ObjectId.isValid(userId)) appOr.push({ userId: user._id });
+  unique([phone, rawPhone]).forEach((value) => appOr.push({ phone: value }));
+  if (email) appOr.push({ email });
+
+  const inquiryOr = [];
+  unique([phone, rawPhone]).forEach((value) => inquiryOr.push({ phone: value }));
+  if (email) inquiryOr.push({ email });
+
+  return { appOr, inquiryOr, email, phone, userId };
+};
+
+const matchesCurrentUser = (doc = {}, user = {}) => {
+  const { email, phone, userId } = buildCustomerOwnership(user);
+  const docUserId = doc?.userId ? String(doc.userId) : "";
+  const docEmail = normalizeEmail(doc?.email || "");
+  const docPhone = normalizePhone(doc?.phone || "");
+
+  return Boolean(
+    (userId && docUserId && docUserId === userId) ||
+      (email && docEmail && docEmail === email) ||
+      (phone && docPhone && docPhone === phone)
+  );
+};
+
+const mapInquiryToCustomerApplication = (inquiry = {}) => {
+  const rawStatus = String(inquiry.status || "").toUpperCase();
+  const mappedStatus = normalizeDashboardStatus(rawStatus);
+  const actionHistory = Array.isArray(inquiry.actionHistory) ? inquiry.actionHistory : [];
+
+  return {
+    _id: String(inquiry._id),
+    id: String(inquiry._id),
+    sourceType: "loan_inquiry",
+    sourceLabel: "Website Loan Inquiry",
+    applicationCode: inquiry.applicationCode || "",
+    fullName: inquiry.fullName || "",
+    phone: inquiry.phone || "",
+    email: inquiry.email || "",
+    productSlug: inquiry.loanProductSlug || "",
+    productName: inquiry.loanProductName || inquiry.loanProductSlug || "",
+    loanProductSlug: inquiry.loanProductSlug || "",
+    loanProductName: inquiry.loanProductName || inquiry.loanProductSlug || "",
+    requestedAmount: Number(inquiry.requestedAmount || 0),
+    amount: Number(inquiry.requestedAmount || 0),
+    tenureMonths: Number(inquiry.preferredTenureMonths || 0),
+    preferredTenureMonths: Number(inquiry.preferredTenureMonths || 0),
+    monthlyIncome: Number(inquiry.monthlyIncome || 0),
+    status: mappedStatus,
+    rawStatus,
+    kycStatus: inquiry.kycStatus || "not_started",
+    precheckReason: "",
+    loanAccountId: inquiry.loanAccountId || null,
+    isRepayable: rawStatus === "DISBURSED" && !!inquiry.loanAccountId,
+    statusHistory: actionHistory.map((entry) => ({
+      status: normalizeDashboardStatus(entry.status || rawStatus),
+      rawStatus: entry.status || rawStatus,
+      note: entry.note || entry.title || "",
+      reasonCode: entry.type || "INQUIRY_UPDATE",
+      updatedBy: entry.actor || "Admin",
+      updatedAt: entry.createdAt || inquiry.updatedAt || inquiry.createdAt,
+    })),
+    inquiryDetails: {
+      publicAccessToken: inquiry.publicAccessToken || "",
+      adminNote: inquiry.adminNote || "",
+      kycRemarks: inquiry.kycRemarks || "",
+      approvedBy: inquiry.approvedBy || "",
+      authorizedBy: inquiry.authorizedBy || "",
+      disbursedBy: inquiry.disbursedBy || "",
+      approvedAt: inquiry.approvedAt || null,
+      authorizedAt: inquiry.authorizedAt || null,
+      disbursedAt: inquiry.disbursedAt || null,
+      transactionReference: inquiry.transactionReference || "",
+    },
+    createdAt: inquiry.createdAt,
+    updatedAt: inquiry.updatedAt,
+  };
+};
+
+const mapLoanApplicationToCustomerApplication = (doc = {}) => ({
+  ...doc,
+  _id: String(doc._id),
+  id: String(doc._id),
+  sourceType: "loan_application",
+  sourceLabel: "Customer Dashboard Application",
+  applicationCode: doc.applicationCode || String(doc._id),
+  productName: doc.productSnapshot?.name || doc.productSlug || "",
+  loanProductName: doc.productSnapshot?.name || doc.productSlug || "",
+});
+
+const getComparableValue = (item, sortBy) => {
+  if (sortBy === "requestedAmount") return Number(item.requestedAmount || 0);
+  if (sortBy === "status") return String(item.status || "");
+  if (sortBy === "updatedAt") return new Date(item.updatedAt || item.createdAt || 0).getTime();
+  return new Date(item.createdAt || item.updatedAt || 0).getTime();
+};
+
+const applyCustomerFilters = (items = [], query = {}) => {
+  const statusParam = String(query.status || "").trim().toUpperCase();
+  const q = String(query.q || "").trim().toLowerCase();
+
+  let next = items;
+  if (statusParam && statusParam !== "ALL") {
+    next = next.filter((item) => String(item.status || "").toUpperCase() === statusParam);
+  }
+
+  if (q) {
+    next = next.filter((item) => {
+      const haystack = [
+        item.applicationCode,
+        item.productSlug,
+        item.productName,
+        item.loanProductName,
+        item.fullName,
+        item.phone,
+        item.email,
+        item.rawStatus,
+        item.status,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }
+
+  return next;
+};
 
 const resolvePrecheck = (profile) => {
   const completion = Number(profile?.profileCompletion || 0);
@@ -186,85 +343,79 @@ export const loanApplicationService = {
   },
 
   /**
-   * Get application by ID
+   * Get application by ID. Supports both customer-dashboard applications and
+   * public loan inquiries so customers can see records that admin approved from
+   * the public application/KYC flow.
    */
   async getById(id, user) {
-    const doc = await LoanApplication.findById(id).lean();
-
-    if (!doc) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new ApiError(404, "Application not found", "NOT_FOUND");
     }
 
-    if (user) {
-      const userId = user?._id ? String(user._id) : "";
-      const ownByUserId = !!doc.userId && String(doc.userId) === userId;
-      const ownByPhone = !!user?.phone && doc.phone === user.phone;
-      const ownByEmail =
-        !!user?.email &&
-        !!doc.email &&
-        String(doc.email).toLowerCase() === String(user.email).toLowerCase();
-
-      if (!ownByUserId && !ownByPhone && !ownByEmail) {
+    const doc = await LoanApplication.findById(id).lean();
+    if (doc) {
+      if (user && !matchesCurrentUser(doc, user)) {
         throw new ApiError(403, "Forbidden", "FORBIDDEN");
       }
+      return mapLoanApplicationToCustomerApplication(doc);
     }
 
-    return doc;
+    const inquiry = await LoanInquiry.findById(id).lean();
+    if (!inquiry) {
+      throw new ApiError(404, "Application not found", "NOT_FOUND");
+    }
+    if (user && !matchesCurrentUser(inquiry, user)) {
+      throw new ApiError(403, "Forbidden", "FORBIDDEN");
+    }
+
+    return mapInquiryToCustomerApplication(inquiry);
   },
 
   /**
-   * List applications owned by the authenticated user
+   * List applications owned by the authenticated user. This now merges:
+   * 1) applications submitted from the authenticated dashboard, and
+   * 2) public loan inquiries created before the customer account existed.
    */
   async listMine(user, query = {}) {
     if (!user) throw new ApiError(401, "Unauthorized", "UNAUTHORIZED");
 
-    const or = [];
-    if (user?._id) or.push({ userId: user._id });
-    if (user?.phone) or.push({ phone: user.phone });
-    if (user?.email) {
-      or.push({ email: String(user.email).toLowerCase() });
-    }
-
-    if (or.length === 0) {
+    const { appOr, inquiryOr } = buildCustomerOwnership(user);
+    if (appOr.length === 0 && inquiryOr.length === 0) {
       return {
         items: [],
         pagination: { page: 1, limit: 20, total: 0, totalPages: 1 },
       };
     }
 
-    const filter = { $or: or };
+    const [applications, inquiries] = await Promise.all([
+      appOr.length ? LoanApplication.find({ $or: appOr }).lean() : [],
+      inquiryOr.length ? LoanInquiry.find({ $or: inquiryOr }).lean() : [],
+    ]);
 
-    const statusParam = String(query.status || "").trim();
-    if (statusParam && statusParam.toUpperCase() !== "ALL") {
-      filter.status = statusParam.toUpperCase();
-    }
+    const combined = [
+      ...applications.map(mapLoanApplicationToCustomerApplication),
+      ...inquiries.map(mapInquiryToCustomerApplication),
+    ];
 
-    const q = String(query.q || "").trim();
-    if (q) {
-      const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const rx = new RegExp(escaped, "i");
-      filter.$and = filter.$and || [];
-      filter.$and.push({
-        $or: [{ productSlug: rx }, { fullName: rx }, { phone: rx }, { email: rx }],
-      });
-    }
+    const filtered = applyCustomerFilters(combined, query);
+
+    const allowedSortBy = new Set(["createdAt", "updatedAt", "requestedAmount", "status"]);
+    const sortBy = allowedSortBy.has(String(query.sortBy)) ? String(query.sortBy) : "createdAt";
+    const sortDirection = String(query.sortOrder).toLowerCase() === "asc" ? 1 : -1;
+
+    filtered.sort((a, b) => {
+      const left = getComparableValue(a, sortBy);
+      const right = getComparableValue(b, sortBy);
+      if (left < right) return -1 * sortDirection;
+      if (left > right) return 1 * sortDirection;
+      return String(b._id).localeCompare(String(a._id));
+    });
 
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
     const skip = (page - 1) * limit;
-
-    const allowedSortBy = new Set(["createdAt", "updatedAt", "requestedAmount", "status"]);
-    const sortBy = allowedSortBy.has(String(query.sortBy)) ? String(query.sortBy) : "createdAt";
-    const sortOrder = String(query.sortOrder).toLowerCase() === "asc" ? 1 : -1;
-
-    const [total, items] = await Promise.all([
-      LoanApplication.countDocuments(filter),
-      LoanApplication.find(filter)
-        .sort({ [sortBy]: sortOrder, _id: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-    ]);
+    const items = filtered.slice(skip, skip + limit);
+    const total = filtered.length;
 
     return {
       items,

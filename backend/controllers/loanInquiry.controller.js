@@ -5,12 +5,15 @@ import fs from "fs";
 import { LoanInquiry } from "../models/LoanInquiry.model.js";
 import { LoanProduct } from "../models/LoanProduct.model.js";
 import { LoanAccount } from "../models/LoanAccount.model.js";
+import UserProfile from "../models/UserProfile.js";
 import { SystemCounter } from "../models/SystemCounter.model.js";
 import { normalizePhone } from "../utils/normalize.js";
 import { calculateProfileCompletion } from "../utils/profileCompletion.js";
 import { toPersistedUploadPath, toPublicUploadUrl } from "../utils/uploadPaths.js";
 import { canTransitionInquiry, getInquiryStage } from "../utils/workflowPolicy.js";
 import { writeAdminAudit } from "../utils/adminAudit.js";
+import { syncInquiryToCustomerProfile } from "../services/customerAccountLink.service.js";
+import { normalizeMoneyForValidation, parseMoneyInput } from "../utils/numberInput.js";
 
 const PUBLIC_LOAN_TYPES = [
   { slug: "civil-servant-loan", name: "Civil Servant Loan" },
@@ -32,6 +35,43 @@ const resolveEditableLoanProduct = async (slug = "") => {
   }
 
   return PUBLIC_LOAN_TYPES.find((item) => item.slug === normalizedSlug) || null;
+};
+
+const moneyNumberField = (schema) => z.preprocess(normalizeMoneyForValidation, schema);
+
+const MAX_DURATION_MONTH_INPUT = 600;
+const durationMonthField = () =>
+  z.coerce
+    .number({ message: "Please enter a valid number of months." })
+    .int("Months must be a whole number.")
+    .min(0, "Months cannot be negative.")
+    .max(MAX_DURATION_MONTH_INPUT, "Months entered are too high. Please review the duration.")
+    .optional();
+
+const normalizeDurationPairs = (data = {}) => {
+  const normalized = { ...data };
+  const pairs = [
+    ["contractDurationYears", "contractDurationMonths"],
+    ["durationWorkedYears", "durationWorkedMonths"],
+  ];
+
+  pairs.forEach(([yearsKey, monthsKey]) => {
+    if (normalized[monthsKey] === undefined || normalized[monthsKey] === null || normalized[monthsKey] === "") {
+      return;
+    }
+
+    const rawMonths = Number(normalized[monthsKey]);
+    if (!Number.isFinite(rawMonths) || rawMonths < 12) {
+      return;
+    }
+
+    const existingYears = Number(normalized[yearsKey] ?? 0);
+    const safeYears = Number.isFinite(existingYears) ? existingYears : 0;
+    normalized[yearsKey] = safeYears + Math.floor(rawMonths / 12);
+    normalized[monthsKey] = rawMonths % 12;
+  });
+
+  return normalized;
 };
 
 const publicCreateSchema = z.object({
@@ -58,20 +98,20 @@ const publicCreateSchema = z.object({
   employmentNumber: z.string().trim().min(2).optional(),
   employmentType: z.string().trim().min(2).optional(),
   contractDurationYears: z.coerce.number().int().min(0).optional(),
-  contractDurationMonths: z.coerce.number().int().min(0).max(11).optional(),
+  contractDurationMonths: durationMonthField(),
   durationWorkedYears: z.coerce.number().int().min(0).optional(),
-  durationWorkedMonths: z.coerce.number().int().min(0).max(11).optional(),
+  durationWorkedMonths: durationMonthField(),
   hrContactPhone: z.string().trim().min(6).optional(),
   salaryDate: z.string().trim().optional(),
   loanProductSlug: z.string().trim().min(2),
   loanProductName: z.string().trim().min(2).optional(),
-  monthlyIncome: z.coerce.number().min(0).optional(),
-  requestedAmount: z.coerce.number().gt(0),
+  monthlyIncome: moneyNumberField(z.coerce.number().min(0)).optional(),
+  requestedAmount: moneyNumberField(z.coerce.number().gt(0)),
   preferredTenureMonths: z.coerce.number().int().min(1),
-  totalDeductionPerMonth: z.coerce.number().min(0).optional(),
+  totalDeductionPerMonth: moneyNumberField(z.coerce.number().min(0)).optional(),
   collateral: z.string().trim().optional(),
-  approvedDisbursedLoanAmount: z.coerce.number().min(0).optional(),
-  approvedTotalDeductionPerMonth: z.coerce.number().min(0).optional(),
+  approvedDisbursedLoanAmount: moneyNumberField(z.coerce.number().min(0)).optional(),
+  approvedTotalDeductionPerMonth: moneyNumberField(z.coerce.number().min(0)).optional(),
   bankName: z.string().trim().min(2).optional(),
   accountHolderName: z.string().trim().min(2).optional(),
   accountNumber: z.string().trim().min(3).optional(),
@@ -109,7 +149,7 @@ const adminUpdateSchema = z.object({
   approvedBy: z.string().trim().max(120).optional(),
   authorizedBy: z.string().trim().max(120).optional(),
   disbursedBy: z.string().trim().max(120).optional(),
-  disbursementAmount: z.coerce.number().min(0).optional(),
+  disbursementAmount: moneyNumberField(z.coerce.number().min(0)).optional(),
   disbursementMethod: z.enum(["cash", "bank_transfer", "mobile_money"]).optional().or(z.literal("")),
   disbursementBankName: z.string().trim().max(120).optional(),
   disbursementAccountName: z.string().trim().max(120).optional(),
@@ -137,7 +177,7 @@ const adminUpdateSchema = z.object({
   residenceDistrict: z.string().trim().max(120).optional(),
   loanProductSlug: z.string().trim().min(2).max(120).optional(),
   loanProductName: z.string().trim().min(2).max(160).optional(),
-  requestedAmount: z.coerce.number().min(0).optional(),
+  requestedAmount: moneyNumberField(z.coerce.number().min(0)).optional(),
   preferredTenureMonths: z.coerce.number().int().min(1).max(120).optional(),
   notes: z.string().trim().max(1000).optional(),
   addressLine1: z.string().trim().max(300).optional(),
@@ -158,22 +198,22 @@ const adminUpdateSchema = z.object({
     "fixed_contract",
   ]).optional(),
   contractDurationYears: z.coerce.number().int().min(0).max(80).optional(),
-  contractDurationMonths: z.coerce.number().int().min(0).max(11).optional(),
+  contractDurationMonths: durationMonthField(),
   durationWorkedYears: z.coerce.number().int().min(0).max(80).optional(),
-  durationWorkedMonths: z.coerce.number().int().min(0).max(11).optional(),
+  durationWorkedMonths: durationMonthField(),
   hrContactPhone: z.string().trim().max(30).optional(),
   governmentId: z.string().trim().max(120).optional().or(z.literal("")),
   salaryDate: z.string().trim().max(50).optional().or(z.literal("")),
-  monthlyIncome: z.coerce.number().min(0).optional(),
+  monthlyIncome: moneyNumberField(z.coerce.number().min(0)).optional(),
   bankName: z.string().trim().max(120).optional(),
   accountNumber: z.string().trim().max(120).optional(),
   branchCode: z.string().trim().max(120).optional(),
   accountHolderName: z.string().trim().max(120).optional(),
   accountPhoneNumber: z.string().trim().max(30).optional(),
-  totalDeductionPerMonth: z.coerce.number().min(0).optional(),
+  totalDeductionPerMonth: moneyNumberField(z.coerce.number().min(0)).optional(),
   collateral: z.string().trim().max(300).optional(),
-  approvedDisbursedLoanAmount: z.coerce.number().min(0).optional(),
-  approvedTotalDeductionPerMonth: z.coerce.number().min(0).optional(),
+  approvedDisbursedLoanAmount: moneyNumberField(z.coerce.number().min(0)).optional(),
+  approvedTotalDeductionPerMonth: moneyNumberField(z.coerce.number().min(0)).optional(),
   reference1Name: z.string().trim().max(120).optional(),
   reference1Phone: z.string().trim().max(30).optional(),
   reference2Name: z.string().trim().max(120).optional(),
@@ -202,13 +242,13 @@ const publicProfileUpdateSchema = z.object({
   employmentNumber: z.string().trim().optional(),
   employmentStatus: z.enum(["full_time", "part_time", "fixed_contract"]).optional(),
   contractDurationYears: z.coerce.number().int().min(0).max(80).optional(),
-  contractDurationMonths: z.coerce.number().int().min(0).max(11).optional(),
+  contractDurationMonths: durationMonthField(),
   durationWorkedYears: z.coerce.number().int().min(0).max(80).optional(),
-  durationWorkedMonths: z.coerce.number().int().min(0).max(11).optional(),
+  durationWorkedMonths: durationMonthField(),
   hrContactPhone: z.string().trim().optional(),
   governmentId: z.string().trim().optional().or(z.literal("")),
   salaryDate: z.string().trim().optional().or(z.literal("")),
-  monthlyIncome: z.coerce.number().gt(0),
+  monthlyIncome: moneyNumberField(z.coerce.number().gt(0)),
   bankName: z.string().trim().min(2),
   accountNumber: z.string().trim().min(3),
   branchCode: z.string().trim().min(2),
@@ -491,7 +531,65 @@ const pushActionHistory = (inquiry, entry) => {
 
 export const loanInquiryController = {
   createPublic: async (req, res) => {
-    const parsed = publicCreateSchema.safeParse(req.body || {});
+    const wantsVerifiedProfileReuse =
+      !!req.user && String(req.body?.reuseVerifiedKyc || "").toLowerCase() === "true";
+    const verifiedProfile = wantsVerifiedProfileReuse
+      ? await UserProfile.findOne({ userId: req.user._id })
+      : null;
+    const canReuseVerifiedProfile =
+      wantsVerifiedProfileReuse &&
+      verifiedProfile &&
+      String(verifiedProfile.kycStatus || "").toLowerCase() === "verified";
+
+    const requestBody = { ...(req.body || {}) };
+    if (canReuseVerifiedProfile) {
+      const profileAddress = [
+        verifiedProfile.addressLine1,
+        verifiedProfile.city,
+        verifiedProfile.district,
+      ]
+        .filter(Boolean)
+        .join(", ");
+
+      requestBody.fullName = requestBody.fullName || verifiedProfile.fullName || req.user.fullName;
+      requestBody.email = requestBody.email || verifiedProfile.email || req.user.email;
+      requestBody.phone = requestBody.phone || verifiedProfile.phone || req.user.phone;
+      requestBody.address = requestBody.address || profileAddress || verifiedProfile.addressLine1 || "Verified profile address";
+      requestBody.dateOfBirth = requestBody.dateOfBirth || "1990-01-01";
+      requestBody.gender = requestBody.gender || "male";
+      requestBody.maritalStatus = requestBody.maritalStatus || "single";
+      requestBody.dependants = requestBody.dependants || 0;
+      requestBody.housingStatus = requestBody.housingStatus || "tenant";
+      requestBody.employmentStatus = requestBody.employmentStatus || "employed";
+      requestBody.borrowerType = requestBody.borrowerType || "repeat";
+      requestBody.applicantNationalIdNumber = requestBody.applicantNationalIdNumber || verifiedProfile.governmentId || "Verified";
+      requestBody.applicantOccupation = requestBody.applicantOccupation || verifiedProfile.jobTitle || verifiedProfile.employmentType || "Verified customer";
+      requestBody.homeVillage = requestBody.homeVillage || "Verified";
+      requestBody.traditionalAuthority = requestBody.traditionalAuthority || "Verified";
+      requestBody.residenceDistrict = requestBody.residenceDistrict || verifiedProfile.district || "Malawi";
+      requestBody.employmentType = requestBody.employmentType || verifiedProfile.employmentType || "Verified customer";
+      requestBody.employerNameOrBusinessAddress = requestBody.employerNameOrBusinessAddress || verifiedProfile.employerNameOrBusinessAddress || verifiedProfile.businessName || "Verified profile";
+      requestBody.businessActivityNature = requestBody.businessActivityNature || verifiedProfile.businessActivityNature || undefined;
+      requestBody.jobTitle = requestBody.jobTitle || verifiedProfile.jobTitle || "Verified customer";
+      requestBody.employmentNumber = requestBody.employmentNumber || verifiedProfile.employmentNumber || "Verified";
+      requestBody.durationWorkedYears = requestBody.durationWorkedYears ?? verifiedProfile.durationWorkedYears ?? 0;
+      requestBody.durationWorkedMonths = requestBody.durationWorkedMonths ?? verifiedProfile.durationWorkedMonths ?? 0;
+      requestBody.hrContactPhone = requestBody.hrContactPhone || verifiedProfile.hrContactPhone || req.user.phone;
+      requestBody.salaryDate = requestBody.salaryDate || verifiedProfile.salaryDate || "1";
+      requestBody.monthlyIncome = requestBody.monthlyIncome || verifiedProfile.monthlyIncome || 0;
+      requestBody.bankName = requestBody.bankName || verifiedProfile.bankName || "Verified bank";
+      requestBody.accountHolderName = requestBody.accountHolderName || verifiedProfile.fullName || req.user.fullName;
+      requestBody.accountNumber = requestBody.accountNumber || verifiedProfile.accountNumber || "Verified";
+      requestBody.branchCode = requestBody.branchCode || verifiedProfile.branchCode || "Verified";
+      requestBody.reference1Name = requestBody.reference1Name || verifiedProfile.reference1Name || "Verified guarantor";
+      requestBody.reference1Phone = requestBody.reference1Phone || verifiedProfile.reference1Phone || req.user.phone;
+      requestBody.guarantorRelationship = requestBody.guarantorRelationship || verifiedProfile.guarantorRelationship || "Verified";
+      requestBody.guarantorNationalId = requestBody.guarantorNationalId || verifiedProfile.guarantorNationalId || "Verified";
+      requestBody.guarantorOccupation = requestBody.guarantorOccupation || verifiedProfile.guarantorOccupation || "Verified";
+      requestBody.guarantorHomeVillage = requestBody.guarantorHomeVillage || verifiedProfile.guarantorHomeVillage || "Verified";
+    }
+
+    const parsed = publicCreateSchema.safeParse(requestBody);
     if (!parsed.success) {
       return res.status(400).json({
         success: false,
@@ -501,7 +599,7 @@ export const loanInquiryController = {
       });
     }
 
-    const payload = parsed.data;
+    const payload = normalizeDurationPairs(parsed.data);
     const loanProductSlug = String(payload.loanProductSlug || "").trim().toLowerCase();
     const publicLoanType = PUBLIC_LOAN_TYPES.find((item) => item.slug === loanProductSlug);
     const loanProduct = await LoanProduct.findOne({ slug: loanProductSlug, status: "active" })
@@ -528,10 +626,10 @@ export const loanInquiryController = {
     const employmentType = String(payload.employmentType || "").trim().toLowerCase();
     const requiresPayslip = !(employmentType === "farmer" || employmentType === "self-employed");
 
-    if (!profilePhoto) {
+    if (!canReuseVerifiedProfile && !profilePhoto) {
       return res.status(400).json({ success: false, message: "Profile photo is required.", code: "AVATAR_REQUIRED" });
     }
-    if (!applicantNationalIdFile) {
+    if (!canReuseVerifiedProfile && !applicantNationalIdFile) {
       return res.status(400).json({ success: false, message: "Applicant national ID attachment is required.", code: "NATIONAL_ID_REQUIRED" });
     }
     if (!bankStatementFile) {
@@ -619,7 +717,7 @@ export const loanInquiryController = {
         {
           type: "inquiry_created",
           title: "Inquiry Created",
-          note: "Customer submitted a new loan inquiry with required documents.",
+          note: "Customer submitted a new loan inquiry with required documents. Verified customer profile was reused where available.",
           status: "KYC_SENT",
           actor: "Customer",
           createdAt: new Date(),
@@ -627,9 +725,14 @@ export const loanInquiryController = {
       ],
     });
 
-    const avatarPath = toPersistedUploadPath(profilePhoto.path, "inquiry-create-avatar");
-    inquiry.avatarPath = avatarPath;
-    inquiry.avatarUrl = toPublicUploadUrl(avatarPath);
+    if (profilePhoto) {
+      const avatarPath = toPersistedUploadPath(profilePhoto.path, "inquiry-create-avatar");
+      inquiry.avatarPath = avatarPath;
+      inquiry.avatarUrl = toPublicUploadUrl(avatarPath);
+    } else if (canReuseVerifiedProfile) {
+      inquiry.avatarPath = verifiedProfile.avatarPath || "";
+      inquiry.avatarUrl = verifiedProfile.avatarUrl || "";
+    }
 
     const docs = [];
     const pushDoc = (type, file) => {
@@ -643,7 +746,20 @@ export const loanInquiryController = {
       });
     };
 
-    pushDoc("national_id", applicantNationalIdFile);
+    if (applicantNationalIdFile) {
+      pushDoc("national_id", applicantNationalIdFile);
+    } else if (canReuseVerifiedProfile) {
+      const nationalIdDoc = (verifiedProfile.documents || []).find((doc) => doc?.type === "national_id");
+      if (nationalIdDoc) {
+        docs.push({
+          type: "national_id",
+          fileUrl: nationalIdDoc.fileUrl,
+          filePath: nationalIdDoc.filePath,
+          mime: nationalIdDoc.mime || "application/octet-stream",
+          uploadedAt: nationalIdDoc.uploadedAt || new Date(),
+        });
+      }
+    }
     pushDoc("bank_statement_3_months", bankStatementFile);
     if (requiresPayslip) pushDoc("payslip_or_business_proof", payslipFile);
     pushDoc("security_offer", collateralFile);
@@ -652,6 +768,7 @@ export const loanInquiryController = {
     syncInquiryCompletion(inquiry);
 
     await inquiry.save();
+    await syncInquiryToCustomerProfile(inquiry);
 
     return res.status(201).json({
       success: true,
@@ -695,7 +812,7 @@ export const loanInquiryController = {
         code: "NOT_FOUND",
       });
     }
-    const payload = parsed.data;
+    const payload = normalizeDurationPairs(parsed.data);
     const update = {
       addressLine1: payload.addressLine1,
       address: payload.addressLine1,
@@ -716,7 +833,7 @@ export const loanInquiryController = {
       hrContactPhone: payload.hrContactPhone,
       governmentId: payload.governmentId || "",
       salaryDate: payload.salaryDate || "",
-      monthlyIncome: Number(payload.monthlyIncome),
+      monthlyIncome: parseMoneyInput(payload.monthlyIncome),
       bankName: payload.bankName,
       accountNumber: payload.accountNumber,
       branchCode: payload.branchCode,
@@ -747,6 +864,7 @@ export const loanInquiryController = {
     const nextCompletion = calculateProfileCompletion(inquiry);
     inquiry.profileCompletion = nextCompletion;
     await inquiry.save();
+    await syncInquiryToCustomerProfile(inquiry);
 
     return res.json({
       success: true,
@@ -935,6 +1053,7 @@ export const loanInquiryController = {
       actor: "Customer",
     });
     await inquiry.save();
+    await syncInquiryToCustomerProfile(inquiry);
 
     return res.json({
       success: true,
@@ -1101,6 +1220,7 @@ export const loanInquiryController = {
 
     syncInquiryCompletion(doc);
     await doc.save();
+    await syncInquiryToCustomerProfile(doc);
 
     if (previousDoc?.filePath && fs.existsSync(previousDoc.filePath)) {
       try {
@@ -1144,6 +1264,7 @@ export const loanInquiryController = {
     doc.documents = (doc.documents || []).filter((entry) => entry.type !== type);
     syncInquiryCompletion(doc);
     await doc.save();
+    await syncInquiryToCustomerProfile(doc);
 
     if (previousDoc?.filePath && fs.existsSync(previousDoc.filePath)) {
       try {
@@ -1348,7 +1469,7 @@ export const loanInquiryController = {
             code: "DISBURSED_BY_REQUIRED",
           });
         }
-        const amount = Number(parsed.data.disbursementAmount ?? doc.disbursementAmount ?? doc.requestedAmount ?? 0);
+        const amount = parseMoneyInput(parsed.data.disbursementAmount ?? doc.disbursementAmount ?? doc.requestedAmount ?? 0);
         if (!amount || amount <= 0) {
           return res.status(400).json({
             success: false,
@@ -1595,6 +1716,7 @@ export const loanInquiryController = {
       disbursedBy: doc.disbursedBy,
     };
     await doc.save();
+    await syncInquiryToCustomerProfile(doc);
     await writeAdminAudit(req, {
       action: parsed.data.status ? "INQUIRY_STATUS_UPDATED" : loanProductChanged ? "INQUIRY_LOAN_TYPE_UPDATED" : "INQUIRY_DETAILS_UPDATED",
       targetType: "LoanInquiry",

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Circle } from "lucide-react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
+import { api } from "../services/api";
 import { useProfile, usePublicProfile } from "../hooks/useProfile";
 import { DocumentUpload, ProfileForm } from "../features/dashboard";
 
@@ -21,6 +22,9 @@ export default function DashboardProfilePage() {
   const [saveState, setSaveState] = useState(""); // "", "saving", "saved", "error"
   const [selectedEmploymentType, setSelectedEmploymentType] = useState("");
   const [showSavedModal, setShowSavedModal] = useState(false);
+  const [showKycUpdatePrompt, setShowKycUpdatePrompt] = useState(false);
+  const [requestingKycUpdate, setRequestingKycUpdate] = useState(false);
+  const [kycUpdateReason, setKycUpdateReason] = useState("");
   const [savedModalMode, setSavedModalMode] = useState("save");
   const [profileSectionsComplete, setProfileSectionsComplete] = useState(false);
   const [declarationAccepted, setDeclarationAccepted] = useState(false);
@@ -233,6 +237,25 @@ export default function DashboardProfilePage() {
     ? `/inquiries/access/${token}/avatar`
     : "/profile/me/avatar";
 
+  const startKycUpdateRequest = async () => {
+    setRequestingKycUpdate(true);
+    setUiError("");
+    setUiSuccess("");
+    try {
+      await api.post("/profile/me/request-kyc-update", {
+        reason: kycUpdateReason.trim(),
+      });
+      setShowKycUpdatePrompt(false);
+      setKycUpdateReason("");
+      setUiSuccess("KYC update request started. Update the details or documents that have changed, then submit them for admin review.");
+      await refresh();
+    } catch (err) {
+      setUiError(err?.response?.data?.message || err?.message || "Could not start the KYC update request.");
+    } finally {
+      setRequestingKycUpdate(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm sm:p-5">
@@ -260,6 +283,53 @@ export default function DashboardProfilePage() {
           </div>
         ) : null}
 
+        {showKycUpdatePrompt ? (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 px-4">
+            <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-700">
+                <CheckCircle2 size={26} />
+              </div>
+              <h3 className="mt-4 text-center text-xl font-bold text-slate-900">Request KYC update</h3>
+              <p className="mt-2 text-center text-sm leading-6 text-slate-600">
+                Use this only when your personal details or supporting documents have changed. Your profile will be opened for updates and sent back to the admin team for review after you submit.
+              </p>
+              <label className="mt-5 block text-sm font-semibold text-slate-700">
+                What would you like to update? <span className="font-normal text-slate-400">Optional</span>
+                <textarea
+                  value={kycUpdateReason}
+                  onChange={(event) => setKycUpdateReason(event.target.value)}
+                  rows={3}
+                  className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-900"
+                  placeholder="Example: I need to update my phone number, payslip, bank statement or guarantor details."
+                />
+              </label>
+              {uiError ? <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{uiError}</p> : null}
+              <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowKycUpdatePrompt(false)}
+                  disabled={requestingKycUpdate}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Keep current KYC
+                </button>
+                <button
+                  type="button"
+                  onClick={startKycUpdateRequest}
+                  disabled={requestingKycUpdate}
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {requestingKycUpdate ? "Starting update..." : "Start KYC update"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {uiSuccess ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{uiSuccess}</div>
+        ) : null}
+
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:p-8">
           <div className="mx-auto max-w-2xl text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
@@ -273,6 +343,24 @@ export default function DashboardProfilePage() {
                 ? "Your profile and KYC have been approved successfully."
                 : "Our team is currently reviewing your profile details and uploaded documents."}
             </p>
+
+            {isApproved ? (
+              <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm leading-6 text-emerald-800">
+                Your KYC is already approved. You do not need to redo it for a new loan unless your details or documents have changed.
+                <div className="mt-3 flex flex-wrap justify-center gap-2">
+                  <Link to="/dashboard/apply-loan" className="rounded-full bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800">
+                    Apply for a new loan
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setShowKycUpdatePrompt(true)}
+                    className="rounded-full border border-emerald-300 bg-white px-4 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100"
+                  >
+                    Request KYC update
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-6 grid gap-4 sm:grid-cols-3">
               <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">

@@ -7,6 +7,7 @@ import ComplaintsPage from "./components/Complaints/Complaints.jsx";
 import AccountsPage from "./components/Accounts/Accounts.jsx";
 import AccountDetailPage from "./components/Accounts/AccountDetail.jsx";
 import Dashboard from "./components/Dashboard/Dashboard.jsx";
+import CustomersPage from "./components/Customers/Customers.jsx";
 import InquiriesPage from "./components/Inquiries/Inquiries.jsx";
 import LoanApplicationsPage from "./components/LoanApplication/LoanApplication.jsx";
 import LoanApplicationDetailPage from "./components/LoanApplication/LoanApplicationDetail.jsx";
@@ -35,7 +36,7 @@ export default function AppRoutes() {
           <Route path="inquiries" element={<InquiriesPage />} />
           <Route path="loan-products" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN"]}><LoanProductsPage /></AdminProtectedRoute>} />
           <Route path="complaints" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "VERIFIER"]}><ComplaintsPage /></AdminProtectedRoute>} />
-          <Route path="customers" element={<Navigate to="/admin" replace />} />
+          <Route path="customers" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "VERIFIER", "APPROVAL", "AUTHORIZED", "DISBURSED"]}><CustomersPage /></AdminProtectedRoute>} />
           <Route path="compliance" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "VERIFIER"]}><CompliancePage /></AdminProtectedRoute>} />
           <Route path="user-access" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN"]}><UserAccessPage /></AdminProtectedRoute>} />
           <Route path="settings" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN"]}><SettingsPage /></AdminProtectedRoute>} />

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import AlinafeLogo from "../Navbar/AlinafeLogo.jsx";
+import RestockTechLogo from "../Brand/RestockTechLogo.jsx";
 
 const BRAND_NAVY = "#002D5B";
 const BRAND_GOLD = "#B38E46";
@@ -60,8 +61,9 @@ export default function SitePreloader({ visible = true }) {
                 Preparing your secure lending experience
               </p>
 
-              <div className="mt-5 inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-[11px] font-medium uppercase tracking-[0.22em] text-slate-500">
-                Financial Services
+              <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-4 py-2 shadow-sm">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">Powered by</span>
+                <RestockTechLogo className="h-8 w-auto" compact />
               </div>
             </div>
           </div>

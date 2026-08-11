@@ -1,6 +1,6 @@
 import { z } from "zod";
 import User from "../models/User.js";
-import { ADMIN_ROLES, normalizeRole } from "../utils/rbac.js";
+import { ADMIN_ROLES, ADMIN_DB_ROLE_VALUES, formatRole, normalizeRole } from "../utils/rbac.js";
 import { normalizeEmail, normalizePhone } from "../utils/normalize.js";
 import { writeAdminAudit } from "../utils/adminAudit.js";
 
@@ -27,11 +27,11 @@ const validAdminRole = (role) => ADMIN_ROLES.includes(normalizeRole(role));
 
 export const adminUserController = {
   list: async (req, res) => {
-    const users = await User.find({ role: { $in: ["admin", ...ADMIN_ROLES] } })
+    const users = await User.find({ role: { $in: ADMIN_DB_ROLE_VALUES } })
       .select("fullName email phone role isActive createdAt updatedAt")
       .sort({ createdAt: -1 })
       .lean();
-    return res.json({ success: true, data: users.map((u) => ({ ...u, role: normalizeRole(u.role) })) });
+    return res.json({ success: true, data: users.map((u) => ({ ...u, role: normalizeRole(u.role), roleLabel: formatRole(u.role) })) });
   },
 
   create: async (req, res) => {
@@ -66,7 +66,7 @@ export const adminUserController = {
     });
     return res.status(201).json({
       success: true,
-      data: { id: user._id, fullName: user.fullName, email: user.email, phone: user.phone, role: normalizeRole(user.role), isActive: user.isActive },
+      data: { id: user._id, fullName: user.fullName, email: user.email, phone: user.phone, role: normalizeRole(user.role), roleLabel: formatRole(user.role), isActive: user.isActive },
     });
   },
 
@@ -120,10 +120,10 @@ export const adminUserController = {
       targetType: "User",
       targetId: user._id,
       oldValue: { role: oldRole, isActive: targetUser.isActive },
-      newValue: { role: normalizeRole(user.role), isActive: user.isActive },
+      newValue: { role: normalizeRole(user.role), roleLabel: formatRole(user.role), isActive: user.isActive },
     });
 
-    return res.json({ success: true, data: { ...user.toObject(), role: normalizeRole(user.role) } });
+    return res.json({ success: true, data: { ...user.toObject(), role: normalizeRole(user.role), roleLabel: formatRole(user.role) } });
   },
 
   resetPassword: async (req, res) => {

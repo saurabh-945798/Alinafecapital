@@ -15,6 +15,7 @@ import { calculateQuote, clamp, generateSchedule } from "./pricingEngine";
 import { api } from "../../services/api";
 import { guardStartApplication } from "../../utils/applyGuard";
 import { useLoanProducts } from "../../hooks/useLoanProducts";
+import { formatMoneyInput, parseMoneyInput } from "../../utils/moneyInput";
 
 const BRAND_NAVY = "#002D5B";
 const BRAND_GOLD = "#B38E46";
@@ -238,7 +239,7 @@ const RepaymentCalculator = () => {
     }
 
     const defaultAmount = Math.round((activePricing.minAmount + activePricing.maxAmount) / 2);
-    setAmountInput(String(defaultAmount));
+    setAmountInput(formatMoneyInput(defaultAmount));
     setAmountError("");
     setTerm(activePricing.allowedTerms[0]);
   }, [activePricing]);
@@ -246,7 +247,7 @@ const RepaymentCalculator = () => {
   const validateAmount = (rawValue) => {
     if (!activePricing) return "Select a loan product first.";
     if (rawValue === "") return "Loan amount is required.";
-    const num = Number(rawValue);
+    const num = parseMoneyInput(rawValue, Number.NaN);
     if (!Number.isFinite(num)) return "Enter a valid numeric amount.";
     if (num < activePricing.minAmount)
       return `Minimum amount is ${formatMWK(activePricing.minAmount)}.`;
@@ -255,7 +256,7 @@ const RepaymentCalculator = () => {
     return "";
   };
 
-  const amountNumber = Number(amountInput);
+  const amountNumber = parseMoneyInput(amountInput, Number.NaN);
   const safeAmount =
     activePricing && Number.isFinite(amountNumber) && amountInput !== ""
       ? clamp(amountNumber, activePricing.minAmount, activePricing.maxAmount)
@@ -531,20 +532,20 @@ const RepaymentCalculator = () => {
             </label>
             <input
               id="loan-amount"
-              type="number"
-              min={activePricing?.minAmount || 0}
-              max={activePricing?.maxAmount || 0}
+              type="text"
+              inputMode="decimal"
               disabled={!activePricing}
               value={amountInput}
               onChange={(e) => {
-                setAmountInput(e.target.value);
-                setAmountError(validateAmount(e.target.value));
+                const value = formatMoneyInput(e.target.value);
+                setAmountInput(value);
+                setAmountError(validateAmount(value));
               }}
               onBlur={() => {
                 const error = validateAmount(amountInput);
                 setAmountError(error);
                 if (!error && activePricing) {
-                  setAmountInput(String(clamp(Number(amountInput), activePricing.minAmount, activePricing.maxAmount)));
+                  setAmountInput(formatMoneyInput(clamp(parseMoneyInput(amountInput, 0), activePricing.minAmount, activePricing.maxAmount)));
                 }
               }}
               className="mt-2 w-full border p-3 rounded-lg disabled:bg-slate-100"
@@ -563,7 +564,7 @@ const RepaymentCalculator = () => {
               disabled={!activePricing}
               value={safeAmount || 0}
               onChange={(e) => {
-                setAmountInput(e.target.value);
+                setAmountInput(formatMoneyInput(e.target.value));
                 setAmountError("");
               }}
               className="w-full mt-4"

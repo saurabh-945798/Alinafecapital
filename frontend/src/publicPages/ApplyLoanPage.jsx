@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, CircleHelp, PhoneCall, ShieldCheck } from "lucide-react";
 import { api } from "../services/api";
 import { useLoanProducts } from "../hooks/useLoanProducts";
+import { formatMoneyInput, parseMoneyInput } from "../utils/moneyInput";
 
 const BRAND_NAVY = "#002D5B";
 
@@ -103,8 +104,8 @@ const ApplyLoanPage = () => {
               "",
             monthlyIncome:
               prev.monthlyIncome ||
-              (isVerifiedProfileReady ? String(profile?.monthlyIncome || "") : "") ||
-              String(currentUser?.monthlyIncome || ""),
+              (isVerifiedProfileReady ? formatMoneyInput(profile?.monthlyIncome || "") : "") ||
+              formatMoneyInput(currentUser?.monthlyIncome || ""),
             employmentType:
               prev.employmentType === "Government Employee" && isVerifiedProfileReady
                 ? profile?.employmentType || prev.employmentType
@@ -129,7 +130,7 @@ const ApplyLoanPage = () => {
     setFormData((prev) => ({
       ...prev,
       loanProductSlug: prev.loanProductSlug || selected.slug || defaultProductSlug,
-      loanAmount: prev.loanAmount || selected.amount || "",
+      loanAmount: prev.loanAmount || formatMoneyInput(selected.amount || ""),
       tenureMonths: prev.tenureMonths || selected.term || "",
     }));
   }, [selected.slug, selected.term, selected.amount, defaultProductSlug]);
@@ -160,13 +161,13 @@ const ApplyLoanPage = () => {
 
     setFormData((prev) => {
       let nextAmount = prev.loanAmount;
-      const amountNum = Number(prev.loanAmount);
+      const amountNum = parseMoneyInput(prev.loanAmount, Number.NaN);
       if (!Number.isFinite(amountNum) || prev.loanAmount === "") {
-        nextAmount = String(minAmount);
+        nextAmount = formatMoneyInput(minAmount);
       } else if (amountNum < minAmount) {
-        nextAmount = String(minAmount);
+        nextAmount = formatMoneyInput(minAmount);
       } else if (amountNum > maxAmount) {
-        nextAmount = String(maxAmount);
+        nextAmount = formatMoneyInput(maxAmount);
       }
 
       let nextTenure = prev.tenureMonths;
@@ -194,6 +195,10 @@ const ApplyLoanPage = () => {
       setFormData((prev) => ({ ...prev, phoneNumber: local }));
       return;
     }
+    if (name === "loanAmount" || name === "monthlyIncome") {
+      setFormData((prev) => ({ ...prev, [name]: formatMoneyInput(value) }));
+      return;
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -213,8 +218,8 @@ const ApplyLoanPage = () => {
       fullName: formData.fullName.trim(),
       phone: `+265${formData.phoneNumber.replace(/\D/g, "")}`,
       email: (formData.email || currentUser?.email || "").trim() || undefined,
-      monthlyIncome: Number(formData.monthlyIncome),
-      amount: Number(formData.loanAmount),
+      monthlyIncome: parseMoneyInput(formData.monthlyIncome, Number.NaN),
+      amount: parseMoneyInput(formData.loanAmount, Number.NaN),
       tenureMonths: Number(formData.tenureMonths),
     };
 
@@ -241,7 +246,7 @@ const ApplyLoanPage = () => {
       const maxTenure = Number(selectedLoanProduct.maxTenureMonths || minTenure);
 
       if (payload.amount < minAmount || payload.amount > maxAmount) {
-        throw new Error(`Loan amount must be between ${minAmount} and ${maxAmount}.`);
+        throw new Error(`Loan amount must be between MWK ${Number(minAmount).toLocaleString("en-US")} and MWK ${Number(maxAmount).toLocaleString("en-US")}.`);
       }
       if (payload.tenureMonths < minTenure || payload.tenureMonths > maxTenure) {
         throw new Error(`Tenure must be between ${minTenure} and ${maxTenure} months.`);
@@ -462,12 +467,11 @@ const ApplyLoanPage = () => {
                   <label className="text-sm font-medium text-slate-700 md:col-span-2">
                     Loan Amount (MWK)
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       name="loanAmount"
                       value={formData.loanAmount}
                       onChange={handleChange}
-                      min={selectedLoanProduct?.minAmount ?? 0}
-                      max={selectedLoanProduct?.maxAmount ?? undefined}
                       required
                       className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-[#002D5B] focus:ring-2 focus:ring-[#002D5B]/20"
                     />
@@ -530,7 +534,8 @@ const ApplyLoanPage = () => {
                   <label className="text-sm font-medium text-slate-700">
                     Monthly Income (MWK)
                     <input
-                      type="number"
+                      type="text"
+                      inputMode="decimal"
                       name="monthlyIncome"
                       value={formData.monthlyIncome}
                       onChange={handleChange}
@@ -598,13 +603,13 @@ const ApplyLoanPage = () => {
                 <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Phone:</span> +265{formData.phoneNumber || "-"}</p>
                 <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Email:</span> {formData.email || "-"}</p>
                 <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Employment:</span> {formData.employmentType || "-"}</p>
-                <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Monthly Income:</span> MWK {Number(formData.monthlyIncome || 0).toLocaleString("en-US")}</p>
+                <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Monthly Income:</span> MWK {parseMoneyInput(formData.monthlyIncome, 0).toLocaleString("en-US")}</p>
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Loan Request</p>
                 <p className="mt-2 text-sm text-slate-800"><span className="font-semibold">Product:</span> {selectedLoanProduct?.loanName || "-"}</p>
-                <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Amount:</span> MWK {Number(formData.loanAmount || 0).toLocaleString("en-US")}</p>
+                <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Amount:</span> MWK {parseMoneyInput(formData.loanAmount, 0).toLocaleString("en-US")}</p>
                 <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Tenure:</span> {formData.tenureMonths || "-"} months</p>
                 <p className="mt-1 text-sm text-slate-800"><span className="font-semibold">Category:</span> {selected.category || "-"}</p>
               </div>
