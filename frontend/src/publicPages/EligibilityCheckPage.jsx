@@ -1,17 +1,21 @@
 ﻿import { useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, XCircle } from "lucide-react";
+import { formatMoneyInput, parseMoneyInput } from "../utils/moneyInput";
 
 const BRAND_NAVY = "#002D5B";
 const BRAND_GOLD = "#B38E46";
 
 const EligibilityCheckPage = () => {
-  const [monthlyIncome, setMonthlyIncome] = useState(0);
-  const [existingLoanEMI, setExistingLoanEMI] = useState(0);
-  const [desiredLoanAmount, setDesiredLoanAmount] = useState(0);
+  const [monthlyIncome, setMonthlyIncome] = useState("");
+  const [existingLoanEMI, setExistingLoanEMI] = useState("");
+  const [desiredLoanAmount, setDesiredLoanAmount] = useState("");
 
   const result = useMemo(() => {
-    const emi = desiredLoanAmount > 0 ? (desiredLoanAmount * 0.06) + (desiredLoanAmount / 6) : 0;
-    const disposable = Math.max(0, monthlyIncome - existingLoanEMI);
+    const desired = parseMoneyInput(desiredLoanAmount, 0);
+    const income = parseMoneyInput(monthlyIncome, 0);
+    const existingEmi = parseMoneyInput(existingLoanEMI, 0);
+    const emi = desired > 0 ? (desired * 0.06) + (desired / 6) : 0;
+    const disposable = Math.max(0, income - existingEmi);
     const eligible = emi > 0 ? disposable >= emi : false;
 
     return { emi, eligible, disposable };
@@ -32,9 +36,10 @@ const EligibilityCheckPage = () => {
             <label className="text-sm font-medium text-gray-700">
               Monthly Income (MWK)
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={monthlyIncome}
-                onChange={(e) => setMonthlyIncome(Number(e.target.value) || 0)}
+                onChange={(e) => setMonthlyIncome(formatMoneyInput(e.target.value))}
                 className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-[#002D5B] focus:ring-2 focus:ring-[#002D5B]/20"
               />
             </label>
@@ -42,9 +47,10 @@ const EligibilityCheckPage = () => {
             <label className="text-sm font-medium text-gray-700">
               Existing Loan EMI (MWK)
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={existingLoanEMI}
-                onChange={(e) => setExistingLoanEMI(Number(e.target.value) || 0)}
+                onChange={(e) => setExistingLoanEMI(formatMoneyInput(e.target.value))}
                 className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-[#002D5B] focus:ring-2 focus:ring-[#002D5B]/20"
               />
             </label>
@@ -52,9 +58,10 @@ const EligibilityCheckPage = () => {
             <label className="text-sm font-medium text-gray-700 sm:col-span-2">
               Desired Loan Amount (MWK)
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={desiredLoanAmount}
-                onChange={(e) => setDesiredLoanAmount(Number(e.target.value) || 0)}
+                onChange={(e) => setDesiredLoanAmount(formatMoneyInput(e.target.value))}
                 className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-3 outline-none focus:border-[#002D5B] focus:ring-2 focus:ring-[#002D5B]/20"
               />
             </label>

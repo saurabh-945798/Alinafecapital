@@ -1,0 +1,31 @@
+ALINAFE CAPITAL - STAFF ROLE / LIMITED ACCESS UPDATE VALIDATION
+Date: 29 September 2026
+
+PASSED
+- Backend JavaScript syntax validation passed: 126 files.
+- Combined financial, Risk Assessment and RBAC regression tests passed: 16/16.
+- Admin/customer JavaScript and JSX parsing passed: 126 source files.
+- Local admin/customer import/export resolution passed: 323 paths checked, none missing.
+- Multi-role access is evaluated from all assigned roles while keeping a primary role for backwards compatibility.
+- Auditor + operational role combinations are blocked.
+- Staff role changes revoke the existing refresh session so updated rights require a fresh sign-in.
+- Backend route checks cover applications, inquiries, customers, KYC, accounts, payments, finance, complaints, analytics, audit and settings-related navigation.
+- Inquiry/application responses remove sensitive fields according to role.
+- KYC file delivery now checks both the staff role and document type.
+- Payment POP delivery remains limited to Super Admin, Payment Verification, Finance/Reconciliation and Auditor, plus the owning customer.
+- Admin application detail editing is restricted to Super Admin in the UI; KYC document changes are limited to Super Admin/KYC Verification.
+- Approved staff-email mapping is supplied in backend/scripts/assignAlinafeStaffRoles.js. The script performs a dry run unless --apply is explicitly supplied.
+- Akuzike Chidula receives Credit Approver only; independent Auditor access remains unassigned until a separate account is nominated.
+- Restock Tech Technical Support is not auto-assigned unless RESTOCK_TECH_SUPPORT_EMAIL is configured.
+- Final source scan found no live .env files, customer CSVs, Git history, node_modules, uploaded KYC/POP folders, private keys or live MongoDB credentials.
+- backend/frontend/admin package manifests match their lockfile root dependency declarations.
+
+STAFF ACCOUNT NOTE
+- The supplied workbook does not contain the phone numbers and initial passwords required for creating missing users. The role-assignment script updates existing matching accounts only. Missing accounts must first be created by Super Admin using Admin > User Access.
+
+SANITIZATION REQUIREMENTS FOR EXPORT
+- Exclude live .env files, node_modules, Git history, customer/KYC/POP uploads, CSV exports, logs, caches and build output.
+
+DEPLOYMENT NOTE
+- Run npm ci in backend/frontend/admin and npm run build in frontend/admin on the test/deployment computer before production.
+- Run npm run staff:roles from backend for a dry-run role preview. After review, run npm run staff:roles:apply against the intended environment database.

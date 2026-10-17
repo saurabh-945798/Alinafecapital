@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import supportLocalImage from "../../assets/alinafe-support-local.png";
 const BRAND_NAVY = "#002D5B";
 const BRAND_GOLD = "#B38E46";
 const AUTOPLAY_INTERVAL = 3200;
@@ -41,7 +42,7 @@ const slides = [
   },
   {
     id: 4,
-    image: "https://www.urban.org/sites/default/files/2024-02/GettyImages-1346691472_crop.jpg",
+    image: supportLocalImage,
     badge: "Local Support",
     headline: "Get support across branches and follow-up channels",
     highlight: "Closer to customers in Malawi",
@@ -195,6 +196,12 @@ const Hero = () => {
                       src={slide.image}
                       alt={slide.headline}
                       loading={current === 0 ? "eager" : "lazy"}
+                      onError={(event) => {
+                        if (event.currentTarget.dataset.fallbackApplied !== "true") {
+                          event.currentTarget.dataset.fallbackApplied = "true";
+                          event.currentTarget.src = supportLocalImage;
+                        }
+                      }}
                       className="h-full w-full object-contain"
                     />
                   </motion.div>

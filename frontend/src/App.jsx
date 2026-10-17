@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import Navbar from "./components/Navbar/Navbar.jsx";
 import SitePreloader from "./components/Preloader/SitePreloader.jsx";
+import TransitionOverlay from "./components/Preloader/TransitionOverlay.jsx";
 import Hero from "./components/Hero/Hero.jsx";
 import LoanProducts from "./components/LoanProducts/LoanProducts.jsx";
 import LoanProductDetailsPage from "./components/LoanProducts/LoanProductDetailsPage.jsx";
@@ -18,6 +19,8 @@ import Eligibility from "./components/Eligibility/Eligibility.jsx";
 import Complaints from "./components/Complaints/Complaints.jsx";
 import Terms from "./components/Terms/Terms.jsx";
 import Privacy from "./components/Privacy/Privacy.jsx";
+import CustomerLoginPage from "./auth/CustomerLoginPage.jsx";
+import CustomerRegisterPage from "./auth/CustomerRegisterPage.jsx";
 import LoanInquiryPage from "./publicPages/LoanInquiryPage.jsx";
 import EligibilityCheckPage from "./publicPages/EligibilityCheckPage.jsx";
 import FAQPage from "./publicPages/FAQPage.jsx";
@@ -36,6 +39,8 @@ import DashboardSchedulePage from "./dashboard/DashboardSchedulePage.jsx";
 import DashboardHelpCenterPage from "./dashboard/DashboardHelpCenterPage.jsx";
 import DashboardContactOfficerPage from "./dashboard/DashboardContactOfficerPage.jsx";
 import DashboardAccountInfoPage from "./dashboard/DashboardAccountInfoPage.jsx";
+import MastercardRepaymentPage from "./payments/MastercardRepaymentPage.jsx";
+import { useAuth } from "./context/AuthContext.jsx";
 
 const Layout = ({ children, noNavbar = false }) => (
   <div className="bg-white min-h-screen">
@@ -44,6 +49,21 @@ const Layout = ({ children, noNavbar = false }) => (
     <Footer />
   </div>
 );
+
+
+const ApplyAccessGate = () => {
+  const { isAuthenticated, isChecking } = useAuth();
+  const location = useLocation();
+
+  if (isChecking) return <div className="p-6 text-sm text-slate-500">Preparing application access...</div>;
+
+  if (!isAuthenticated) {
+    const next = `${location.pathname}${location.search || ""}`;
+    return <Navigate to={`/register?next=${encodeURIComponent(next)}&intent=apply`} replace />;
+  }
+
+  return <LoanInquiryPage />;
+};
 
 const HomePage = () => (
   <>
@@ -57,7 +77,9 @@ const HomePage = () => (
 );
 
 function App() {
+  const location = useLocation();
   const [showPreloader, setShowPreloader] = useState(true);
+  const [routeLoading, setRouteLoading] = useState(false);
 
   useEffect(() => {
     const minDurationTimer = window.setTimeout(() => {
@@ -69,9 +91,17 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (showPreloader) return undefined;
+    setRouteLoading(true);
+    const timer = window.setTimeout(() => setRouteLoading(false), 420);
+    return () => window.clearTimeout(timer);
+  }, [location.pathname, showPreloader]);
+
   return (
     <>
       <SitePreloader visible={showPreloader} />
+      <TransitionOverlay visible={!showPreloader && routeLoading} title="Opening your page" message="Preparing the next screen for you." />
       <Routes>
         <Route
           path="/"
@@ -81,10 +111,29 @@ function App() {
             </Layout>
           }
         />
-
         <Route path="/home" element={<Navigate to="/" replace />} />
 
-        <Route element={<ProtectedRoute />}>
+        <Route
+          path="/login"
+          element={
+            <Layout noNavbar>
+              <CustomerLoginPage />
+            </Layout>
+          }
+        />
+        <Route path="/customer/login" element={<Navigate to="/login" replace />} />
+        <Route
+          path="/register"
+          element={
+            <Layout noNavbar>
+              <CustomerRegisterPage />
+            </Layout>
+          }
+        />
+        <Route path="/customer/register" element={<Navigate to="/register" replace />} />
+
+        <Route element={<ProtectedRoute />}> 
+          <Route path="/payments/mastercard/repayments/:paymentId" element={<MastercardRepaymentPage />} />
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<Dashboard />} />
             <Route path="quick-actions" element={<DashboardQuickActionsPage />} />
@@ -164,7 +213,7 @@ function App() {
           path="/apply"
           element={
             <Layout noNavbar>
-              <LoanInquiryPage />
+              <ApplyAccessGate />
             </Layout>
           }
         />
@@ -193,10 +242,7 @@ function App() {
             </Layout>
           }
         />
-        <Route
-          path="/faqs"
-          element={<Navigate to="/faq" replace />}
-        />
+        <Route path="/faqs" element={<Navigate to="/faq" replace />} />
         <Route
           path="/complaints"
           element={

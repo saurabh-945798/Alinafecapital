@@ -243,17 +243,18 @@ export default function DashboardMyApplicationsPage() {
               <th className="p-4 text-left">Amount</th>
               <th className="p-4 text-left">Created</th>
               <th className="p-4 text-left">Status</th>
+              <th className="p-4 text-left">Loan Account</th>
               <th className="p-4 text-left">Action</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="p-4 text-slate-500">Loading applications...</td>
+                <td colSpan={7} className="p-4 text-slate-500">Loading applications...</td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-6 text-center text-slate-500">
+                <td colSpan={7} className="p-6 text-center text-slate-500">
                   No applications yet. <Link to="/dashboard/apply-loan" className="underline">Start New Application</Link>
                 </td>
               </tr>
@@ -265,14 +266,27 @@ export default function DashboardMyApplicationsPage() {
                     key={app._id}
                     className={`border-t ${isCreated ? "bg-emerald-50/50" : "hover:bg-slate-50"}`}
                   >
-                    <td className="p-4 text-xs">{app._id}</td>
-                    <td className="p-4">{app.productSlug || "-"}</td>
+                    <td className="p-4 text-xs">{app.applicationCode || app._id}</td>
+                    <td className="p-4">{app.productName || app.loanProductName || app.productSlug || "-"}</td>
                     <td className="p-4">{money(app.requestedAmount)}</td>
                     <td className="p-4">{formatDate(app.createdAt)}</td>
                     <td className="p-4">
                       <span className={statusBadgeClass(app.status)}>
                         {STATUS_LABEL[app.status] || app.status}
                       </span>
+                    </td>
+                    <td className="p-4">
+                      {app.loanAccountId ? (
+                        <Link
+                          to="/dashboard/repayments"
+                          state={{ accountId: app.loanAccountId, source: "application" }}
+                          className="font-medium text-[#002D5B] hover:underline"
+                        >
+                          {app.loanAccountNumber || "Open Loan Account"}
+                        </Link>
+                      ) : (
+                        <span className="text-xs text-slate-400">Not created yet</span>
+                      )}
                     </td>
                     <td className="p-4">
                       <button
@@ -343,17 +357,20 @@ export default function DashboardMyApplicationsPage() {
               <div className="grid gap-3 md:grid-cols-3 text-sm">
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-slate-500">Product</p>
-                  <p className="font-semibold">{selected.productSlug || "-"}</p>
+                  <p className="font-semibold">{selected.productName || selected.loanProductName || selected.productSlug || "-"}</p>
                   <p className="text-xs text-slate-500 mt-1">Amount</p>
                   <p>{money(selected.requestedAmount)}</p>
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-slate-500">Tenure</p>
-                  <p className="font-semibold">{selected.tenureMonths} months</p>
+                  <p className="font-semibold">{selected.tenureMonths || selected.preferredTenureMonths || "-"} months</p>
                   <p className="text-xs text-slate-500 mt-1">Status</p>
                   <span className={statusBadgeClass(selected.status)}>
                     {STATUS_LABEL[selected.status] || selected.status}
                   </span>
+                  {selected.rawStatus && selected.rawStatus !== selected.status ? (
+                    <p className="mt-2 text-xs text-slate-500">Admin stage: {selected.rawStatus}</p>
+                  ) : null}
                 </div>
                 <div className="rounded-lg border p-3">
                   <p className="text-xs text-slate-500">Created</p>
@@ -362,6 +379,32 @@ export default function DashboardMyApplicationsPage() {
                   <p>{formatDate(selected.updatedAt)}</p>
                 </div>
               </div>
+
+              {selected.loanAccountId ? (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Loan Account Created</p>
+                      <p className="mt-1 font-semibold text-slate-900">
+                        {selected.loanAccountNumber || "Your disbursed loan account is ready"}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        This application is linked to your active repayment account.
+                        {Number(selected.outstandingBalance || 0) > 0
+                          ? ` Outstanding balance: ${money(selected.outstandingBalance)}.`
+                          : ""}
+                      </p>
+                    </div>
+                    <Link
+                      to="/dashboard/repayments"
+                      state={{ accountId: selected.loanAccountId, source: "application" }}
+                      className="inline-flex shrink-0 items-center justify-center rounded-xl bg-[#002D5B] px-4 py-2 text-sm font-semibold text-white hover:bg-[#001f40]"
+                    >
+                      Open Loan Account
+                    </Link>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="rounded-lg border p-3">
                 <h3 className="text-sm font-semibold mb-2">Status Timeline</h3>

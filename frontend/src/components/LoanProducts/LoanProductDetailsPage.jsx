@@ -205,7 +205,17 @@ const getProductDetails = (product) => {
     ],
   };
 
-  return { ...defaults, ...(detailsBySlug[product.slug] || {}) };
+  const merged = { ...defaults, ...(detailsBySlug[product.slug] || {}) };
+  return {
+    ...merged,
+    feesAndDisclosures: [
+      `Indicative pricing: ${product.interestRate}`,
+      "Processing Fee: 2.5% once at the beginning of the loan (not monthly)",
+      "Admin Fee: 2.5% once at the beginning of the loan (not monthly)",
+      "Overdue installment penalty: 15% when a scheduled payment remains unpaid after its due date",
+      "Final offer depends on profile, affordability, KYC and risk assessment",
+    ],
+  };
 };
 
 const getProductVisual = (product) =>

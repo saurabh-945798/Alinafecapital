@@ -1,4 +1,4 @@
-﻿export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 export function calculateReducing(principal, monthlyRate, months) {
   if (principal <= 0 || months <= 0 || monthlyRate <= 0) {
@@ -51,6 +51,10 @@ export function calculateQuote({
   adminFeeRate = 0,
   adminFeeFlat = 0,
   monthlyAdminFee = 0,
+  insuranceType = "none",
+  insuranceRate = 0,
+  insuranceFlat = 0,
+  taxRate = 0,
 }) {
   const processingFee = processingFeeEnabled
     ? processingFeeType === "flat"
@@ -61,6 +65,13 @@ export function calculateQuote({
     adminFeeType === "percent"
       ? principal * Number(adminFeeRate || 0)
       : Number(adminFeeFlat || 0);
+  const insurance =
+    insuranceType === "percent"
+      ? principal * Number(insuranceRate || 0)
+      : insuranceType === "flat"
+      ? Number(insuranceFlat || 0)
+      : 0;
+  const tax = (processingFee + insurance) * Number(taxRate || 0);
 
   const base =
     rateType === "reducing"
@@ -70,19 +81,20 @@ export function calculateQuote({
       : calculateFeeOnly(principal, months, processingFee);
 
   const totalAdminFees = oneTimeAdminFee + Number(monthlyAdminFee || 0) * months;
-  const totalWithFees =
-    rateType === "fee_only"
-      ? base.totalPayment + totalAdminFees
-      : base.totalPayment + processingFee + totalAdminFees;
+  const totalWithFees = base.totalPayment + processingFee + insurance + tax + totalAdminFees;
   const recurringMonthlyDue = base.emi + Number(monthlyAdminFee || 0);
   const firstMonthDue =
     recurringMonthlyDue +
     Number(oneTimeAdminFee || 0) +
-    (rateType === "fee_only" ? 0 : Number(processingFee || 0));
+    Number(processingFee || 0) +
+    Number(insurance || 0) +
+    Number(tax || 0);
 
   return {
     ...base,
     processingFee,
+    insurance,
+    tax,
     oneTimeAdminFee,
     monthlyAdminFee: Number(monthlyAdminFee || 0),
     totalAdminFees,
@@ -99,7 +111,9 @@ export function generateSchedule(
   rateType,
   processingFee = 0,
   monthlyAdminFee = 0,
-  oneTimeAdminFee = 0
+  oneTimeAdminFee = 0,
+  insurance = 0,
+  tax = 0
 ) {
   const schedule = [];
 
@@ -130,12 +144,14 @@ export function generateSchedule(
         emi +
         Number(monthlyAdminFee || 0) +
         (i === 1
-          ? Number(oneTimeAdminFee || 0) + (rateType === "fee_only" ? 0 : Number(processingFee || 0))
+          ? Number(oneTimeAdminFee || 0) + Number(processingFee || 0) + Number(insurance || 0) + Number(tax || 0)
           : 0),
       principalPaid,
       interest,
       adminFee: Number(monthlyAdminFee || 0) + (i === 1 ? Number(oneTimeAdminFee || 0) : 0),
-      processingFee: i === 1 && rateType !== "fee_only" ? Number(processingFee || 0) : 0,
+      processingFee: i === 1 ? Number(processingFee || 0) : 0,
+      insurance: i === 1 ? Number(insurance || 0) : 0,
+      tax: i === 1 ? Number(tax || 0) : 0,
       balance: balance > 0 ? balance : 0,
     });
   }

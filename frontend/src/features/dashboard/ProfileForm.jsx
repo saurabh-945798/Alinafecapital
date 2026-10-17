@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../services/api";
 import { FILE_BASE_URL } from "../../config/api";
+import { formatMoneyInput, parseMoneyInput } from "../../utils/moneyInput";
 
 const BANK_OPTIONS = [
   "CDH Investment Bank (Limited)",
@@ -127,7 +128,7 @@ export default function ProfileForm({
       hrContactPhone: profile.hrContactPhone || "",
       governmentId: profile.governmentId || "",
       salaryDate: profile.salaryDate || "",
-      monthlyIncome: profile.monthlyIncome || "",
+      monthlyIncome: formatMoneyInput(profile.monthlyIncome || ""),
       bankNameOption: isKnownBank ? existingBankName : existingBankName ? "Other" : "",
       bankNameOther: isKnownBank ? "" : existingBankName,
       accountNumber: profile.accountNumber || "",
@@ -223,7 +224,7 @@ export default function ProfileForm({
       (!isGovernmentEmployee || !!String(form.governmentId || "").trim()) &&
       (!requiresSalaryDate || !!String(form.salaryDate || "").trim()) &&
       !!String(form.monthlyIncome || "").trim() &&
-      Number(form.monthlyIncome) > 0 &&
+      parseMoneyInput(form.monthlyIncome, 0) > 0 &&
       !!resolvedBankName &&
       (form.bankNameOption !== "Other" || !!String(form.bankNameOther || "").trim()) &&
       !!String(form.accountNumber || "").trim() &&
@@ -313,7 +314,7 @@ export default function ProfileForm({
       return "Please select date of salary.";
     }
     if (!String(form.monthlyIncome || "").trim()) return "Please enter your monthly income.";
-    if (Number(form.monthlyIncome) <= 0) return "Monthly income must be greater than zero.";
+    if (parseMoneyInput(form.monthlyIncome, 0) <= 0) return "Monthly income must be greater than zero.";
     if (!resolvedBankName) return "Please select your bank name.";
     if (form.bankNameOption === "Other" && !String(form.bankNameOther || "").trim()) {
       return "Please enter your bank name.";
@@ -401,7 +402,7 @@ export default function ProfileForm({
         hrContactPhone: isBusiness || isFarmer ? undefined : form.hrContactPhone,
         governmentId: isGovernmentEmployee ? form.governmentId : undefined,
         salaryDate: requiresSalaryDate ? form.salaryDate : undefined,
-        monthlyIncome: form.monthlyIncome === "" ? undefined : Number(form.monthlyIncome),
+        monthlyIncome: form.monthlyIncome === "" ? undefined : parseMoneyInput(form.monthlyIncome),
         bankName: resolvedBankName,
         accountNumber: form.accountNumber,
         branchCode: form.branchCode,
@@ -883,11 +884,11 @@ export default function ProfileForm({
             <span className="text-sm font-medium text-slate-700">Monthly Income (MWK)</span>
             <input
               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-              placeholder="Example: 350000"
-              type="number"
-              min="0"
+              placeholder="Example: 350,000"
+              type="text"
+              inputMode="decimal"
               value={form.monthlyIncome}
-              onChange={(e) => setForm((p) => ({ ...p, monthlyIncome: e.target.value }))}
+              onChange={(e) => setForm((p) => ({ ...p, monthlyIncome: formatMoneyInput(e.target.value) }))}
               required
             />
           </label>

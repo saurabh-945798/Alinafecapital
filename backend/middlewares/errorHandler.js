@@ -1,5 +1,6 @@
-﻿import { ApiError } from "../utils/ApiError.js";
+import { ApiError } from "../utils/ApiError.js";
 import { ZodError } from "zod";
+import { sanitizeForLog } from "../utils/paymentSecurity.js";
 
 export const errorHandler = (err, req, res, next) => {
   let statusCode = err instanceof ApiError ? err.statusCode : 500;
@@ -33,11 +34,21 @@ export const errorHandler = (err, req, res, next) => {
     message = `${dupField} already exists`;
   }
 
-  if (statusCode >= 500) {
+  if (err?.errorCode === "CORS_ORIGIN_NOT_ALLOWED") {
+    statusCode = err.statusCode || 403;
+    errorCode = "CORS_ORIGIN_NOT_ALLOWED";
+    message = err.message || "CORS origin not allowed";
+  }
+
+  // Keep intentional ApiError messages visible even for 5xx service errors
+  // such as MPGS configuration or gateway connectivity failures. Only hide
+  // unexpected programming/runtime errors behind a generic message.
+  if (statusCode >= 500 && !(err instanceof ApiError)) {
     message = "Internal server error";
   }
 
-  console.error("Error:", err);
+  // Never print raw card/payment payloads to the terminal or log files.
+  console.error("Error:", sanitizeForLog(err));
 
   res.status(statusCode).json({
     success: false,

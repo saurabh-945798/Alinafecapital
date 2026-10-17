@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="96" viewBox="0 0 360 96" role="img" aria-labelledby="title desc">
+  <title id="title">Restock Tech</title>
+  <desc id="desc">Restock Tech brand mark</desc>
+  <defs>
+    <linearGradient id="rtg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0B1B3A"/>
+      <stop offset="58%" stop-color="#002D5B"/>
+      <stop offset="100%" stop-color="#B38E46"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="3" width="90" height="90" rx="24" fill="url(#rtg)"/>
+  <path d="M26 66V28h27c10 0 16 5 16 13 0 6-3 10-9 12l12 13H58L47 54h-9v12H26Zm12-22h14c3 0 5-2 5-4s-2-4-5-4H38v8Z" fill="#fff"/>
+  <path d="M69 29h17v10H73v27H61V39H48V29h21Z" fill="#D4AF37" opacity=".95"/>
+  <text x="112" y="45" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="800" fill="#0B1B3A">Restock Tech</text>
+  <text x="114" y="68" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="4" fill="#B38E46">DIGITAL SOLUTIONS</text>
+</svg>

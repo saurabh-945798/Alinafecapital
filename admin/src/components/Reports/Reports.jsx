@@ -56,8 +56,8 @@ export default function ReportsPage() {
   useEffect(() => {
     let active = true;
 
-    const load = async () => {
-      setLoading(true);
+    const load = async ({ quiet = false } = {}) => {
+      if (!quiet) setLoading(true);
       setError("");
       try {
         const first = await accountsApi.list({ page: 1, limit: 100, status: "ALL" });
@@ -77,19 +77,21 @@ export default function ReportsPage() {
         const extra = chunks.flatMap((entry) => (Array.isArray(entry?.items) ? entry.items : []));
         if (active) setAllAccounts([...firstItems, ...extra]);
       } catch (err) {
-        if (active) {
+        if (active && !quiet) {
           const msg = err?.response?.data?.message || "Failed to load reports.";
           setError(msg);
           toast.error(msg);
         }
       } finally {
-        if (active) setLoading(false);
+        if (active && !quiet) setLoading(false);
       }
     };
 
     load();
+    const timer = window.setInterval(() => load({ quiet: true }), 30000);
     return () => {
       active = false;
+      window.clearInterval(timer);
     };
   }, []);
 
@@ -294,6 +296,72 @@ export default function ReportsPage() {
     }
   };
 
+  const exportExcel = () => {
+    try {
+      const summaryRows = [
+        ["Metric", "Value"],
+        ["Total Disbursed", summary.totalDisbursed],
+        ["Total Collected", summary.totalCollected],
+        ["Total Outstanding", summary.totalOutstanding],
+        ["Overdue Accounts", summary.overdueAccounts],
+        ["Overdue Amount", summary.overdueAmount],
+        ["Collection Rate", `${summary.collectionRate.toFixed(1)}%`],
+      ];
+
+      const monthlyRows = [
+        ["Month", "Disbursed", "Collected", "Gap", "Profit"],
+        ...monthlyTableRows.map((row) => [
+          row.label,
+          Number(row.disbursed || 0),
+          Number(row.collected || 0),
+          Number(row.gap || 0),
+          Number(row.collected || 0) - Number(row.disbursed || 0),
+        ]),
+      ];
+
+      const recordRows = [
+        ["Account No", "Customer", "Loan Product", "Disbursed", "Collected", "Outstanding", "Next Due Date", "Status"],
+        ...filtered.map((item) => [
+          item?.accountNumber || "",
+          item?.customerName || "",
+          item?.loanProductName || item?.loanProductSlug || "",
+          Number(item?.disbursedAmount || 0),
+          Number(item?.totalPaidAmount || 0),
+          Number(item?.outstandingBalance || 0),
+          item?.nextDueDate ? new Date(item.nextDueDate).toISOString().slice(0, 10) : "",
+          item?.status || "",
+        ]),
+      ];
+
+      const table = (title, rows) => `
+        <h2>${title}</h2>
+        <table border="1">
+          ${rows.map((row, idx) => `<tr>${row.map((cell) => `<${idx === 0 ? "th" : "td"}>${String(cell ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;")}</${idx === 0 ? "th" : "td"}>`).join("")}</tr>`).join("")}
+        </table>
+      `;
+
+      const html = `
+        <html><head><meta charset="UTF-8" /></head><body>
+          <h1>Alinafe Capital Reconciliation Report</h1>
+          <p>Generated: ${new Date().toLocaleString()}</p>
+          ${table("Summary", summaryRows)}
+          ${table("Monthly Chart Data", monthlyRows)}
+          ${table("Loan Records", recordRows)}
+        </body></html>`;
+
+      const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `alinafe_reconciliation_${new Date().toISOString().slice(0, 10)}.xls`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success("Excel reconciliation export completed.");
+    } catch {
+      toast.error("Failed to export Excel report.");
+    }
+  };
+
   const printSummary = () => {
     try {
       setPdfLoading(true);
@@ -308,16 +376,18 @@ export default function ReportsPage() {
         <head>
           <title>Reports Summary</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
-            h1 { margin: 0 0 8px; }
-            .meta { color: #475569; margin-bottom: 20px; }
-            .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
-            .card { border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px; }
-            .label { font-size: 12px; text-transform: uppercase; color: #64748b; }
-            .val { font-size: 24px; font-weight: 700; margin-top: 6px; }
-            table { width: 100%; border-collapse: collapse; font-size: 12px; }
-            th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+            @page { size: landscape; margin: 14mm; }
+            body { font-family: Arial, sans-serif; padding: 0; color: #0f172a; }
+            h1 { margin: 0 0 8px; font-size: 22px; }
+            .meta { color: #475569; margin-bottom: 18px; font-size: 12px; }
+            .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+            .card { border: 1px solid #cbd5e1; border-radius: 10px; padding: 10px; break-inside: avoid; }
+            .label { font-size: 10px; text-transform: uppercase; color: #64748b; letter-spacing: 0.08em; }
+            .val { font-size: 18px; font-weight: 700; margin-top: 5px; }
+            table { width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed; }
+            th, td { border: 1px solid #e2e8f0; padding: 6px; text-align: left; word-break: break-word; }
             th { background: #f8fafc; }
+            @media print { .no-print { display: none; } }
           </style>
         </head>
         <body>
@@ -375,9 +445,17 @@ export default function ReportsPage() {
             Clean report view for disbursement, collection, and outstanding status.
           </p>
         </div>
-        <Button variant="outline" onClick={printSummary} disabled={pdfLoading}>
-          {pdfLoading ? "Preparing PDF..." : "Download Report (PDF)"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+            Live refresh every 30s
+          </span>
+          <Button variant="outline" className="min-w-[112px]" onClick={exportExcel}>
+            Export Excel
+          </Button>
+          <Button variant="outline" className="min-w-[128px]" onClick={printSummary} disabled={pdfLoading}>
+            {pdfLoading ? "Preparing PDF..." : "Download Report (PDF)"}
+          </Button>
+        </div>
       </div>
 
       {error ? (
@@ -476,7 +554,7 @@ export default function ReportsPage() {
             All Time
           </button>
         </div>
-        <div className="grid gap-3 lg:grid-cols-5">
+        <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1fr_auto] xl:items-end">
           <label className="space-y-1">
             <span className="text-xs font-medium text-slate-500">From Date</span>
             <input
@@ -530,11 +608,14 @@ export default function ReportsPage() {
               ))}
             </select>
           </label>
-          <div className="flex items-end gap-2">
-            <Button variant="outline" onClick={exportCsv} disabled={csvLoading}>
+          <div className="flex flex-wrap items-end gap-2 xl:min-w-[260px] xl:justify-end">
+            <Button variant="outline" className="min-w-[112px]" onClick={exportCsv} disabled={csvLoading}>
               {csvLoading ? "Exporting..." : "Export CSV"}
             </Button>
-            <Button variant="outline" onClick={printSummary} disabled={pdfLoading}>
+            <Button variant="outline" className="min-w-[112px]" onClick={exportExcel}>
+              Export Excel
+            </Button>
+            <Button variant="outline" className="min-w-[128px]" onClick={printSummary} disabled={pdfLoading}>
               {pdfLoading ? "Preparing..." : "Print Summary"}
             </Button>
           </div>

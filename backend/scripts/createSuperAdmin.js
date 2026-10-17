@@ -6,67 +6,49 @@ import { normalizePhone, isValidE164Phone, normalizeEmail } from "../utils/norma
 
 dotenv.config();
 
-const RAW_PHONE = "98765432";
-const PASSWORD = "Admin@123";
-
 const ROLE = "SUPER_ADMIN";
-const DEFAULT_FULL_NAME = "Super Admin";
-const DEFAULT_EMAIL = "superadmin@alinafecapital.com";
+const RAW_PHONE = String(process.env.SUPER_ADMIN_PHONE || "").trim();
+const PASSWORD = String(process.env.SUPER_ADMIN_PASSWORD || "");
+const FULL_NAME = String(process.env.SUPER_ADMIN_NAME || "Super Admin").trim();
+const EMAIL = normalizeEmail(process.env.SUPER_ADMIN_EMAIL || "");
 
 const run = async () => {
   try {
-    if (!process.env.MONGO_URI) {
-      throw new Error("Missing MONGO_URI in environment.");
+    if (!process.env.MONGO_URI) throw new Error("Missing MONGO_URI in environment.");
+    if (!RAW_PHONE || !PASSWORD || !EMAIL) {
+      throw new Error("SUPER_ADMIN_PHONE, SUPER_ADMIN_EMAIL and SUPER_ADMIN_PASSWORD are required.");
     }
+    if (PASSWORD.length < 12) throw new Error("SUPER_ADMIN_PASSWORD must contain at least 12 characters.");
 
     await connectDB();
-    console.log("MongoDB connected.");
-
     const phone = normalizePhone(RAW_PHONE);
-    if (!isValidE164Phone(phone)) {
-      throw new Error(`Invalid phone after normalization: ${phone}`);
-    }
+    if (!isValidE164Phone(phone)) throw new Error("SUPER_ADMIN_PHONE is not a valid E.164 phone number.");
 
-    const email = normalizeEmail(DEFAULT_EMAIL);
-
-    let user = await User.findOne({ phone });
-
+    let user = await User.findOne({ $or: [{ phone }, { email: EMAIL }] });
     if (user) {
       user.role = ROLE;
       user.isActive = true;
-      user.password = PASSWORD; // hashed by pre-save hook
+      user.password = PASSWORD;
       user.loginAttempts = 0;
       user.lockUntil = null;
-      if (!user.email) user.email = email;
-      if (!user.fullName) user.fullName = DEFAULT_FULL_NAME;
+      user.email = EMAIL;
+      user.phone = phone;
+      user.fullName = FULL_NAME || user.fullName;
       await user.save();
-      console.log(`Existing user upgraded to ${ROLE} and password reset.`);
+      console.log(`Existing user upgraded to ${ROLE}.`);
     } else {
       user = await User.create({
-        fullName: DEFAULT_FULL_NAME,
-        email,
-        phone,
-        password: PASSWORD, // hashed by pre-save hook
-        role: ROLE,
-        isActive: true,
-        loginAttempts: 0,
-        lockUntil: null,
+        fullName: FULL_NAME, email: EMAIL, phone, password: PASSWORD, role: ROLE, isActive: true, loginAttempts: 0, lockUntil: null,
       });
       console.log(`New ${ROLE} user created.`);
     }
-
-    console.log("Credentials summary:");
-    console.log(`- Phone: ${RAW_PHONE} (stored as ${phone})`);
-    console.log(`- Password: ${PASSWORD}`);
-    console.log(`- Role: ${ROLE}`);
-    console.log(`- User ID: ${user._id}`);
+    console.log(`SUPER_ADMIN ready. User ID: ${user._id}`);
   } catch (error) {
     console.error("Failed to create/upgrade SUPER_ADMIN:", error.message);
     process.exitCode = 1;
   } finally {
     await mongoose.connection.close();
-    process.exit();
   }
 };
 
-run();
+await run();

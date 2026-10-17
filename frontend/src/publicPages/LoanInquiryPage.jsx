@@ -101,6 +101,8 @@ const FRIENDLY_FIELD_LABELS = {
   employerNameOrBusinessAddress: "Employer / business address",
   businessActivityNature: "Nature of business activity",
   jobTitle: "Job title",
+  contractDurationMonths: "Contract duration months",
+  durationWorkedMonths: "Duration worked months",
   salaryDate: "Date of salary/income",
   monthlyIncome: "Monthly income",
   collateral: "Collateral",
@@ -130,10 +132,25 @@ const toFriendlyValidationMessage = (issue) => {
   if (issue?.code === "invalid_string" && issue?.validation === "email") {
     return "Please enter a valid email address.";
   }
+  if (issue?.code === "too_big" && ["contractDurationMonths", "durationWorkedMonths"].includes(pathKey)) {
+    return `${fieldLabel} is too high. You can enter total months; the system will convert 12 months into 1 year.`;
+  }
   if (issue?.message) {
     return `${fieldLabel}: ${issue.message}`;
   }
   return "Please review the highlighted form fields and try again.";
+};
+
+const normalizeDurationInputPair = (yearsValue, monthsValue) => {
+  const years = Number.parseInt(String(yearsValue || "0"), 10);
+  const months = Number.parseInt(String(monthsValue || "0"), 10);
+  const safeYears = Number.isFinite(years) && years > 0 ? years : 0;
+  const safeMonths = Number.isFinite(months) && months > 0 ? months : 0;
+
+  return {
+    years: safeYears + Math.floor(safeMonths / 12),
+    months: safeMonths % 12,
+  };
 };
 
 function ChoiceGrid({ label, name, value, onChange, options, hint, columns = 1 }) {
@@ -182,9 +199,12 @@ function ChoiceGrid({ label, name, value, onChange, options, hint, columns = 1 }
 export default function LoanInquiryPage() {
   const [searchParams] = useSearchParams();
   const initialSlug = searchParams.get("product") || "";
+  const reuseKycRequested = searchParams.get("reuseKyc") === "1";
 
   const [loanProducts, setLoanProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const [customerProfile, setCustomerProfile] = useState(null);
+  const [profileCheckDone, setProfileCheckDone] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitStage, setSubmitStage] = useState("");
   const [error, setError] = useState("");
@@ -299,6 +319,79 @@ export default function LoanInquiryPage() {
     }
   }, [form.loanProductSlug, initialSlug]);
 
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchCustomerProfile = async () => {
+      if (!reuseKycRequested) {
+        setProfileCheckDone(true);
+        return;
+      }
+
+      try {
+        const { data } = await api.get("/profile/me");
+        const profile = data?.data || data?.profile || null;
+        if (!mounted) return;
+        setCustomerProfile(profile);
+        if (profile) {
+          const phoneDigits = String(profile.phone || "").replace(/\D/g, "");
+          setForm((prev) => ({
+            ...prev,
+            fullName: prev.fullName || profile.fullName || "",
+            address: prev.address || [profile.addressLine1, profile.city, profile.district].filter(Boolean).join(", "),
+            phone: prev.phone || phoneDigits.replace(/^265/, "").replace(/^0/, "").slice(-9),
+            email: prev.email || profile.email || "",
+            borrowerType: prev.borrowerType || "repeat",
+            employmentType: prev.employmentType || profile.employmentType || "",
+            employerNameOrBusinessAddress: prev.employerNameOrBusinessAddress || profile.employerNameOrBusinessAddress || profile.businessName || "",
+            businessActivityNature: prev.businessActivityNature || profile.businessActivityNature || "",
+            jobTitle: prev.jobTitle || profile.jobTitle || "",
+            employmentNumber: prev.employmentNumber || profile.employmentNumber || "",
+            employmentStatus: prev.employmentStatus || "employed",
+            contractDurationYears: prev.contractDurationYears || String(profile.contractDurationYears ?? ""),
+            contractDurationMonths: prev.contractDurationMonths || String(profile.contractDurationMonths ?? ""),
+            durationWorkedYears: prev.durationWorkedYears || String(profile.durationWorkedYears ?? ""),
+            durationWorkedMonths: prev.durationWorkedMonths || String(profile.durationWorkedMonths ?? ""),
+            hrContactPhone: prev.hrContactPhone || profile.hrContactPhone || "",
+            salaryDate: prev.salaryDate || profile.salaryDate || "",
+            monthlyIncome: prev.monthlyIncome || String(profile.monthlyIncome || ""),
+            bankName: prev.bankName || profile.bankName || "",
+            accountHolderName: prev.accountHolderName || profile.fullName || "",
+            accountNumber: prev.accountNumber || profile.accountNumber || "",
+            bankBranch: prev.bankBranch || profile.branchCode || "",
+            guarantorFullName: prev.guarantorFullName || profile.reference1Name || "",
+            guarantorPhone: prev.guarantorPhone || profile.reference1Phone || "",
+            guarantorRelationship: prev.guarantorRelationship || profile.guarantorRelationship || "",
+            guarantorNationalId: prev.guarantorNationalId || profile.guarantorNationalId || "",
+            guarantorOccupation: prev.guarantorOccupation || profile.guarantorOccupation || "",
+            guarantorHomeVillage: prev.guarantorHomeVillage || profile.guarantorHomeVillage || "",
+          }));
+        }
+      } catch {
+        if (mounted) setCustomerProfile(null);
+      } finally {
+        if (mounted) setProfileCheckDone(true);
+      }
+    };
+
+    fetchCustomerProfile();
+    return () => {
+      mounted = false;
+    };
+  }, [reuseKycRequested]);
+
+  const canReuseVerifiedKyc =
+    reuseKycRequested && String(customerProfile?.kycStatus || "").toLowerCase() === "verified";
+
+  const employmentTypeForRequirements = String(
+    form.employmentType || customerProfile?.employmentType || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  const requiresPayslipForLoanRequest =
+    !(employmentTypeForRequirements === "farmer" || employmentTypeForRequirements === "self-employed");
+
   const updateField = (name, value) => {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
@@ -313,6 +406,26 @@ export default function LoanInquiryPage() {
     const requiresPayslip = !(isFarmer || isSelfEmployed);
     const requiresSalaryDate = isGovernmentEmployee || isPrivateCompanyEmployee || isSelfEmployed;
     const requiresEmployerSection = !isFarmer;
+
+    if (canReuseVerifiedKyc) {
+      if (!form.borrowerType) return "Please select borrower type.";
+      if (!form.loanProductSlug) return "Please select loan type.";
+      if (!form.requestedAmount.trim()) return "Loan amount is required.";
+      if (Number(form.requestedAmount) <= 0) return "Loan amount must be greater than 0.";
+      if (!form.preferredTenureMonths) return "Please select tenure.";
+      if (form.description.trim().length < 3) return "Loan purpose must be at least 3 characters.";
+      if (!bankStatementFile) return "Current bank statement is required for this loan request.";
+      if (requiresPayslipForLoanRequest && !payslipFile) return "Current payslip or income proof is required for this loan request.";
+      if (!collateralFile) return "Collateral attachment is required for this loan request.";
+      if (!form.guarantorFullName.trim()) return "Guarantor full name is required.";
+      if (!form.guarantorPhone.trim()) return "Guarantor phone is required.";
+      if (!form.guarantorRelationship.trim()) return "Guarantor relationship is required.";
+      if (!form.guarantorNationalId.trim()) return "Guarantor national ID is required.";
+      if (!guarantorNationalIdFile) return "Guarantor national ID attachment is required.";
+      if (!form.declarationAccepted) return "Please accept applicant declaration.";
+      if (!form.guarantorDeclarationAccepted) return "Please accept guarantor declaration.";
+      return "";
+    }
 
     if (form.fullName.trim().length < 2) return "Full name must be at least 2 characters.";
     if (form.address.trim().length < 5) return "Address must be at least 5 characters.";
@@ -507,39 +620,50 @@ export default function LoanInquiryPage() {
       const isPrivateCompanyEmployee = normalizedEmploymentType === "private company employee";
       const isSelfEmployed = normalizedEmploymentType === "self-employed";
       const requiresEmploymentNumber = !isPrivateCompanyEmployee && !isSelfEmployed && normalizedEmploymentType !== "farmer" && !isBusiness;
+      const normalizedContractDuration = normalizeDurationInputPair(
+        form.contractDurationYears,
+        form.contractDurationMonths
+      );
+      const normalizedDurationWorked = normalizeDurationInputPair(
+        form.durationWorkedYears,
+        form.durationWorkedMonths
+      );
       const selectedLoanName =
         mergedLoanOptions.find((item) => item.slug === form.loanProductSlug)?.name || undefined;
+      const profileAddress = [customerProfile?.addressLine1, customerProfile?.city, customerProfile?.district].filter(Boolean).join(", ");
+      const profilePhoneDigits = String(customerProfile?.phone || "").replace(/\D/g, "");
+      const reusablePhone = profilePhoneDigits.startsWith("265") ? `+${profilePhoneDigits}` : profilePhoneDigits ? `+265${profilePhoneDigits.replace(/^0/, "").slice(-9)}` : `+265${form.phone}`;
       const payload = {
-        fullName: form.fullName,
-        address: form.address,
-        phone: `+265${form.phone}`,
-        email: form.email,
-        dateOfBirth: form.dateOfBirth,
-        gender: form.gender,
-        maritalStatus: form.maritalStatus,
-        dependants: Number(form.dependants),
-        housingStatus: form.housingStatus,
-        employmentStatus: form.employmentStatus,
+        fullName: canReuseVerifiedKyc ? (customerProfile?.fullName || form.fullName) : form.fullName,
+        address: canReuseVerifiedKyc ? (profileAddress || form.address || "Verified customer address") : form.address,
+        phone: canReuseVerifiedKyc ? reusablePhone : `+265${form.phone}`,
+        email: canReuseVerifiedKyc ? (customerProfile?.email || form.email) : form.email,
+        dateOfBirth: canReuseVerifiedKyc ? (form.dateOfBirth || "1990-01-01") : form.dateOfBirth,
+        gender: canReuseVerifiedKyc ? (form.gender || "male") : form.gender,
+        maritalStatus: canReuseVerifiedKyc ? (form.maritalStatus || "single") : form.maritalStatus,
+        dependants: canReuseVerifiedKyc ? Number(form.dependants || 0) : Number(form.dependants),
+        housingStatus: canReuseVerifiedKyc ? (form.housingStatus || "tenant") : form.housingStatus,
+        employmentStatus: canReuseVerifiedKyc ? (form.employmentStatus || "employed") : form.employmentStatus,
         borrowerType: form.borrowerType,
         loanProductSlug: form.loanProductSlug,
         ...(selectedLoanName ? { loanProductName: selectedLoanName } : {}),
         requestedAmount: Number(form.requestedAmount),
         preferredTenureMonths: Number(form.preferredTenureMonths),
-        applicantNationalIdNumber: form.applicantNationalIdNumber.trim(),
-        applicantOccupation: form.applicantOccupation.trim(),
-        homeVillage: form.homeVillage.trim(),
-        traditionalAuthority: form.traditionalAuthority.trim(),
+        applicantNationalIdNumber: canReuseVerifiedKyc ? (form.applicantNationalIdNumber.trim() || customerProfile?.governmentId || "Verified") : form.applicantNationalIdNumber.trim(),
+        applicantOccupation: canReuseVerifiedKyc ? (form.applicantOccupation.trim() || customerProfile?.jobTitle || customerProfile?.employmentType || "Verified customer") : form.applicantOccupation.trim(),
+        homeVillage: canReuseVerifiedKyc ? (form.homeVillage.trim() || "Verified") : form.homeVillage.trim(),
+        traditionalAuthority: canReuseVerifiedKyc ? (form.traditionalAuthority.trim() || "Verified") : form.traditionalAuthority.trim(),
         residenceArea: form.residenceArea.trim(),
-        residenceDistrict: form.residenceDistrict.trim(),
+        residenceDistrict: canReuseVerifiedKyc ? (form.residenceDistrict.trim() || customerProfile?.district || "Malawi") : form.residenceDistrict.trim(),
         employerNameOrBusinessAddress: form.employerNameOrBusinessAddress.trim() || undefined,
         businessActivityNature: isBusiness ? form.businessActivityNature.trim() : undefined,
         jobTitle: isBusiness ? undefined : form.jobTitle.trim() || undefined,
         employmentNumber: requiresEmploymentNumber ? form.employmentNumber.trim() || undefined : undefined,
         employmentType: form.employmentType.trim() || form.applicantOccupation.trim(),
-        contractDurationYears: isBusiness ? undefined : (form.contractDurationYears ? Number(form.contractDurationYears) : undefined),
-        contractDurationMonths: isBusiness ? undefined : (form.contractDurationMonths ? Number(form.contractDurationMonths) : undefined),
-        durationWorkedYears: isBusiness ? undefined : (form.durationWorkedYears ? Number(form.durationWorkedYears) : undefined),
-        durationWorkedMonths: isBusiness ? undefined : (form.durationWorkedMonths ? Number(form.durationWorkedMonths) : undefined),
+        contractDurationYears: isBusiness ? undefined : normalizedContractDuration.years,
+        contractDurationMonths: isBusiness ? undefined : normalizedContractDuration.months,
+        durationWorkedYears: isBusiness ? undefined : normalizedDurationWorked.years,
+        durationWorkedMonths: isBusiness ? undefined : normalizedDurationWorked.months,
         hrContactPhone: isBusiness ? undefined : (form.hrContactPhone.trim() || undefined),
         salaryDate: form.salaryDate || undefined,
         monthlyIncome: Number(form.monthlyIncome || 0),
@@ -569,8 +693,9 @@ export default function LoanInquiryPage() {
         formData.append(key, String(value));
       });
 
-      formData.append("profilePhoto", profilePhotoFile);
-      formData.append("applicantNationalIdFile", applicantNationalIdFile);
+      formData.append("reuseVerifiedKyc", canReuseVerifiedKyc ? "true" : "false");
+      if (profilePhotoFile) formData.append("profilePhoto", profilePhotoFile);
+      if (applicantNationalIdFile) formData.append("applicantNationalIdFile", applicantNationalIdFile);
       formData.append("bankStatementFile", bankStatementFile);
       if (payslipFile) formData.append("payslipFile", payslipFile);
       formData.append("collateralFile", collateralFile);
@@ -949,6 +1074,16 @@ export default function LoanInquiryPage() {
                 </div>
               </section>
 
+              {canReuseVerifiedKyc ? (
+                <section className="rounded-[24px] border border-emerald-200 bg-emerald-50 p-4 sm:p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Profile details reused</p>
+                  <h3 className="mt-2 text-base font-bold text-emerald-950">KYC already verified</h3>
+                  <p className="mt-2 text-sm leading-6 text-emerald-800">
+                    We will use your approved profile, identity details and saved contact information for this loan request. Update KYC only if your details have changed.
+                  </p>
+                </section>
+              ) : (
+                <>
               <section className="rounded-[24px] border border-slate-200 bg-gradient-to-b from-slate-50/70 to-white p-4 sm:p-5">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                   PART 1: Applicant Personal Details
@@ -1063,7 +1198,7 @@ export default function LoanInquiryPage() {
                       </label>
                       <label>
                         <span className="mb-1.5 block text-sm font-medium text-slate-700">Duration Worked Months</span>
-                        <input name="durationWorkedMonths" value={form.durationWorkedMonths} onChange={onChange} className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm" placeholder="Enter months worked" />
+                        <input name="durationWorkedMonths" value={form.durationWorkedMonths} onChange={onChange} className="h-12 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm" placeholder="Enter months worked, e.g. 6 or 18" />
                       </label>
                       <label>
                         <span className="mb-1.5 block text-sm font-medium text-slate-700">HR Phone Number</span>
@@ -1095,6 +1230,8 @@ export default function LoanInquiryPage() {
                   );
                 })()}
               </section>
+              </>
+              )}
 
               <section className="rounded-[24px] border border-slate-200 bg-white p-4 sm:p-5">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -1149,10 +1286,10 @@ export default function LoanInquiryPage() {
 
               <section className="rounded-[24px] border border-slate-200 bg-gradient-to-b from-slate-50/70 to-white p-4 sm:p-5">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Required Documents
+                  Required Documents for This Loan Request
                 </p>
                 <p className="mt-2 text-sm text-slate-600">
-                  Upload all required documents in this single section.
+                  {canReuseVerifiedKyc ? "Upload the current documents needed for this new loan request." : "Upload all required documents in this single section."}
                 </p>
                 {(() => {
                   const normalizedEmploymentType = String(form.employmentType || "").trim().toLowerCase();
@@ -1161,41 +1298,45 @@ export default function LoanInquiryPage() {
                   const showPayslip = !(isSelfEmployed || isFarmer);
                   return (
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <label className="h-full rounded-2xl border border-slate-200 bg-white p-4">
-                    <span className="block text-sm font-semibold text-slate-800">Profile Photo</span>
-                    <span className="mt-1 block text-xs text-slate-500">JPG or PNG, clear face image</span>
-                    <input
-                      required
-                      type="file"
-                      accept=".jpg,.jpeg,.png"
-                      onChange={(e) => setProfilePhotoFile(e.target.files?.[0] || null)}
-                      className="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
-                    />
-                    <span className="mt-2 block text-xs text-slate-600">{profilePhotoFile?.name || "No file selected"}</span>
-                    {profilePhotoFile ? (
-                      <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                        Uploaded successfully
-                      </span>
-                    ) : null}
-                  </label>
+                  {!canReuseVerifiedKyc ? (
+                    <label className="h-full rounded-2xl border border-slate-200 bg-white p-4">
+                      <span className="block text-sm font-semibold text-slate-800">Profile Photo</span>
+                      <span className="mt-1 block text-xs text-slate-500">JPG or PNG, clear face image</span>
+                      <input
+                        required
+                        type="file"
+                        accept=".jpg,.jpeg,.png"
+                        onChange={(e) => setProfilePhotoFile(e.target.files?.[0] || null)}
+                        className="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
+                      />
+                      <span className="mt-2 block text-xs text-slate-600">{profilePhotoFile?.name || "No file selected"}</span>
+                      {profilePhotoFile ? (
+                        <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                          Uploaded successfully
+                        </span>
+                      ) : null}
+                    </label>
+                  ) : null}
 
-                  <label className="h-full rounded-2xl border border-slate-200 bg-white p-4">
-                    <span className="block text-sm font-semibold text-slate-800">Applicant National ID</span>
-                    <span className="mt-1 block text-xs text-slate-500">PDF, JPG, JPEG, or PNG</span>
-                    <input
-                      required
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={(e) => setApplicantNationalIdFile(e.target.files?.[0] || null)}
-                      className="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
-                    />
-                    <span className="mt-2 block text-xs text-slate-600">{applicantNationalIdFile?.name || "No file selected"}</span>
-                    {applicantNationalIdFile ? (
-                      <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                        Uploaded successfully
-                      </span>
-                    ) : null}
-                  </label>
+                  {!canReuseVerifiedKyc ? (
+                    <label className="h-full rounded-2xl border border-slate-200 bg-white p-4">
+                      <span className="block text-sm font-semibold text-slate-800">Applicant National ID</span>
+                      <span className="mt-1 block text-xs text-slate-500">PDF, JPG, JPEG, or PNG</span>
+                      <input
+                        required
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={(e) => setApplicantNationalIdFile(e.target.files?.[0] || null)}
+                        className="mt-3 block w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white"
+                      />
+                      <span className="mt-2 block text-xs text-slate-600">{applicantNationalIdFile?.name || "No file selected"}</span>
+                      {applicantNationalIdFile ? (
+                        <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                          Uploaded successfully
+                        </span>
+                      ) : null}
+                    </label>
+                  ) : null}
 
                   <label className="h-full rounded-2xl border border-slate-200 bg-white p-4">
                     <span className="block text-sm font-semibold text-slate-800">Bank Statement (3 Months)</span>

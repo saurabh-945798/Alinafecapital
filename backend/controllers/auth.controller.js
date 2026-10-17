@@ -3,7 +3,8 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { registerSchema, loginSchema } from "../utils/validators/auth.validators.js";
 import { isValidE164Phone, normalizeEmail, normalizePhone } from "../utils/normalize.js";
-import { isAdminRole, normalizeRole } from "../utils/rbac.js";
+import { formatRoles, getUserRoles, isAdminRole, normalizeRole, selectPrimaryRole } from "../utils/rbac.js";
+import { syncLatestInquiryToCustomerProfile } from "../services/customerAccountLink.service.js";
 
 const MAX_LOGIN_ATTEMPTS = Number(process.env.MAX_LOGIN_ATTEMPTS || 5);
 const LOCK_MINUTES = Number(process.env.LOCK_MINUTES || 30);
@@ -12,17 +13,22 @@ const issueAccessToken = (user) =>
   jwt.sign(
     {
       id: user._id,
-      role: normalizeRole(user.role),
+      role: selectPrimaryRole(getUserRoles(user)),
+      roles: getUserRoles(user).filter((role) => role !== "user"),
       isActive: Boolean(user.isActive),
     },
     process.env.JWT_SECRET,
     { expiresIn: "15m" }
   );
 
-const issueRefreshToken = (user) =>
-  jwt.sign({ id: user._id, role: normalizeRole(user.role) }, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
-  });
+const issueRefreshToken = (user) => {
+  const roles = getUserRoles(user).filter((role) => role !== "user");
+  return jwt.sign(
+    { id: user._id, role: selectPrimaryRole(roles), roles },
+    process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d" }
+  );
+};
 
 const hashRefreshToken = (token) =>
   crypto.createHash("sha256").update(token).digest("hex");
@@ -32,7 +38,7 @@ const getCookieOptions = () => ({
   secure: process.env.NODE_ENV === "production",
   sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
   maxAge: 7 * 24 * 60 * 60 * 1000,
-  path: "/api/v1/auth",
+  path: "/api/v1",
 });
 
 const parseCookie = (cookieHeader = "", key) => {
@@ -90,6 +96,11 @@ export const registerUser = async (req, res, next) => {
 
     const user = await User.create({ fullName, email, phone, password });
 
+    // If this borrower already submitted a public loan inquiry, copy that KYC/profile
+    // information into the login account so the customer dashboard and admin customer
+    // records show the same KYC state.
+    await syncLatestInquiryToCustomerProfile(user);
+
     const accessToken = issueAccessToken(user);
     const refreshToken = issueRefreshToken(user);
     const refreshTokenHash = hashRefreshToken(refreshToken);
@@ -111,7 +122,9 @@ export const registerUser = async (req, res, next) => {
           fullName: user.fullName,
           email: user.email,
           phone: user.phone,
-          role: normalizeRole(user.role),
+          role: selectPrimaryRole(getUserRoles(user)),
+          roles: getUserRoles(user).filter((role) => role !== "user"),
+          roleLabels: formatRoles(user),
         },
       },
       201
@@ -184,7 +197,7 @@ const loginCore = async (req, res, next, { adminOnly = false } = {}) => {
       return authError(res, "Account disabled", "ACCOUNT_DISABLED", 403);
     }
 
-    if (adminOnly && !isAdminRole(user.role)) {
+    if (adminOnly && !isAdminRole(user)) {
       return authError(
         res,
         "Forbidden: admin access required",
@@ -201,6 +214,10 @@ const loginCore = async (req, res, next, { adminOnly = false } = {}) => {
     user.refreshTokenHash = hashRefreshToken(refreshToken);
     await user.save({ validateBeforeSave: false });
 
+    if (!adminOnly) {
+      await syncLatestInquiryToCustomerProfile(user);
+    }
+
     res.cookie("refreshToken", refreshToken, getCookieOptions());
 
     return sendAuthSuccess(res, {
@@ -211,7 +228,9 @@ const loginCore = async (req, res, next, { adminOnly = false } = {}) => {
         fullName: user.fullName,
         email: user.email,
         phone: user.phone,
-        role: normalizeRole(user.role),
+        role: selectPrimaryRole(getUserRoles(user)),
+        roles: getUserRoles(user).filter((role) => role !== "user"),
+        roleLabels: formatRoles(user),
       },
     });
   } catch (error) {
@@ -250,9 +269,6 @@ export const refreshAccessToken = async (req, res, next) => {
     if (!user.isActive) {
       return authError(res, "Account disabled", "ACCOUNT_DISABLED", 403);
     }
-    if (isAdminRole(normalizeRole(user.role)) && !["SUPER_ADMIN", "VERIFIER", "APPROVAL", "AUTHORIZED", "DISBURSED"].includes(normalizeRole(user.role))) {
-      return authError(res, "Unauthorized role", "ROLE_INVALID", 403);
-    }
 
     const incomingHash = hashRefreshToken(refreshToken);
     if (incomingHash !== user.refreshTokenHash) {
@@ -269,6 +285,15 @@ export const refreshAccessToken = async (req, res, next) => {
     return sendAuthSuccess(res, {
       message: "Token refreshed",
       accessToken: newAccessToken,
+      user: {
+        id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        phone: user.phone,
+        role: selectPrimaryRole(getUserRoles(user)),
+        roles: getUserRoles(user).filter((role) => role !== "user"),
+        roleLabels: formatRoles(user),
+      },
     });
   } catch (error) {
     return next(error);
