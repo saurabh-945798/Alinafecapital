@@ -2,11 +2,13 @@ import mongoose from "mongoose";
 import { LoanProduct } from "../models/LoanProduct.model.js";
 import { LoanApplication } from "../models/LoanApplication.model.js";
 import { LoanInquiry } from "../models/LoanInquiry.model.js";
+import { LoanAccount } from "../models/LoanAccount.model.js";
 import UserProfile from "../models/UserProfile.js";
 import { emiCalculatorService } from "./emiCalculator.service.js";
 import { ApiError } from "../utils/ApiError.js";
 import { calculateProfileCompletion } from "../utils/profileCompletion.js";
 import { normalizeEmail, normalizePhone } from "../utils/normalize.js";
+import { withCurrentLoanFeePolicy } from "../utils/loanPricingPolicy.js";
 
 /**
  * Create immutable snapshot of product at time of application
@@ -29,7 +31,10 @@ const pickProductSnapshot = (p) => ({
 
   processingFeeType: p.processingFeeType,
   processingFeeValue: p.processingFeeValue,
-  loanAdministrationFeeMonthly: p.loanAdministrationFeeMonthly,
+  adminFeeType: p.adminFeeType,
+  adminFeeValue: p.adminFeeValue,
+  overduePenaltyRatePercent: p.overduePenaltyRatePercent,
+  loanAdministrationFeeMonthly: 0,
 
   insuranceType: p.insuranceType,
   insuranceValue: p.insuranceValue,
@@ -84,6 +89,59 @@ const buildCustomerOwnership = (user = {}) => {
 
   return { appOr, inquiryOr, email, phone, userId };
 };
+
+const buildLoanAccountOwnership = (user = {}) => {
+  const filters = [];
+  const userId = user?._id ? String(user._id) : "";
+  const email = normalizeEmail(user?.email || "");
+  const phone = normalizePhone(user?.phone || "");
+
+  if (userId && mongoose.Types.ObjectId.isValid(userId)) filters.push({ userId: user._id });
+  if (email) filters.push({ email });
+  if (phone) filters.push({ phone });
+
+  return filters.length ? { $or: filters } : { _id: null };
+};
+
+const mapLoanAccountToCustomerApplication = (account = {}) => ({
+  _id: String(account._id),
+  id: String(account._id),
+  sourceType: "loan_account",
+  sourceLabel: "Disbursed Loan Account",
+  applicationCode: account.applicationCode || account.accountNumber || String(account._id),
+  fullName: account.customerName || "",
+  phone: account.phone || "",
+  email: account.email || "",
+  productSlug: account.loanProductSlug || "",
+  productName: account.loanProductName || account.loanProductSlug || "",
+  loanProductSlug: account.loanProductSlug || "",
+  loanProductName: account.loanProductName || account.loanProductSlug || "",
+  requestedAmount: Number(account.approvedAmount || account.disbursedAmount || 0),
+  amount: Number(account.approvedAmount || account.disbursedAmount || 0),
+  tenureMonths: Number(account.tenureMonths || 0),
+  preferredTenureMonths: Number(account.tenureMonths || 0),
+  status: "DISBURSED",
+  rawStatus: "DISBURSED",
+  loanAccountId: String(account._id),
+  loanAccountNumber: account.accountNumber || "",
+  isRepayable: true,
+  disbursedAt: account.disbursedAt || null,
+  outstandingBalance: Number(account.outstandingBalance || 0),
+  statusHistory: [
+    {
+      status: "DISBURSED",
+      rawStatus: "DISBURSED",
+      note: account.accountNumber
+        ? `Loan account ${account.accountNumber} is active for repayment.`
+        : "Loan account is active for repayment.",
+      reasonCode: "LOAN_ACCOUNT",
+      updatedBy: "System",
+      updatedAt: account.disbursedAt || account.createdAt || account.updatedAt,
+    },
+  ],
+  createdAt: account.disbursedAt || account.createdAt,
+  updatedAt: account.updatedAt || account.disbursedAt || account.createdAt,
+});
 
 const matchesCurrentUser = (doc = {}, user = {}) => {
   const { email, phone, userId } = buildCustomerOwnership(user);
@@ -253,6 +311,8 @@ export const loanApplicationService = {
       throw new ApiError(404, "Loan product not found", "NOT_FOUND");
     }
 
+    const effectiveProduct = withCurrentLoanFeePolicy(product);
+
     // 2) Pre-check profile and KYC to decide queue
     const profile = payload.userId
       ? await UserProfile.findOne({ userId: payload.userId }).lean()
@@ -280,7 +340,7 @@ export const loanApplicationService = {
     // 4) Block if already approved/disbursed for same product
     const alreadyApproved = await LoanApplication.findOne({
       phone: payload.phone,
-      productSlug: product.slug,
+      productSlug: effectiveProduct.slug,
       status: { $in: ["APPROVED", "DISBURSED"] },
     }).lean();
 
@@ -295,7 +355,7 @@ export const loanApplicationService = {
     // 5) Block duplicate within 24 hours (same core values)
     const recentDuplicate = await LoanApplication.findOne({
       phone: payload.phone,
-      productSlug: product.slug,
+      productSlug: effectiveProduct.slug,
       requestedAmount: Number(payload.amount),
       tenureMonths: Number(payload.tenureMonths),
       createdAt: { $gte: last24Hours },
@@ -311,13 +371,13 @@ export const loanApplicationService = {
 
     // 6) Calculate estimate snapshot
     const calc = emiCalculatorService.calculate({
-      product,
+      product: effectiveProduct,
       amount: Number(payload.amount),
       tenureMonths: Number(payload.tenureMonths),
     });
 
     // 7) Save application
-    const productSnapshot = pickProductSnapshot(product);
+    const productSnapshot = pickProductSnapshot(effectiveProduct);
 
     const appDoc = await LoanApplication.create({
       fullName: payload.fullName,
@@ -327,7 +387,7 @@ export const loanApplicationService = {
       userId: payload.userId || null,
 
       productId: product._id,
-      productSlug: product.slug,
+      productSlug: effectiveProduct.slug,
 
       requestedAmount: Number(payload.amount),
       tenureMonths: Number(payload.tenureMonths),
@@ -361,14 +421,34 @@ export const loanApplicationService = {
     }
 
     const inquiry = await LoanInquiry.findById(id).lean();
-    if (!inquiry) {
-      throw new ApiError(404, "Application not found", "NOT_FOUND");
-    }
-    if (user && !matchesCurrentUser(inquiry, user)) {
-      throw new ApiError(403, "Forbidden", "FORBIDDEN");
+    if (inquiry) {
+      const linkedAccount = user
+        ? await LoanAccount.findOne({ inquiryId: inquiry._id, ...buildLoanAccountOwnership(user) }).lean()
+        : await LoanAccount.findOne({ inquiryId: inquiry._id }).lean();
+      if (user && !matchesCurrentUser(inquiry, user) && !linkedAccount) {
+        throw new ApiError(403, "Forbidden", "FORBIDDEN");
+      }
+
+      const mapped = mapInquiryToCustomerApplication(inquiry);
+      if (linkedAccount) {
+        mapped.loanAccountId = String(linkedAccount._id);
+        mapped.loanAccountNumber = linkedAccount.accountNumber || "";
+        mapped.isRepayable = true;
+        mapped.status = "DISBURSED";
+        mapped.rawStatus = "DISBURSED";
+        mapped.disbursedAt = inquiry.disbursedAt || linkedAccount.disbursedAt || null;
+        mapped.outstandingBalance = Number(linkedAccount.outstandingBalance || 0);
+      }
+      return mapped;
     }
 
-    return mapInquiryToCustomerApplication(inquiry);
+    const account = user
+      ? await LoanAccount.findOne({ _id: id, ...buildLoanAccountOwnership(user) }).lean()
+      : await LoanAccount.findById(id).lean();
+    if (!account) {
+      throw new ApiError(404, "Application not found", "NOT_FOUND");
+    }
+    return mapLoanAccountToCustomerApplication(account);
   },
 
   /**
@@ -387,15 +467,60 @@ export const loanApplicationService = {
       };
     }
 
-    const [applications, inquiries] = await Promise.all([
+    const loanAccountOwnership = buildLoanAccountOwnership(user);
+    const [applications, inquiries, loanAccounts] = await Promise.all([
       appOr.length ? LoanApplication.find({ $or: appOr }).lean() : [],
       inquiryOr.length ? LoanInquiry.find({ $or: inquiryOr }).lean() : [],
+      LoanAccount.find(loanAccountOwnership).sort({ disbursedAt: -1, createdAt: -1 }).lean(),
     ]);
 
-    const combined = [
-      ...applications.map(mapLoanApplicationToCustomerApplication),
-      ...inquiries.map(mapInquiryToCustomerApplication),
-    ];
+    const accountByInquiryId = new Map(
+      loanAccounts
+        .filter((account) => account.inquiryId)
+        .map((account) => [String(account.inquiryId), account])
+    );
+
+    const missingInquiryIds = loanAccounts
+      .map((account) => account.inquiryId)
+      .filter(Boolean)
+      .filter((id) => !inquiries.some((inquiry) => String(inquiry._id) === String(id)));
+
+    const accountLinkedInquiries = missingInquiryIds.length
+      ? await LoanInquiry.find({ _id: { $in: missingInquiryIds } }).lean()
+      : [];
+
+    const allInquiries = [...inquiries, ...accountLinkedInquiries];
+    const seen = new Set();
+    const combined = [];
+
+    for (const application of applications.map(mapLoanApplicationToCustomerApplication)) {
+      const key = `application:${application._id}`;
+      if (!seen.has(key)) { seen.add(key); combined.push(application); }
+    }
+
+    for (const inquiry of allInquiries) {
+      const mapped = mapInquiryToCustomerApplication(inquiry);
+      const account = accountByInquiryId.get(String(inquiry._id));
+      if (account) {
+        mapped.loanAccountId = String(account._id);
+        mapped.loanAccountNumber = account.accountNumber || "";
+        mapped.isRepayable = true;
+        mapped.status = "DISBURSED";
+        mapped.rawStatus = "DISBURSED";
+        mapped.disbursedAt = inquiry.disbursedAt || account.disbursedAt || null;
+        mapped.outstandingBalance = Number(account.outstandingBalance || 0);
+      }
+      const key = `inquiry:${mapped._id}`;
+      if (!seen.has(key)) { seen.add(key); combined.push(mapped); }
+    }
+
+    for (const account of loanAccounts) {
+      const inquiryKey = account.inquiryId ? `inquiry:${String(account.inquiryId)}` : "";
+      if (inquiryKey && seen.has(inquiryKey)) continue;
+      const mapped = mapLoanAccountToCustomerApplication(account);
+      const key = `account:${String(account._id)}`;
+      if (!seen.has(key)) { seen.add(key); combined.push(mapped); }
+    }
 
     const filtered = applyCustomerFilters(combined, query);
 

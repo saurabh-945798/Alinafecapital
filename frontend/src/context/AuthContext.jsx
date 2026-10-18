@@ -1,5 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { api } from "../services/api";
+import {
+  api,
+  clearAccessToken,
+  getAccessToken,
+  refreshBrowserSession,
+  setAccessToken,
+} from "../services/api";
 
 const AuthContext = createContext(null);
 
@@ -14,30 +20,24 @@ const parseStoredUser = () => {
 };
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(() =>
-    typeof window === "undefined" ? "" : window.localStorage.getItem("token") || ""
-  );
+  const [token, setToken] = useState(getAccessToken);
   const [user, setUser] = useState(parseStoredUser);
   const [isChecking, setIsChecking] = useState(true);
 
-  const clearSession = useCallback(() => {
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem("token");
-      window.localStorage.removeItem("user");
-    }
+  const clearSession = useCallback(({ notifyServer = true } = {}) => {
+    if (notifyServer) api.post("/auth/logout", null, { skipRefresh: true }).catch(() => {});
+    clearAccessToken();
+    if (typeof window !== "undefined") window.localStorage.removeItem("user");
     setToken("");
     setUser(null);
   }, []);
 
   const setSession = useCallback(({ token: nextToken, user: nextUser }) => {
     if (!nextToken) return;
+    setAccessToken(nextToken);
     if (typeof window !== "undefined") {
-      window.localStorage.setItem("token", nextToken);
-      if (nextUser) {
-        window.localStorage.setItem("user", JSON.stringify(nextUser));
-      } else {
-        window.localStorage.removeItem("user");
-      }
+      if (nextUser) window.localStorage.setItem("user", JSON.stringify(nextUser));
+      else window.localStorage.removeItem("user");
     }
     setToken(nextToken);
     setUser(nextUser || null);
@@ -45,54 +45,40 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let mounted = true;
-
-    const verifyExistingToken = async () => {
-      if (!token) {
-        if (mounted) setIsChecking(false);
-        return;
-      }
-
+    const bootstrap = async () => {
       try {
+        const nextToken = await refreshBrowserSession();
+        if (!mounted) return;
+        setToken(nextToken);
         const { data } = await api.get("/profile/me");
         const profile = data?.item ?? data?.data ?? null;
-        if (mounted) {
-          setUser((prev) => prev || profile?.user || parseStoredUser());
-        }
-      } catch (err) {
-        const status = err?.response?.status;
-        if (status === 401) {
-          clearSession();
-        }
+        if (mounted) setUser((prev) => prev || profile?.user || parseStoredUser());
+      } catch {
+        if (mounted) clearSession({ notifyServer: false });
       } finally {
         if (mounted) setIsChecking(false);
       }
     };
-
-    verifyExistingToken();
+    bootstrap();
     return () => {
       mounted = false;
     };
-  }, [token, clearSession]);
+  }, [clearSession]);
 
   useEffect(() => {
-    const interceptorId = api.interceptors.response.use(
-      (response) => response,
-      (error) => Promise.reject(error)
-    );
-
-    return () => {
-      api.interceptors.response.eject(interceptorId);
-    };
-  }, []);
+    const expire = () => clearSession({ notifyServer: false });
+    window.addEventListener("alinafe:session-expired", expire);
+    return () => window.removeEventListener("alinafe:session-expired", expire);
+  }, [clearSession]);
 
   const value = useMemo(
     () => ({
       token,
       user,
-      isAuthenticated: !!token,
+      isAuthenticated: Boolean(token),
       isChecking,
       setSession,
-      logout: clearSession,
+      logout: () => clearSession({ notifyServer: true }),
     }),
     [token, user, isChecking, setSession, clearSession]
   );

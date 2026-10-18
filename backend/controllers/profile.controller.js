@@ -2,6 +2,18 @@ import UserProfile from "../models/UserProfile.js";
 import { calculateProfileCompletion } from "../utils/profileCompletion.js";
 import fs from "fs";
 import { toPersistedUploadPath, toPublicUploadUrl } from "../utils/uploadPaths.js";
+import { syncLatestInquiryToCustomerProfile } from "../services/customerAccountLink.service.js";
+
+const getProfileCompletion = (profile) => {
+  const kycStatus = String(profile?.kycStatus || "not_started").toLowerCase();
+  const updateStatus = String(profile?.kycUpdateStatus || "none").toLowerCase();
+  const activeUpdate = ["draft", "pending_review"].includes(updateStatus);
+
+  // A verified profile must not fall back to 0% simply because an older/legacy
+  // source record is missing fields. Explicit KYC update flows may recalculate.
+  if (kycStatus === "verified" && !activeUpdate) return 100;
+  return calculateProfileCompletion(profile || {});
+};
 
 const ALLOWED_DOC_TYPES = new Set([
   "national_id",
@@ -32,10 +44,11 @@ const toPublicProfile = (profile) => {
 export async function getMyProfile(req, res, next) {
   try {
     const userId = req.user._id;
+    await syncLatestInquiryToCustomerProfile(req.user);
     const profile = await UserProfile.findOne({ userId });
 
     if (profile) {
-      const recomputed = calculateProfileCompletion(profile);
+      const recomputed = getProfileCompletion(profile);
       if (profile.profileCompletion !== recomputed) {
         profile.profileCompletion = recomputed;
       }
@@ -114,7 +127,7 @@ export async function upsertMyProfile(req, res, next) {
       { upsert: true, returnDocument: "after" }
     );
 
-    profile.profileCompletion = calculateProfileCompletion(profile);
+    profile.profileCompletion = getProfileCompletion(profile);
 
     if (profile.kycStatus === "not_started" && profile.profileCompletion > 0) {
       profile.kycStatus = "not_started";
@@ -175,7 +188,7 @@ export async function uploadMyDoc(req, res, next) {
       uploadedAt: new Date(),
     });
 
-    profile.profileCompletion = calculateProfileCompletion(profile);
+    profile.profileCompletion = getProfileCompletion(profile);
     await profile.save();
 
     return res.json({
@@ -200,7 +213,7 @@ export async function submitKyc(req, res, next) {
       });
     }
 
-    profile.profileCompletion = calculateProfileCompletion(profile);
+    profile.profileCompletion = getProfileCompletion(profile);
 
     if (!String(profile.avatarUrl || "").trim()) {
       await profile.save();
@@ -289,7 +302,7 @@ export async function requestKycUpdate(req, res, next) {
     profile.kycRemarks = reason
       ? `Customer requested KYC update: ${reason}`
       : "Customer requested KYC update.";
-    profile.profileCompletion = calculateProfileCompletion(profile);
+    profile.profileCompletion = getProfileCompletion(profile);
 
     await profile.save({ validateBeforeSave: false });
 
@@ -330,7 +343,7 @@ export async function uploadMyAvatar(req, res, next) {
 
     profile.avatarPath = filePath;
     profile.avatarUrl = fileUrl;
-    profile.profileCompletion = calculateProfileCompletion(profile);
+    profile.profileCompletion = getProfileCompletion(profile);
     await profile.save();
 
     if (previousAvatarPath && previousAvatarPath !== filePath && fs.existsSync(previousAvatarPath)) {
@@ -366,7 +379,7 @@ export async function removeMyAvatar(req, res, next) {
     const previousAvatarPath = profile.avatarPath || "";
     profile.avatarPath = "";
     profile.avatarUrl = "";
-    profile.profileCompletion = calculateProfileCompletion(profile);
+    profile.profileCompletion = getProfileCompletion(profile);
     await profile.save();
 
     if (previousAvatarPath && fs.existsSync(previousAvatarPath)) {
@@ -386,3 +399,37 @@ export async function removeMyAvatar(req, res, next) {
   }
 }
 
+
+
+export async function getMyRepaymentReminders(req, res, next) {
+  try {
+    const profile = await UserProfile.findOne({ userId: req.user._id }).lean();
+    return res.json({
+      success: true,
+      data: profile?.repaymentReminders || { dashboard: true, sms: true, email: false },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function updateMyRepaymentReminders(req, res, next) {
+  try {
+    const clean = {};
+    for (const key of ["dashboard", "sms", "email"]) {
+      if (typeof req.body?.[key] === "boolean") clean[`repaymentReminders.${key}`] = req.body[key];
+    }
+    const profile = await UserProfile.findOneAndUpdate(
+      { userId: req.user._id },
+      { $set: clean, $setOnInsert: { userId: req.user._id, fullName: req.user.fullName, email: req.user.email, phone: req.user.phone } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    ).lean();
+    return res.json({
+      success: true,
+      message: "Reminder preferences saved.",
+      data: profile?.repaymentReminders || { dashboard: true, sms: true, email: false },
+    });
+  } catch (error) {
+    return next(error);
+  }
+}

@@ -1,6 +1,7 @@
 import User from "../models/User.js";
 import UserProfile from "../models/UserProfile.js";
 import { LoanInquiry } from "../models/LoanInquiry.model.js";
+import { LoanAccount } from "../models/LoanAccount.model.js";
 import { normalizeEmail, normalizePhone } from "../utils/normalize.js";
 import { calculateProfileCompletion } from "../utils/profileCompletion.js";
 
@@ -36,6 +37,33 @@ const buildIdentityFilter = ({ email = "", phone = "" } = {}) => {
   if (normalizedPhone) filters.push({ phone: normalizedPhone });
 
   return filters.length ? { $or: filters } : null;
+};
+
+const buildLoanAccountFilter = (user = {}) => {
+  const filters = [];
+  const normalizedEmail = normalizeEmail(user?.email || "");
+  const normalizedPhone = normalizePhone(user?.phone || "");
+  if (user?._id) filters.push({ userId: user._id });
+  if (normalizedEmail) filters.push({ email: normalizedEmail });
+  if (normalizedPhone) filters.push({ phone: normalizedPhone });
+  return filters.length ? { $or: filters } : null;
+};
+
+const findVerifiedInquiryLinkedToLoan = async (user) => {
+  const accountFilter = buildLoanAccountFilter(user || {});
+  if (!accountFilter) return null;
+
+  const accounts = await LoanAccount.find(accountFilter)
+    .sort({ disbursedAt: -1, createdAt: -1 })
+    .select("inquiryId")
+    .lean();
+  const inquiryIds = accounts.map((account) => account.inquiryId).filter(Boolean);
+  if (!inquiryIds.length) return null;
+
+  return LoanInquiry.findOne({
+    _id: { $in: inquiryIds },
+    kycStatus: "verified",
+  }).sort({ verifiedAt: -1, disbursedAt: -1, updatedAt: -1 });
 };
 
 const mapInquiryToProfileFields = (inquiry, user) => {
@@ -128,7 +156,25 @@ export const syncInquiryToCustomerProfile = async (inquiry, options = {}) => {
 
   if (!user) return null;
 
+  const existingProfile = await UserProfile.findOne({ userId: user._id }).lean();
   const profileFields = mapInquiryToProfileFields(doc, user);
+  const updateStatus = String(existingProfile?.kycUpdateStatus || "none").toLowerCase();
+  const activeKycUpdate = ["draft", "pending_review"].includes(updateStatus);
+
+  // Never let a newer, incomplete inquiry silently downgrade a previously verified
+  // customer profile. An explicit KYC update request is the only exception.
+  if (
+    existingProfile &&
+    String(existingProfile.kycStatus || "").toLowerCase() === "verified" &&
+    String(profileFields.kycStatus || "").toLowerCase() !== "verified" &&
+    !activeKycUpdate
+  ) {
+    profileFields.kycStatus = "verified";
+    profileFields.profileCompletion = Math.max(100, Number(profileFields.profileCompletion || 0));
+    profileFields.verifiedAt = existingProfile.verifiedAt || profileFields.verifiedAt || null;
+    profileFields.rejectedAt = null;
+  }
+
   const profile = await UserProfile.findOneAndUpdate(
     { userId: user._id },
     {
@@ -138,13 +184,35 @@ export const syncInquiryToCustomerProfile = async (inquiry, options = {}) => {
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
+  // Keep disbursed loan accounts explicitly tied to the authenticated portal user.
+  await LoanAccount.updateMany(
+    { inquiryId: doc._id, $or: [{ userId: null }, { userId: { $exists: false } }, { userId: user._id }] },
+    { $set: { userId: user._id } }
+  );
+
   return profile;
 };
 
 export const syncLatestInquiryToCustomerProfile = async (user) => {
   if (!user) return null;
-  const inquiry = await findLatestInquiryForUser(user);
-  if (!inquiry) return null;
+
+  const existingProfile = await UserProfile.findOne({ userId: user._id }).lean();
+  const updateStatus = String(existingProfile?.kycUpdateStatus || "none").toLowerCase();
+  if (["draft", "pending_review"].includes(updateStatus)) {
+    return existingProfile;
+  }
+
+  let inquiry = await findLatestInquiryForUser(user);
+
+  // If the portal already has a disbursed loan but the latest inquiry is incomplete,
+  // prefer the verified inquiry that actually created the loan account. This is the
+  // relationship the customer dashboard should use for KYC/application consistency.
+  if (String(existingProfile?.kycStatus || "").toLowerCase() !== "verified") {
+    const linkedVerifiedInquiry = await findVerifiedInquiryLinkedToLoan(user);
+    if (linkedVerifiedInquiry) inquiry = linkedVerifiedInquiry;
+  }
+
+  if (!inquiry) return existingProfile || null;
   return syncInquiryToCustomerProfile(inquiry, { user });
 };
 

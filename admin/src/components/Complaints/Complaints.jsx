@@ -4,6 +4,8 @@ import { complaintsApi } from "../../services/api/complaints.api";
 import Button from "../ui/Button";
 import Badge from "../ui/Badge";
 import { useToast } from "../../context/ToastContext.jsx";
+import { getAdminUser } from "../../utils/adminAuth";
+import { hasAnyRole } from "../../utils/adminRbac";
 
 const STATUS_TONE = {
   NEW: "amber",
@@ -27,6 +29,7 @@ const formatDate = (value) => {
 
 export default function ComplaintsPage() {
   const toast = useToast();
+  const canManage = hasAnyRole(getAdminUser(), ["SUPER_ADMIN", "CUSTOMER_SERVICE"]);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -177,37 +180,19 @@ export default function ComplaintsPage() {
 
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-slate-500">Submitted: {formatDate(item.createdAt)}</p>
-                <div className="flex flex-wrap gap-2">
-                  {item.status !== "IN_REVIEW" ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={actionLoading === `${item._id}:IN_REVIEW`}
-                      onClick={() => updateStatus(item._id, "IN_REVIEW")}
-                    >
-                      In Review
-                    </Button>
-                  ) : null}
-                  {item.status !== "RESOLVED" ? (
-                    <Button
-                      size="sm"
-                      disabled={actionLoading === `${item._id}:RESOLVED`}
-                      onClick={() => updateStatus(item._id, "RESOLVED")}
-                    >
-                      Resolve
-                    </Button>
-                  ) : null}
-                  {item.status !== "CLOSED" ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={actionLoading === `${item._id}:CLOSED`}
-                      onClick={() => updateStatus(item._id, "CLOSED")}
-                    >
-                      Close
-                    </Button>
-                  ) : null}
-                </div>
+                {canManage ? (
+                  <div className="flex flex-wrap gap-2">
+                    {item.status !== "IN_REVIEW" ? (
+                      <Button size="sm" variant="outline" disabled={actionLoading === `${item._id}:IN_REVIEW`} onClick={() => updateStatus(item._id, "IN_REVIEW")}>In Review</Button>
+                    ) : null}
+                    {item.status !== "RESOLVED" ? (
+                      <Button size="sm" disabled={actionLoading === `${item._id}:RESOLVED`} onClick={() => updateStatus(item._id, "RESOLVED")}>Resolve</Button>
+                    ) : null}
+                    {item.status !== "CLOSED" ? (
+                      <Button size="sm" variant="outline" disabled={actionLoading === `${item._id}:CLOSED`} onClick={() => updateStatus(item._id, "CLOSED")}>Close</Button>
+                    ) : null}
+                  </div>
+                ) : <span className="text-xs font-semibold text-slate-400">Read-only review</span>}
               </div>
             </article>
           ))

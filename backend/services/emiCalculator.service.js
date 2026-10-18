@@ -1,5 +1,12 @@
 import { ApiError } from "../utils/ApiError.js";
 
+const calculateFee = (type, value, principal) => {
+  const safeValue = Number(value || 0);
+  if (type === "flat") return safeValue;
+  if (type === "percent") return (principal * safeValue) / 100;
+  return 0;
+};
+
 export const emiCalculatorService = {
   calculate({ product, amount, tenureMonths }) {
     if (amount < product.minAmount || amount > product.maxAmount) {
@@ -13,17 +20,15 @@ export const emiCalculatorService = {
       throw new ApiError(400, "Tenure outside allowed range", "INVALID_TENURE");
     }
 
-    const monthlyRate = product.interestRateMonthly / 100;
+    const monthlyRate = Number(product.interestRateMonthly || 0) / 100;
     let emi = 0;
     let totalInterest = 0;
 
-    // FLAT INTEREST
     if (product.interestType === "flat") {
       totalInterest = amount * monthlyRate * tenureMonths;
       emi = (amount + totalInterest) / tenureMonths;
     }
 
-    // REDUCING BALANCE (EMI formula)
     if (product.interestType === "reducing") {
       const r = monthlyRate;
       const n = tenureMonths;
@@ -39,42 +44,44 @@ export const emiCalculatorService = {
       totalInterest = emi * tenureMonths - amount;
     }
 
-    // Processing Fee
-    let processingFee = 0;
-    if (product.processingFeeType === "flat") {
-      processingFee = product.processingFeeValue;
-    } else if (product.processingFeeType === "percent") {
-      processingFee = (amount * product.processingFeeValue) / 100;
-    }
+    // Processing and administration charges are ONE-TIME upfront fees.
+    // They are not repeated in monthly installments/calculator periods.
+    const processingFee = calculateFee(
+      product.processingFeeType || "percent",
+      product.processingFeeValue ?? 2.5,
+      amount
+    );
+    const adminFee = calculateFee(
+      product.adminFeeType || "percent",
+      product.adminFeeValue ?? 2.5,
+      amount
+    );
 
-    const loanAdministrationFeeMonthly = Number(product.loanAdministrationFeeMonthly || 0);
-    const loanAdministrationFeeTotal = loanAdministrationFeeMonthly * tenureMonths;
-
-    // Insurance
     let insurance = 0;
     if (product.insuranceType === "flat") {
-      insurance = product.insuranceValue;
+      insurance = Number(product.insuranceValue || 0);
     } else if (product.insuranceType === "percent") {
-      insurance = (amount * product.insuranceValue) / 100;
+      insurance = (amount * Number(product.insuranceValue || 0)) / 100;
     }
 
-    // Tax on fees
-    const tax = ((processingFee + insurance) * product.taxRatePercent) / 100;
-
-    const totalPayable =
-      amount + totalInterest + processingFee + insurance + tax + loanAdministrationFeeTotal;
+    const tax = ((processingFee + insurance) * Number(product.taxRatePercent || 0)) / 100;
+    const totalPayable = amount + totalInterest + processingFee + adminFee + insurance + tax;
 
     return {
       principal: amount,
       emi: Number(emi.toFixed(2)),
       totalInterest: Number(totalInterest.toFixed(2)),
       processingFee: Number(processingFee.toFixed(2)),
-      loanAdministrationFeeMonthly: Number(loanAdministrationFeeMonthly.toFixed(2)),
-      loanAdministrationFeeTotal: Number(loanAdministrationFeeTotal.toFixed(2)),
+      adminFee: Number(adminFee.toFixed(2)),
+      // Legacy response keys retained so older clients do not break.
+      loanAdministrationFeeMonthly: 0,
+      loanAdministrationFeeTotal: 0,
       insurance: Number(insurance.toFixed(2)),
       tax: Number(tax.toFixed(2)),
       totalPayable: Number(totalPayable.toFixed(2)),
       interestType: product.interestType,
+      overduePenaltyRatePercent: Number(product.overduePenaltyRatePercent ?? 15),
+      feePolicy: "Processing fee and administration fee are one-time charges applied at the beginning of the loan.",
     };
   },
 };

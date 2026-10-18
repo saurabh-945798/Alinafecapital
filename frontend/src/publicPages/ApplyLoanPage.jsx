@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, CircleHelp, PhoneCall, ShieldCheck } from "lucide-react";
-import { api } from "../services/api";
+import { api, getAccessToken } from "../services/api";
 import { useLoanProducts } from "../hooks/useLoanProducts";
 import { formatMoneyInput, parseMoneyInput } from "../utils/moneyInput";
 
@@ -63,7 +63,7 @@ const ApplyLoanPage = () => {
     let active = true;
 
     const loadApplyContext = async () => {
-      const token = typeof window !== "undefined" ? window.localStorage.getItem("token") : "";
+      const token = getAccessToken();
       if (!token) {
         if (active) setGateChecking(false);
         return;
@@ -312,11 +312,11 @@ const ApplyLoanPage = () => {
         >
           <div className="flex items-center gap-3">
             <Link
-              to="/"
+              to="/dashboard"
               className="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-semibold transition hover:bg-slate-100"
               style={{ color: BRAND_NAVY }}
             >
-              <ArrowLeft size={16} /> Back to Home
+              <ArrowLeft size={16} /> Back to Dashboard
             </Link>
             <span className="hidden text-slate-300 md:inline">|</span>
             <span className="hidden items-center gap-2 text-sm text-slate-600 md:inline-flex">

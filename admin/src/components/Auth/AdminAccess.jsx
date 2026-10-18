@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import Button from "../ui/Button";
 import { adminAuthApi } from "../../services/api/auth.api";
 import { setAdminToken, setAdminUser } from "../../utils/adminAuth";
-import { ADMIN_ROLES, normalizeAdminRole } from "../../utils/adminRbac";
+import { ADMIN_ROLES, hasAnyRole, normalizeAdminRole, normalizeAdminRoles } from "../../utils/adminRbac";
 import { useToast } from "../../context/ToastContext.jsx";
 import alinafeLogo from "../../assets/alinafe-logo.png";
 import restockLogo from "../../assets/restock-tech-logo.png";
@@ -28,10 +28,17 @@ export default function AdminAccessPage() {
 
   const nextPath = searchParams.get("next") || "/admin";
 
-  const roleHome = (role) => {
-    const r = normalizeAdminRole(role);
-    if (r === "SUPER_ADMIN") return "/admin";
-    if (r === "DISBURSED" || r === "DISBURSER") return "/admin/payments";
+  const roleHome = (user) => {
+    if (hasAnyRole(user, ["SUPER_ADMIN"])) return "/admin";
+    if (hasAnyRole(user, ["TECH_SUPPORT"])) return "/admin/settings";
+    if (hasAnyRole(user, ["PAYMENT_VERIFIER"])) return "/admin/payment-verification";
+    if (hasAnyRole(user, ["FINANCE_RECON"])) return "/admin/financial-journal";
+    if (hasAnyRole(user, ["COLLECTIONS", "DISBURSED"])) return "/admin/payments";
+    if (hasAnyRole(user, ["RISK_ANALYST"])) return "/admin/risk-assessment";
+    if (hasAnyRole(user, ["REPORTING_MIS"])) return "/admin/reports";
+    if (hasAnyRole(user, ["CUSTOMER_SERVICE"])) return "/admin/complaints";
+    if (hasAnyRole(user, ["VERIFIER"])) return "/admin/compliance";
+    if (hasAnyRole(user, ["AUDITOR"])) return "/admin/audit-trail";
     return "/admin/applications";
   };
 
@@ -47,15 +54,17 @@ export default function AdminAccessPage() {
       const user = payload.user || null;
 
       if (!token) throw new Error("Login response did not include access token.");
-      const userRole = normalizeAdminRole(user?.role);
-      if (!user || !ADMIN_ROLES.includes(userRole)) {
+      const userRoles = normalizeAdminRoles(user);
+      const userRole = normalizeAdminRole(userRoles);
+      if (!user || !userRoles.length || !userRoles.some((role) => ADMIN_ROLES.includes(role))) {
         throw new Error("You are not authorized to access the admin panel.");
       }
+      user.roles = userRoles;
       user.role = userRole;
 
       setAdminToken(token);
       setAdminUser(user);
-      const defaultPath = roleHome(user.role);
+      const defaultPath = roleHome(user);
       const safeNext =
         nextPath && nextPath.startsWith("/admin") && !nextPath.startsWith("/admin/user-access")
           ? nextPath

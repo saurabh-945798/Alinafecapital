@@ -70,6 +70,7 @@ export default function Dashboard() {
     actionRequired: 0,
   });
   const [needsAction, setNeedsAction] = useState([]);
+  const [overdue, setOverdue] = useState({ customersOverdue: 0, totalOverdueAmount: 0, pendingVerificationCount: 0, buckets: {}, items: [] });
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();
@@ -100,6 +101,7 @@ export default function Dashboard() {
         }
       );
       setNeedsAction(summary?.needsAction || []);
+      setOverdue(summary?.overdue || { customersOverdue: 0, totalOverdueAmount: 0, pendingVerificationCount: 0, buckets: {}, items: [] });
     } catch (err) {
       const msg = err?.response?.data?.message || "Failed to load dashboard.";
       setError(msg);
@@ -218,6 +220,12 @@ export default function Dashboard() {
             subtitle="Completed or not proceeding"
           />
         </div>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h2 className="text-lg font-semibold text-slate-900">Overdue Loans</h2><p className="text-sm text-slate-500">A controlled collections view. Accounts with a bank payment awaiting verification are clearly marked.</p></div><Link to="/admin/payment-verification" className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold">Payment Verification <ArrowRight size={15}/></Link></div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-6"><InfoTile label="Customers overdue" value={overdue.customersOverdue || 0}/><InfoTile label="Total overdue" value={`MWK ${Number(overdue.totalOverdueAmount || 0).toLocaleString("en-US",{maximumFractionDigits:2})}`}/><InfoTile label="1–7 days" value={overdue.buckets?.days1to7 || 0}/><InfoTile label="8–30 days" value={overdue.buckets?.days8to30 || 0}/><InfoTile label="31–60 days" value={overdue.buckets?.days31to60 || 0}/><InfoTile label="61+ days" value={overdue.buckets?.days61plus || 0}/></div>
+        <div className="mt-4 overflow-x-auto"><table className="min-w-full text-sm"><thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="p-3">Customer</th><th className="p-3">Loan</th><th className="p-3">Days overdue</th><th className="p-3">Overdue</th><th className="p-3">Outstanding</th><th className="p-3">Next action</th></tr></thead><tbody>{(overdue.items || []).length ? overdue.items.slice(0,8).map((item)=><tr key={item._id} className="border-t"><td className="p-3"><p className="font-semibold">{item.customerName}</p><p className="text-xs text-slate-500">{item.phone || item.email || "-"}</p></td><td className="p-3">{item.accountNumber}</td><td className="p-3 font-semibold text-rose-700">{item.daysOverdue}</td><td className="p-3">MWK {Number(item.overdueAmount||0).toLocaleString("en-US",{maximumFractionDigits:2})}</td><td className="p-3">MWK {Number(item.outstandingBalance||0).toLocaleString("en-US",{maximumFractionDigits:2})}</td><td className="p-3">{item.pendingPaymentVerification?.length?<span className="rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">Payment awaiting verification</span>:<span className="text-xs font-semibold text-amber-700">Customer follow-up</span>}</td></tr>) : <tr><td colSpan="6" className="p-6 text-center text-slate-500">No overdue loans right now.</td></tr>}</tbody></table></div>
       </section>
 
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">

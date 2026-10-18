@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { LoanAccount } from "../models/LoanAccount.model.js";
+import { BankPayment } from "../models/BankPayment.model.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { normalizeEmail, normalizePhone } from "../utils/normalize.js";
 import { enrichLoanAccount } from "../services/loanAccountSummary.service.js";
@@ -20,12 +21,32 @@ export const customerLoanAccountController = {
   listMine: async (req, res) => {
     const ownerFilter = buildOwnerFilter(req.user);
     const accounts = await LoanAccount.find(ownerFilter).sort({ createdAt: -1 }).lean();
+    const ids = accounts.map((account) => account._id);
+    const pendingPayments = ids.length
+      ? await BankPayment.find({
+          loanAccountId: { $in: ids },
+          userId: req.user._id,
+          status: { $in: ["PENDING_VERIFICATION", "REQUIRES_CLARIFICATION"] },
+        })
+          .select("loanAccountId paymentReference amount status clarificationMessage createdAt")
+          .sort({ createdAt: -1 })
+          .lean()
+      : [];
+    const pendingByAccount = new Map();
+    for (const payment of pendingPayments) {
+      const key = String(payment.loanAccountId);
+      if (!pendingByAccount.has(key)) pendingByAccount.set(key, []);
+      pendingByAccount.get(key).push(payment);
+    }
 
     res.json(
       new ApiResponse({
         message: "Loan accounts fetched",
         data: {
-          items: accounts.map(enrichLoanAccount),
+          items: accounts.map((account) => ({
+            ...enrichLoanAccount(account),
+            pendingBankPayments: pendingByAccount.get(String(account._id)) || [],
+          })),
         },
       })
     );
@@ -41,10 +62,19 @@ export const customerLoanAccountController = {
       return res.status(404).json({ success: false, message: "Loan account not found", code: "NOT_FOUND" });
     }
 
+    const pendingBankPayments = await BankPayment.find({
+      loanAccountId: account._id,
+      userId: req.user._id,
+      status: { $in: ["PENDING_VERIFICATION", "REQUIRES_CLARIFICATION"] },
+    })
+      .select("paymentReference amount status clarificationMessage createdAt")
+      .sort({ createdAt: -1 })
+      .lean();
+
     res.json(
       new ApiResponse({
         message: "Loan account fetched",
-        data: enrichLoanAccount(account),
+        data: { ...enrichLoanAccount(account), pendingBankPayments },
       })
     );
   },

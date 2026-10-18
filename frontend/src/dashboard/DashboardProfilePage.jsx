@@ -403,11 +403,11 @@ export default function DashboardProfilePage() {
       <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="space-y-1">
-            <h1 className="text-xl font-semibold text-slate-900">Profile + KYC</h1>
+            <h1 className="text-xl font-semibold text-slate-900">Profile Completion</h1>
             <p className="text-sm text-slate-500">
               {isPublicAccess
                 ? "Complete your details, upload documents, and submit your KYC from this secure link."
-                : "Complete your details, upload documents, and submit KYC in one place."}
+                : "Complete your personal, contact, employment and banking details. KYC verification is tracked separately under KYC Status."}
             </p>
           </div>
 
@@ -431,6 +431,10 @@ export default function DashboardProfilePage() {
           />
         </div>
 
+        <div className="flex flex-col gap-3 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
+          <p><strong className="text-[#002D5B]">Profile Completion</strong> measures how much account information you have filled in. <strong className="text-[#002D5B]">KYC Status</strong> is the separate verification decision made after your identity documents are reviewed.</p>
+          {!isPublicAccess ? <a href="/dashboard/kyc-status" className="shrink-0 font-semibold text-[#002D5B] underline">Check KYC Status</a> : null}
+        </div>
         <p className="text-sm text-slate-600">{nextStep}</p>
       </section>
 

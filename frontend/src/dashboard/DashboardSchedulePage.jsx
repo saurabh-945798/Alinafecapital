@@ -65,8 +65,9 @@ export default function DashboardSchedulePage() {
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [view, setView] = useState("list");
   const [filter, setFilter] = useState("All");
-  const [smsReminder, setSmsReminder] = useState(() => localStorage.getItem("alinafe_sms_reminders") !== "false");
-  const [emailReminder, setEmailReminder] = useState(() => localStorage.getItem("alinafe_email_reminders") === "true");
+  const [smsReminder, setSmsReminder] = useState(true);
+  const [emailReminder, setEmailReminder] = useState(false);
+  const [savingReminder, setSavingReminder] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -107,10 +108,16 @@ export default function DashboardSchedulePage() {
     setLoading(true);
     setError("");
     try {
-      const { data } = await api.get("/accounts/mine");
+      const [{ data }, { data: reminderResponse }] = await Promise.all([
+        api.get("/accounts/mine"),
+        api.get("/profile/me/reminders"),
+      ]);
       const items = data?.data?.items || data?.items || [];
       setAccounts(items);
       setSelectedAccountId((prev) => prev || String(items[0]?._id || ""));
+      const prefs = reminderResponse?.data || reminderResponse || {};
+      setSmsReminder(prefs.sms !== false);
+      setEmailReminder(Boolean(prefs.email));
     } catch (err) {
       setError(err?.response?.data?.message || err?.message || "Unable to load your repayment schedule.");
     } finally {
@@ -122,10 +129,20 @@ export default function DashboardSchedulePage() {
     loadAccounts();
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem("alinafe_sms_reminders", smsReminder ? "true" : "false");
-    localStorage.setItem("alinafe_email_reminders", emailReminder ? "true" : "false");
-  }, [smsReminder, emailReminder]);
+  const saveReminderPreference = async (next) => {
+    setSavingReminder(true);
+    setError("");
+    try {
+      await api.patch("/profile/me/reminders", next);
+      if (typeof next.sms === "boolean") setSmsReminder(next.sms);
+      if (typeof next.email === "boolean") setEmailReminder(next.email);
+      setNotice("Reminder preference saved to your account.");
+    } catch (err) {
+      setError(err?.response?.data?.message || err?.message || "Could not save reminder preference.");
+    } finally {
+      setSavingReminder(false);
+    }
+  };
 
   const openRepayment = (item = null) => {
     navigate("/dashboard/repayments", {
@@ -233,18 +250,45 @@ export default function DashboardSchedulePage() {
         <div className="space-y-4">
           {schedule.length ? schedule.map((item) => {
             const displayStatus = getDisplayStatus(item);
+            const penalty = Number(item.penaltyAmount || 0);
+            const cardTone = displayStatus === "overdue"
+              ? "border-rose-200 bg-gradient-to-r from-rose-50/80 to-white"
+              : displayStatus === "paid"
+              ? "border-emerald-200 bg-gradient-to-r from-emerald-50/60 to-white"
+              : "border-slate-200 bg-white";
             return (
-            <div key={`${selectedAccount._id}-${item.month}`} className="rounded-2xl border bg-white p-5 shadow-sm space-y-3">
-              <div className="flex justify-between gap-3">
+            <div key={`${selectedAccount._id}-${item.month}`} className={`overflow-hidden rounded-2xl border p-5 shadow-sm ${cardTone}`}>
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                  <p className="font-semibold text-slate-900">{monthName(item.dueDate, item.month)}</p>
-                  <p className="mt-1 text-sm text-slate-600">Due Date: {formatDate(item.dueDate)}</p>
-                  <p className="mt-1 text-sm">Amount: {formatMoney(item.remainingAmount || item.installment, currency)}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-base font-semibold text-slate-900">Installment #{item.month}</p>
+                    <span className={statusChip(displayStatus)}>{statusLabel(displayStatus)}</span>
+                  </div>
+                  <p className="mt-1 text-sm text-slate-500">{monthName(item.dueDate, item.month)} · Due {formatDate(item.dueDate)}</p>
                 </div>
-                <span className={statusChip(displayStatus)}>{statusLabel(displayStatus)}</span>
+                <div className="text-left lg:text-right">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Amount Remaining</p>
+                  <p className={`mt-1 text-xl font-bold ${displayStatus === "overdue" ? "text-rose-700" : "text-[#002D5B]"}`}>{formatMoney(item.remainingAmount ?? item.installment, currency)}</p>
+                </div>
               </div>
-              <button onClick={() => openRepayment(item)} className="w-full rounded-xl border px-4 py-2 text-sm font-semibold hover:bg-slate-100 transition">
-                {displayStatus === "paid" ? "View repayment details" : displayStatus === "overdue" ? "Pay overdue installment" : "Pay"}
+
+              <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                <ScheduleMetric label="Principal" value={formatMoney(item.principalPaid, currency)} />
+                <ScheduleMetric label="Interest" value={formatMoney(item.interest, currency)} />
+                <ScheduleMetric label="Fees" value={formatMoney(item.fees, currency)} />
+                <ScheduleMetric label="Paid" value={formatMoney(item.paidAmount, currency)} />
+                <ScheduleMetric label="Scheduled Amount" value={formatMoney(item.baseInstallment || item.installment, currency)} />
+              </div>
+
+              {penalty > 0 ? (
+                <div className="mt-4 flex flex-col gap-1 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 sm:flex-row sm:items-center sm:justify-between">
+                  <span><strong>Overdue penalty:</strong> {Number(item.penaltyRatePercent || 15).toFixed(0)}% applied because the installment was not cleared by the due date.</span>
+                  <strong className="shrink-0">+ {formatMoney(penalty, currency)}</strong>
+                </div>
+              ) : null}
+
+              <button onClick={() => openRepayment(item)} className="mt-4 w-full rounded-xl border border-[#002D5B]/15 bg-white px-4 py-2.5 text-sm font-semibold text-[#002D5B] transition hover:bg-blue-50">
+                {displayStatus === "paid" ? "View repayment details" : displayStatus === "overdue" ? "Pay overdue installment" : "Make payment"}
               </button>
             </div>
             );
@@ -259,7 +303,8 @@ export default function DashboardSchedulePage() {
               <CalendarDays size={18} className="text-slate-500" />
               <p className="mt-3 font-semibold text-slate-900">{monthName(item.dueDate, item.month)}</p>
               <p className="mt-1 text-sm text-slate-500">{formatDate(item.dueDate)}</p>
-              <p className="mt-2 text-sm font-semibold">{formatMoney(item.remainingAmount || item.installment, currency)}</p>
+              <p className="mt-2 text-sm font-semibold">{formatMoney(item.remainingAmount ?? item.installment, currency)}</p>
+              {Number(item.penaltyAmount || 0) > 0 ? <p className="mt-1 text-xs font-semibold text-rose-700">Includes {formatMoney(item.penaltyAmount, currency)} penalty</p> : null}
               <span className={`mt-3 inline-flex ${statusChip(displayStatus)}`}>{statusLabel(displayStatus)}</span>
             </button>
             );
@@ -271,13 +316,13 @@ export default function DashboardSchedulePage() {
         <h3 className="text-base font-semibold text-slate-800">Reminders</h3>
         <div className="flex items-center justify-between text-sm">
           <span>SMS reminders</span>
-          <input type="checkbox" checked={smsReminder} onChange={() => { setSmsReminder((v) => !v); setNotice("Reminder preference saved for this device."); }} />
+          <input type="checkbox" disabled={savingReminder} checked={smsReminder} onChange={() => saveReminderPreference({ sms: !smsReminder })} />
         </div>
         <div className="flex items-center justify-between text-sm">
           <span>Email reminders</span>
-          <input type="checkbox" checked={emailReminder} onChange={() => { setEmailReminder((v) => !v); setNotice("Reminder preference saved for this device."); }} />
+          <input type="checkbox" disabled={savingReminder} checked={emailReminder} onChange={() => saveReminderPreference({ email: !emailReminder })} />
         </div>
-        <p className="text-xs text-slate-500">You will receive reminders before the due date once reminder services are enabled for your account.</p>
+        <p className="text-xs text-slate-500">Your preference is saved to your account. Reminder services can use the controlled 7-day, 3-day, due-date and overdue schedule when enabled.</p>
       </section>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -285,6 +330,15 @@ export default function DashboardSchedulePage() {
         <LinkButton to="/dashboard/repayments" label="Open Repayments" />
         <ActionButton label="Download Schedule PDF" icon={Download} onClick={printSchedule} />
       </div>
+    </div>
+  );
+}
+
+function ScheduleMetric({ label, value }) {
+  return (
+    <div className="rounded-xl border border-slate-100 bg-white/80 px-3 py-2.5">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-slate-800">{value}</p>
     </div>
   );
 }

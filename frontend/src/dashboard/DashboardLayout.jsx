@@ -88,12 +88,12 @@ export default function DashboardLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 py-4 sm:py-6">
+    <div className="min-h-screen bg-[linear-gradient(135deg,#f8fafc_0%,#eef4fb_48%,#fbf7ee_100%)] py-4 sm:py-6">
       <TransitionOverlay visible={loggingOut} title="Signing you out" message="Taking you back to the main menu." />
       <div className="mx-auto max-w-7xl px-4 pb-8 md:px-6 lg:px-8">
-        <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-[#002D5B]/10 bg-[linear-gradient(120deg,rgba(255,255,255,0.98),rgba(237,244,252,0.96),rgba(251,247,238,0.94))] px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Customer Dashboard</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#002D5B]">Customer Dashboard</p>
             <p className="mt-1 text-sm text-slate-600">Manage your loan, repayments and profile in one place.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

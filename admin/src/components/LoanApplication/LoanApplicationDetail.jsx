@@ -10,7 +10,7 @@ import { useToast } from "../../context/ToastContext.jsx";
 import { ADMIN_API_BASE_URL, ADMIN_FILE_BASE_URL } from "../../config/api";
 import { formatMWK } from "../../utils/money.js";
 import { getAdminUser } from "../../utils/adminAuth";
-import { canTakeStatusAction, normalizeAdminRole } from "../../utils/adminRbac";
+import { canTakeStatusAction, hasAnyRole } from "../../utils/adminRbac";
 
 const STATUS_TONE = {
   NEW: "amber",
@@ -99,32 +99,29 @@ const formatMoney = (value) => {
   return formatMWK(value, 3);
 };
 
-const resolveRepaymentConfig = (item) => {
-  const text = `${item?.loanProductName || ""} ${item?.loanProductSlug || ""}`.toLowerCase();
-  const base = {
-    monthlyRate: 0.05,
-    processingFeeRate: 0.025,
-    adminFeeRate: 0.025,
-    rateType: "reducing",
+const resolveRepaymentConfig = (item, products = []) => {
+  const slug = String(item?.loanProductSlug || "").trim().toLowerCase();
+  const product = products.find((entry) => String(entry?.slug || "").trim().toLowerCase() === slug);
+  if (!product) return null;
+
+  return {
+    interestType: product.interestType === "flat" ? "flat" : "reducing",
+    monthlyRate: Number(product.interestRateMonthly || 0) / 100,
+    processingFeeType: product.processingFeeType === "flat" ? "flat" : "percent",
+    processingFeeValue: Number(product.processingFeeValue ?? 2.5),
+    adminFeeType: product.adminFeeType === "flat" ? "flat" : "percent",
+    adminFeeValue: Number(product.adminFeeValue ?? 2.5),
+    monthlyAdminFee: 0,
+    overduePenaltyRatePercent: Number(product.overduePenaltyRatePercent ?? 15),
+    insuranceType: ["flat", "percent"].includes(product.insuranceType) ? product.insuranceType : "none",
+    insuranceValue: Number(product.insuranceValue || 0),
+    taxRate: Number(product.taxRatePercent || 0) / 100,
   };
-
-  if (text.includes("business")) {
-    return { ...base, monthlyRate: 0.075 };
-  }
-
-  if (
-    text.includes("civil servant") ||
-    text.includes("private company") ||
-    text.includes("statutory company")
-  ) {
-    return base;
-  }
-
-  return base;
 };
 
 const calculateReducingInstallment = (principal, monthlyRate, months) => {
-  if (principal <= 0 || monthlyRate <= 0 || months <= 0) return 0;
+  if (principal <= 0 || months <= 0) return 0;
+  if (monthlyRate <= 0) return principal / months;
   const factor = Math.pow(1 + monthlyRate, months);
   return (principal * monthlyRate * factor) / (factor - 1);
 };
@@ -136,27 +133,45 @@ const addMonths = (dateValue, monthsToAdd) => {
   return date.toISOString();
 };
 
-const buildRepaymentPlan = (item) => {
-  const principal = Number(item?.requestedAmount || 0);
+const buildRepaymentPlan = (item, products = []) => {
+  const principal = Number(item?.disbursementAmount || item?.requestedAmount || 0);
   const months = Number(item?.preferredTenureMonths || 0);
   if (principal <= 0 || months <= 0) return null;
 
-  const config = resolveRepaymentConfig(item);
-  const emi = calculateReducingInstallment(principal, config.monthlyRate, months);
-  const processingFee = principal * config.processingFeeRate;
-  const oneTimeAdminFee = principal * config.adminFeeRate;
+  const config = resolveRepaymentConfig(item, products);
+  if (!config) return null;
+
+  const baseInstallment =
+    config.interestType === "flat"
+      ? (principal + principal * config.monthlyRate * months) / months
+      : calculateReducingInstallment(principal, config.monthlyRate, months);
+  const processingFee =
+    config.processingFeeType === "flat"
+      ? config.processingFeeValue
+      : principal * (config.processingFeeValue / 100);
+  const insurance =
+    config.insuranceType === "flat"
+      ? config.insuranceValue
+      : config.insuranceType === "percent"
+      ? principal * (config.insuranceValue / 100)
+      : 0;
+  const tax = (processingFee + insurance) * config.taxRate;
+  const oneTimeAdminFee =
+    config.adminFeeType === "flat"
+      ? config.adminFeeValue
+      : principal * (config.adminFeeValue / 100);
   const startDate =
     item?.disbursedAt || item?.approvedAt || item?.verifiedAt || item?.createdAt || new Date().toISOString();
 
   let balance = principal;
   const schedule = [];
-
   for (let month = 1; month <= months; month += 1) {
     const openingBalance = balance;
-    const interest = openingBalance * config.monthlyRate;
-    const principalPaid = Math.max(0, emi - interest);
+    const interest = config.interestType === "flat" ? principal * config.monthlyRate : openingBalance * config.monthlyRate;
+    let principalPaid = config.interestType === "flat" ? principal / months : Math.max(0, baseInstallment - interest);
+    if (month === months || principalPaid > openingBalance) principalPaid = openingBalance;
     balance = Math.max(0, openingBalance - principalPaid);
-    const fees = month === 1 ? processingFee + oneTimeAdminFee : 0;
+    const fees = month === 1 ? processingFee + oneTimeAdminFee + insurance + tax : 0;
 
     schedule.push({
       month,
@@ -165,21 +180,24 @@ const buildRepaymentPlan = (item) => {
       principalPaid,
       interest,
       fees,
-      installment: emi + fees,
+      installment: principalPaid + interest + fees,
       closingBalance: balance,
     });
   }
 
   const totalInterest = schedule.reduce((sum, row) => sum + row.interest, 0);
-  const totalFees = processingFee + oneTimeAdminFee;
-  const totalRepayment = principal + totalInterest + totalFees;
+  const totalFees = processingFee + oneTimeAdminFee + insurance + tax;
+  const totalRepayment = schedule.reduce((sum, row) => sum + row.installment, 0);
 
   return {
     monthlyRate: config.monthlyRate,
     processingFee,
     oneTimeAdminFee,
-    monthlyInstallment: emi,
-    firstInstallment: schedule[0]?.installment || emi,
+    insurance,
+    tax,
+    monthlyInstallment: baseInstallment,
+    overduePenaltyRatePercent: config.overduePenaltyRatePercent,
+    firstInstallment: schedule[0]?.installment || baseInstallment,
     totalInterest,
     totalFees,
     totalRepayment,
@@ -333,7 +351,8 @@ export default function LoanApplicationDetail() {
   const [addDocName, setAddDocName] = useState("");
   const [approvalWhatsAppMessage, setApprovalWhatsAppMessage] = useState("");
   const adminUser = getAdminUser() || {};
-  const adminRole = normalizeAdminRole(adminUser?.role);
+  const canEditApplicationDetails = hasAnyRole(adminUser, ["SUPER_ADMIN"]);
+  const canManageKycDocuments = hasAnyRole(adminUser, ["SUPER_ADMIN", "VERIFIER"]);
   const adminDisplayName =
     adminUser.name || adminUser.fullName || adminUser.email || "Admin";
   const hasSubmittedKyc =
@@ -487,7 +506,7 @@ export default function LoanApplicationDetail() {
   };
 
   const saveDetails = async () => {
-    if (!item?._id || !detailsForm) return;
+    if (!item?._id || !detailsForm || !canEditApplicationDetails) return;
     setActionLoading(true);
     setError("");
     try {
@@ -564,7 +583,7 @@ export default function LoanApplicationDetail() {
   };
 
   const uploadAdminDoc = async (type, file, displayName) => {
-    if (!item?._id || !file) return;
+    if (!item?._id || !file || !canManageKycDocuments) return;
     const trimmedName = String(displayName || "").trim();
     if (!trimmedName) {
       const msg = "Document name is required.";
@@ -589,7 +608,7 @@ export default function LoanApplicationDetail() {
   };
 
   const removeAdminDoc = async (type) => {
-    if (!item?._id) return;
+    if (!item?._id || !canManageKycDocuments) return;
     setDocActionLoading(`remove:${type}`);
     setError("");
     try {
@@ -611,7 +630,7 @@ export default function LoanApplicationDetail() {
     setError("");
     const actionStatus = nextStatus;
     try {
-      if (!canTakeStatusAction(adminRole, actionStatus)) {
+      if (!canTakeStatusAction(adminUser, actionStatus)) {
         throw new Error("You are not allowed to perform this action.");
       }
       if ((actionStatus === "APPROVED" || actionStatus === "KYC_REJECTED" || actionStatus === "VERIFIED") && !hasSubmittedKyc) {
@@ -1508,10 +1527,10 @@ export default function LoanApplicationDetail() {
     if (item?.status === "CLOSED") return [];
     if (hasSubmittedKyc) return ["VERIFIED", "CLOSED"];
     return ["CLOSED"];
-  })().filter((status) => canTakeStatusAction(adminRole, status));
+  })().filter((status) => canTakeStatusAction(adminUser, status));
   const repaymentPlan =
     item?.kycStatus === "verified" || item?.status === "APPROVED" || item?.status === "DISBURSED"
-      ? buildRepaymentPlan(item)
+      ? buildRepaymentPlan(item, loanProducts)
       : null;
   const visibleHistory = actionHistory
     .slice()
@@ -1669,7 +1688,7 @@ export default function LoanApplicationDetail() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!isDisbursed ? (
+          {!isDisbursed && canEditApplicationDetails ? (
             <Button onClick={() => setEditMode((prev) => !prev)}>
               {editMode ? (
                 <>
@@ -1682,7 +1701,7 @@ export default function LoanApplicationDetail() {
               )}
             </Button>
           ) : null}
-          {editMode && !isDisbursed ? (
+          {editMode && !isDisbursed && canEditApplicationDetails ? (
             <Button variant="outline" onClick={saveDetails} disabled={actionLoading}>
               <Save size={16} />
               {actionLoading ? "Saving..." : "Save Details"}
@@ -1747,7 +1766,7 @@ export default function LoanApplicationDetail() {
             <div className="flex flex-wrap gap-2">
               {item.status === "APPROVED" ? (
                 <Button
-                  disabled={!canTakeStatusAction(adminRole, "AUTHORIZED")}
+                  disabled={!canTakeStatusAction(adminUser, "AUTHORIZED")}
                   onClick={() => prepareWorkflowStatus("AUTHORIZED")}
                 >
                   Prepare Authorization
@@ -1755,7 +1774,7 @@ export default function LoanApplicationDetail() {
               ) : null}
               {item.status === "AUTHORIZED" ? (
                 <Button
-                  disabled={!canTakeStatusAction(adminRole, "DISBURSED")}
+                  disabled={!canTakeStatusAction(adminUser, "DISBURSED")}
                   onClick={() => prepareWorkflowStatus("DISBURSED")}
                 >
                   Prepare Disbursement
@@ -1769,12 +1788,12 @@ export default function LoanApplicationDetail() {
             </div>
           </div>
 
-          {item.status === "APPROVED" && !canTakeStatusAction(adminRole, "AUTHORIZED") ? (
+          {item.status === "APPROVED" && !canTakeStatusAction(adminUser, "AUTHORIZED") ? (
             <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
               Your current admin role cannot authorize loans. Sign in as Super Admin or an Authorized officer.
             </p>
           ) : null}
-          {item.status === "AUTHORIZED" && !canTakeStatusAction(adminRole, "DISBURSED") ? (
+          {item.status === "AUTHORIZED" && !canTakeStatusAction(adminUser, "DISBURSED") ? (
             <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
               Your current admin role cannot disburse loans. Sign in as Super Admin or a Disbursement officer.
             </p>
@@ -2284,7 +2303,7 @@ export default function LoanApplicationDetail() {
                           Actions
                         </p>
                         {doc.fileUrl ? (
-                          editMode ? (
+                          canManageKycDocuments ? (
                             <div className="flex flex-wrap items-center gap-2">
                               <a
                                 href={resolveAssetUrl(doc.fileUrl)}
@@ -2333,6 +2352,7 @@ export default function LoanApplicationDetail() {
                 </div>
               </div>
             )}
+            {canManageKycDocuments ? (
             <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-4">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
                 Add Document
@@ -2370,6 +2390,7 @@ export default function LoanApplicationDetail() {
                 </p>
               </div>
             </div>
+            ) : null}
           </div>
 
           {repaymentPlan ? (

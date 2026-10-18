@@ -6,6 +6,8 @@ import Button from "../ui/Button";
 import { accountsApi } from "../../services/api/accounts.api";
 import { useToast } from "../../context/ToastContext.jsx";
 import { formatMWK, truncateAmount } from "../../utils/money.js";
+import { getAdminUser } from "../../utils/adminAuth";
+import { hasAnyRole } from "../../utils/adminRbac";
 
 const ACCOUNT_STATUS_TONE = {
   ACTIVE: "green",
@@ -57,12 +59,18 @@ const addMonths = (value, monthsToAdd) => {
 const buildRepaymentPlan = (account) => {
   const principal = Number(account?.disbursedAmount || 0);
   const months = Number(account?.tenureMonths || 0);
-  const monthlyRate = Number(account?.monthlyRate || 0);
+  const monthlyRate = Number(account?.interestRateMonthly ?? 0) > 0
+    ? Number(account.interestRateMonthly) / 100
+    : Number(account?.monthlyRate || 0);
   if (principal <= 0 || months <= 0) return null;
 
   const installment = calculateReducingInstallment(principal, monthlyRate, months);
-  const processingFee = roundAmount(principal * Number(account?.processingFeeRate || 0));
-  const adminFee = roundAmount(principal * Number(account?.adminFeeRate || 0));
+  const processingFee = account?.processingFeeType === "flat"
+    ? roundAmount(account?.processingFeeValue || 0)
+    : roundAmount(principal * (Number(account?.processingFeeValue ?? 2.5) / 100));
+  const adminFee = account?.adminFeeType === "flat"
+    ? roundAmount(account?.adminFeeValue || 0)
+    : roundAmount(principal * (Number(account?.adminFeeValue ?? 2.5) / 100));
   const startDate = account?.disbursedAt || account?.approvedAt || account?.createdAt || new Date().toISOString();
 
   let balance = roundAmount(principal);
@@ -104,6 +112,8 @@ export default function AccountDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const adminUser = getAdminUser() || {};
+  const canManagePayments = hasAnyRole(adminUser, ["SUPER_ADMIN", "FINANCE_RECON"]);
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -161,7 +171,7 @@ export default function AccountDetailPage() {
       return {
         tone: "border-rose-200 bg-rose-50 text-rose-900",
         title: "Payment Attention Needed",
-        message: `${item.overdueInstallmentsCount} installment(s) are overdue. Review the repayment schedule and update the missing payment entries.`,
+        message: `${item.overdueInstallmentsCount} installment(s) are overdue. The 15% overdue penalty is included where triggered. Review the repayment schedule and update the missing payment entries.`,
       };
     }
     if (item.nextDueDate) {
@@ -608,7 +618,7 @@ export default function AccountDetailPage() {
 
           {scheduleOpen ? (
             <div className="mt-4 space-y-4">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Monthly Rate</p>
                   <p className="mt-1 text-sm font-medium text-slate-900">{(repaymentPlan.monthlyRate * 100).toFixed(1)}%</p>
@@ -625,6 +635,10 @@ export default function AccountDetailPage() {
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Total Repayment</p>
                   <p className="mt-1 text-sm font-medium text-slate-900">{formatMoney(repaymentPlan.totalRepayment)}</p>
                 </div>
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-600">Penalty Interest</p>
+                  <p className="mt-1 text-sm font-medium text-rose-800">{formatMoney(repaymentPlan.totalPenaltyInterest || 0)}</p>
+                </div>
               </div>
 
               <div className="overflow-x-auto rounded-lg border border-slate-200">
@@ -636,6 +650,7 @@ export default function AccountDetailPage() {
                       <th className="px-3 py-3">Opening</th>
                       <th className="px-3 py-3">Principal</th>
                       <th className="px-3 py-3">Interest</th>
+                      <th className="px-3 py-3">Penalty</th>
                       <th className="px-3 py-3">Fees</th>
                       <th className="px-3 py-3">Installment</th>
                       <th className="px-3 py-3">Paid</th>
@@ -665,6 +680,7 @@ export default function AccountDetailPage() {
                           <td className="px-3 py-3 text-slate-700">{formatMoney(row.openingBalance)}</td>
                           <td className="px-3 py-3 text-slate-700">{formatMoney(row.principalPaid)}</td>
                           <td className="px-3 py-3 text-slate-700">{formatMoney(row.interest)}</td>
+                          <td className={`px-3 py-3 ${Number(row.penaltyAmount || 0) > 0 ? "font-semibold text-rose-700" : "text-slate-500"}`}>{formatMoney(row.penaltyAmount || 0)}</td>
                           <td className="px-3 py-3 text-slate-700">{formatMoney(row.fees)}</td>
                           <td className="px-3 py-3 font-medium text-slate-900">{formatMoney(row.installment)}</td>
                           <td className="px-3 py-3 text-slate-700">{formatMoney(row.paidAmount)}</td>
@@ -783,7 +799,7 @@ export default function AccountDetailPage() {
         </div>
       ) : null}
 
-      {confirmDeletePaymentId ? (
+      {canManagePayments && confirmDeletePaymentId ? (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 px-4">
           <div className="w-full max-w-md rounded-2xl border border-rose-200 bg-white p-6 shadow-2xl">
             <h3 className="text-lg font-semibold text-slate-900">Delete Payment Entry</h3>

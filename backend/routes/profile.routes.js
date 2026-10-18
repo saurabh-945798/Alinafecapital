@@ -9,6 +9,8 @@ import {
   uploadMyAvatar,
   removeMyAvatar,
   requestKycUpdate,
+  getMyRepaymentReminders,
+  updateMyRepaymentReminders,
 } from "../controllers/profile.controller.js";
 
 const router = Router();
@@ -37,5 +39,7 @@ router.delete("/me/avatar", requireAuth, removeMyAvatar);
 router.post("/me/doc", requireAuth, upload.single("file"), handleUploadError, uploadMyDoc);
 router.post("/me/submit", requireAuth, submitKyc);
 router.post("/me/request-kyc-update", requireAuth, requestKycUpdate);
+router.get("/me/reminders", requireAuth, getMyRepaymentReminders);
+router.patch("/me/reminders", requireAuth, updateMyRepaymentReminders);
 
 export default router;

@@ -47,9 +47,13 @@ export const toPublicUploadUrl = (filePath = "") => {
 
   throwIfUnsafeInProduction(normalizePath(absolute));
 
+  const publicUrl = normalizedRelative.startsWith("profile/")
+    ? `/uploads/${normalizedRelative}`
+    : `/api/v1/files/${normalizedRelative}`;
+
   if (traceUploads) {
-    console.info(`[upload-trace] context=public-url uploadRoot=${normalizePath(UPLOAD_ROOT)} absolute=${normalizePath(absolute)} url=/uploads/${normalizedRelative}`);
+    console.info(`[upload-trace] context=public-url uploadRoot=${normalizePath(UPLOAD_ROOT)} absolute=${normalizePath(absolute)} url=${publicUrl}`);
   }
 
-  return `/uploads/${normalizedRelative}`;
+  return publicUrl;
 };

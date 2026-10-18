@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Bell, FileSpreadsheet, LockKeyhole, RefreshCcw, ShieldCheck, SlidersHorizontal, Users } from "lucide-react";
 import Button from "../ui/Button";
 import { clearAdminSession, getAdminUser } from "../../utils/adminAuth";
+import { adminAuthApi } from "../../services/api/auth.api";
 
 const STORAGE_KEY = "alinafe_admin_settings";
 
@@ -67,8 +68,10 @@ export default function SettingsPage() {
   };
 
   const logout = () => {
-    clearAdminSession();
-    navigate("/admin/login", { replace: true });
+    adminAuthApi.logout().catch(() => {}).finally(() => {
+      clearAdminSession();
+      navigate("/admin/login", { replace: true });
+    });
   };
 
   return (
