@@ -22,7 +22,7 @@ export default function AdminLayout() {
   }, [location.pathname]);
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-[linear-gradient(135deg,#f8fafc_0%,#eef4fb_50%,#fbf7ee_100%)]">
       {pageTransition ? (
         <AdminLoadingScreen mode="compact" message="Loading page..." />
       ) : null}
@@ -30,7 +30,7 @@ export default function AdminLayout() {
       <Sidebar />
 
       <main className="lg:pl-72">
-        <div className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur-xl lg:px-8">
+        <div className="sticky top-0 z-30 border-b border-[#002D5B]/10 bg-[linear-gradient(120deg,rgba(255,255,255,0.96),rgba(238,245,252,0.94),rgba(252,248,239,0.94))] px-4 py-3 backdrop-blur-xl lg:px-8">
           <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">

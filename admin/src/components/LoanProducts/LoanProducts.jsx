@@ -17,20 +17,32 @@ const DEFAULT_FORM = {
   interestType: "reducing",
   interestRateMonthly: "",
   processingFeeType: "percent",
-  processingFeeValue: "0",
+  processingFeeValue: "2.5",
+  adminFeeType: "percent",
+  adminFeeValue: "2.5",
+  overduePenaltyRatePercent: "15",
   loanAdministrationFeeMonthly: "0",
   status: "active",
   featured: false,
 };
 
 const toNumber = (value, fallback = 0) => {
-  const n = Number(value);
+  const n = Number(String(value ?? "").replace(/,/g, ""));
   return Number.isFinite(n) ? n : fallback;
 };
 
+const formatAmountField = (value) => {
+  if (value === "" || value == null) return "";
+  const n = toNumber(value, Number.NaN);
+  if (!Number.isFinite(n)) return String(value);
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const unformatAmountField = (value) => String(value ?? "").replace(/,/g, "");
+
 const statusTone = (status) => (status === "active" ? "green" : "gray");
 
-const INPUT_CLASS = "mt-1 h-10 w-full rounded-lg border px-3 text-sm";
+const INPUT_CLASS = "mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-[#002D5B] focus:ring-2 focus:ring-[#002D5B]/10";
 
 const FieldHint = ({ children }) => <p className="mt-1 text-[11px] text-slate-500">{children}</p>;
 
@@ -86,6 +98,16 @@ export default function LoanProductsPage() {
     }));
   };
 
+  const handleMoneyFocus = (event) => {
+    const { name, value } = event.target;
+    setForm((prev) => ({ ...prev, [name]: unformatAmountField(value) }));
+  };
+
+  const handleMoneyBlur = (event) => {
+    const { name, value } = event.target;
+    setForm((prev) => ({ ...prev, [name]: formatAmountField(value) }));
+  };
+
   const handleEdit = (item) => {
     setEditingId(String(item._id));
     setForm({
@@ -94,15 +116,18 @@ export default function LoanProductsPage() {
       category: item.category || "Private",
       description: item.description || "",
       currency: item.currency || "MWK",
-      minAmount: String(item.minAmount ?? ""),
-      maxAmount: String(item.maxAmount ?? ""),
+      minAmount: formatAmountField(item.minAmount ?? ""),
+      maxAmount: formatAmountField(item.maxAmount ?? ""),
       minTenureMonths: String(item.minTenureMonths ?? ""),
       maxTenureMonths: String(item.maxTenureMonths ?? ""),
       interestType: item.interestType || "reducing",
       interestRateMonthly: String(item.interestRateMonthly ?? ""),
-      processingFeeType: item.processingFeeType || "percent",
-      processingFeeValue: String(item.processingFeeValue ?? 0),
-      loanAdministrationFeeMonthly: String(item.loanAdministrationFeeMonthly ?? 0),
+      processingFeeType: "percent",
+      processingFeeValue: "2.5",
+      adminFeeType: "percent",
+      adminFeeValue: "2.5",
+      overduePenaltyRatePercent: "15",
+      loanAdministrationFeeMonthly: "0",
       status: item.status || "active",
       featured: Boolean(item.featured),
     });
@@ -132,9 +157,12 @@ export default function LoanProductsPage() {
     maxTenureMonths: toNumber(form.maxTenureMonths),
     interestType: form.interestType,
     interestRateMonthly: toNumber(form.interestRateMonthly),
-    processingFeeType: form.processingFeeType,
-    processingFeeValue: toNumber(form.processingFeeValue),
-    loanAdministrationFeeMonthly: toNumber(form.loanAdministrationFeeMonthly),
+    processingFeeType: "percent",
+    processingFeeValue: 2.5,
+    adminFeeType: "percent",
+    adminFeeValue: 2.5,
+    overduePenaltyRatePercent: 15,
+    loanAdministrationFeeMonthly: 0,
     status: form.status,
     featured: Boolean(form.featured),
   });
@@ -270,12 +298,18 @@ export default function LoanProductsPage() {
                 value={form.category}
                 onChange={handleInput}
               >
+                <option value="Personal">Personal</option>
                 <option value="Private">Private</option>
                 <option value="Business">Business</option>
                 <option value="Agriculture">Agriculture</option>
                 <option value="Emergency Loan">Emergency Loan</option>
                 <option value="Government">Government</option>
                 <option value="Public">Public</option>
+                <option value="Education">Education</option>
+                <option value="Group">Group</option>
+                <option value="Asset Finance">Asset Finance</option>
+                <option value="Digital Credit">Digital Credit</option>
+                <option value="Other">Other</option>
               </select>
               <FieldHint>Select how this product should appear in frontend tabs.</FieldHint>
             </label>
@@ -296,7 +330,7 @@ export default function LoanProductsPage() {
           <label className="block text-xs text-slate-600">
             Short Description
             <textarea
-              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-[#002D5B] focus:ring-2 focus:ring-[#002D5B]/10"
               placeholder="Short customer-friendly summary."
               name="description"
               rows={3}
@@ -314,11 +348,14 @@ export default function LoanProductsPage() {
               Minimum Amount *
               <input
                 className={INPUT_CLASS}
-                placeholder="50000"
+                placeholder="50,000.00"
                 name="minAmount"
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={form.minAmount}
                 onChange={handleInput}
+                onFocus={handleMoneyFocus}
+                onBlur={handleMoneyBlur}
               />
               <FieldHint>Smallest loan customer can request.</FieldHint>
             </label>
@@ -327,11 +364,14 @@ export default function LoanProductsPage() {
               Maximum Amount *
               <input
                 className={INPUT_CLASS}
-                placeholder="500000"
+                placeholder="500,000.00"
                 name="maxAmount"
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={form.maxAmount}
                 onChange={handleInput}
+                onFocus={handleMoneyFocus}
+                onBlur={handleMoneyBlur}
               />
               <FieldHint>Largest loan allowed for this product.</FieldHint>
             </label>
@@ -421,41 +461,41 @@ export default function LoanProductsPage() {
                 </label>
 
                 <label className="text-xs text-slate-600">
-                  Processing Fee Type
-                  <select className={INPUT_CLASS} name="processingFeeType" value={form.processingFeeType} onChange={handleInput}>
-                    <option value="percent">percent</option>
-                    <option value="flat">flat</option>
-                  </select>
-                  <FieldHint>Percent means % of loan amount. Flat means fixed value.</FieldHint>
-                </label>
-
-                <label className="text-xs text-slate-600">
-                  Processing Fees and Insurance per Month
+                  Processing Fee (%)
                   <input
-                    className={INPUT_CLASS}
-                    placeholder="0"
+                    className={`${INPUT_CLASS} bg-blue-50/60`}
                     name="processingFeeValue"
-                    type="number"
-                    step="0.01"
-                    value={form.processingFeeValue}
-                    onChange={handleInput}
+                    value="2.50"
+                    readOnly
                   />
-                  <FieldHint>Use this as the single monthly charge amount or percentage.</FieldHint>
+                  <FieldHint>One-time 2.5% charge applied at the beginning of the loan. It does not recur monthly.</FieldHint>
                 </label>
 
                 <label className="text-xs text-slate-600">
-                  Loan Administration Fees per Month
+                  Admin Fee (%)
                   <input
-                    className={INPUT_CLASS}
-                    placeholder="0"
-                    name="loanAdministrationFeeMonthly"
-                    type="number"
-                    step="0.01"
-                    value={form.loanAdministrationFeeMonthly}
-                    onChange={handleInput}
+                    className={`${INPUT_CLASS} bg-blue-50/60`}
+                    name="adminFeeValue"
+                    value="2.50"
+                    readOnly
                   />
-                  <FieldHint>Monthly administration charge added for this loan product.</FieldHint>
+                  <FieldHint>One-time 2.5% administration charge applied at the beginning of the loan only.</FieldHint>
                 </label>
+
+                <label className="text-xs text-slate-600">
+                  Overdue Penalty (%)
+                  <input
+                    className={`${INPUT_CLASS} bg-amber-50/70`}
+                    name="overduePenaltyRatePercent"
+                    value="15.00"
+                    readOnly
+                  />
+                  <FieldHint>Applied automatically to an installment that remains unpaid after its due date.</FieldHint>
+                </label>
+
+                <div className="md:col-span-3 rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-3 text-xs leading-5 text-slate-700">
+                  <strong className="text-[#002D5B]">Current fee policy:</strong> Processing Fee 2.5% + Admin Fee 2.5% are charged once at loan commencement. They are not monthly recurring fees. The normal calculator remains interactive for amount and tenure.
+                </div>
               </div>
             </>
           ) : null}
@@ -483,6 +523,7 @@ export default function LoanProductsPage() {
                 <th className="px-4 py-3 text-left">Slug</th>
                 <th className="px-4 py-3 text-left">Range</th>
                 <th className="px-4 py-3 text-left">Rate</th>
+                <th className="px-4 py-3 text-left">Fees</th>
                 <th className="px-4 py-3 text-left">Status</th>
                 <th className="px-4 py-3 text-left">Action</th>
               </tr>
@@ -490,13 +531,13 @@ export default function LoanProductsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-slate-500">
+                  <td colSpan={8} className="px-4 py-6 text-slate-500">
                     Loading products...
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-slate-500">
+                  <td colSpan={8} className="px-4 py-6 text-slate-500">
                     No loan products found.
                   </td>
                 </tr>
@@ -520,6 +561,11 @@ export default function LoanProductsPage() {
                     </td>
                     <td className="px-4 py-3">
                       {item.interestRateMonthly}% ({item.interestType})
+                    </td>
+                    <td className="px-4 py-3 text-xs leading-5 text-slate-600">
+                      <div>Processing: 2.5% once</div>
+                      <div>Admin: 2.5% once</div>
+                      <div className="text-amber-700">Overdue: 15%</div>
                     </td>
                     <td className="px-4 py-3">
                       <Badge tone={statusTone(item.status)}>{item.status}</Badge>

@@ -83,6 +83,11 @@ const UserProfileSchema = new mongoose.Schema(
     },
     kycUpdateReason: { type: String, trim: true, default: "" },
     kycUpdateRequestedAt: { type: Date, default: null },
+    repaymentReminders: {
+      dashboard: { type: Boolean, default: true },
+      sms: { type: Boolean, default: true },
+      email: { type: Boolean, default: false },
+    },
     submittedAt: { type: Date, default: null },
     verifiedAt: { type: Date, default: null },
     rejectedAt: { type: Date, default: null },

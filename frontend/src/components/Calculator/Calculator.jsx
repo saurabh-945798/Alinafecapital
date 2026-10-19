@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Phone,
@@ -6,11 +6,7 @@ import {
   Download,
   ShieldCheck,
 } from "lucide-react";
-import {
-  LAST_UPDATED,
-  EMPLOYMENT_ADJUSTMENTS,
-  productPricingConfig,
-} from "./productPricingConfig";
+import { LAST_UPDATED, EMPLOYMENT_ADJUSTMENTS } from "./productPricingConfig";
 import { calculateQuote, clamp, generateSchedule } from "./pricingEngine";
 import { api } from "../../services/api";
 import { guardStartApplication } from "../../utils/applyGuard";
@@ -63,127 +59,32 @@ const buildAllowedTerms = (minTenureMonths, maxTenureMonths) => {
   return terms.length ? terms : [min];
 };
 
-const normalizeLoanKey = (value = "") =>
-  String(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-
-const FIXED_PRICING_BY_LOAN = {
-  [normalizeLoanKey("Civil Servant loans")]: {
-    baseMonthlyRate: 0.05,
-    processingFeeType: "percent",
-    processingFeeRate: 0.025,
-    processingFeeFlat: 0,
-    adminFeeType: "percent",
-    adminFeeRate: 0.025,
-    adminFeeFlat: 0,
-    monthlyAdminFee: 0,
-    allowedTerms: Array.from({ length: 12 }, (_, index) => index + 1),
-  },
-  [normalizeLoanKey("Private company loans")]: {
-    baseMonthlyRate: 0.05,
-    processingFeeType: "percent",
-    processingFeeRate: 0.025,
-    processingFeeFlat: 0,
-    adminFeeType: "percent",
-    adminFeeRate: 0.025,
-    adminFeeFlat: 0,
-    monthlyAdminFee: 0,
-    allowedTerms: Array.from({ length: 12 }, (_, index) => index + 1),
-  },
-  [normalizeLoanKey("Statutory company loans")]: {
-    baseMonthlyRate: 0.05,
-    processingFeeType: "percent",
-    processingFeeRate: 0.025,
-    processingFeeFlat: 0,
-    adminFeeType: "percent",
-    adminFeeRate: 0.025,
-    adminFeeFlat: 0,
-    monthlyAdminFee: 0,
-    allowedTerms: Array.from({ length: 12 }, (_, index) => index + 1),
-  },
-  [normalizeLoanKey("Business loans")]: {
-    baseMonthlyRate: 0.075,
-    processingFeeType: "percent",
-    processingFeeRate: 0.025,
-    processingFeeFlat: 0,
-    adminFeeType: "percent",
-    adminFeeRate: 0.025,
-    adminFeeFlat: 0,
-    monthlyAdminFee: 0,
-    allowedTerms: Array.from({ length: 12 }, (_, index) => index + 1),
-  },
-};
-
-const FIXED_PRICING_MATCHERS = [
-  {
-    match: (text) => text.includes("civil servant"),
-    pricing: FIXED_PRICING_BY_LOAN[normalizeLoanKey("Civil Servant loans")],
-  },
-  {
-    match: (text) => text.includes("private company"),
-    pricing: FIXED_PRICING_BY_LOAN[normalizeLoanKey("Private company loans")],
-  },
-  {
-    match: (text) => text.includes("statutory company") || text.includes("statutory"),
-    pricing: FIXED_PRICING_BY_LOAN[normalizeLoanKey("Statutory company loans")],
-  },
-  {
-    match: (text) => text.includes("business"),
-    pricing: FIXED_PRICING_BY_LOAN[normalizeLoanKey("Business loans")],
-  },
-];
-
-const resolveFixedPricing = (product) => {
-  const raw = product?.raw || {};
-  const exact =
-    FIXED_PRICING_BY_LOAN[
-      normalizeLoanKey(raw.name || product?.loanName || raw.slug || product?.slug)
-    ];
-  if (exact) return exact;
-
-  const searchable = normalizeLoanKey(
-    [raw.name, product?.loanName, raw.slug, product?.slug, raw.category, product?.category]
-      .filter(Boolean)
-      .join(" ")
-  );
-
-  return FIXED_PRICING_MATCHERS.find((entry) => entry.match(searchable))?.pricing || null;
-};
-
 const buildDynamicPricingConfig = (product) => {
   const raw = product?.raw || {};
-  const fixedPricing = resolveFixedPricing(product);
-  const baseMonthlyRate = fixedPricing?.baseMonthlyRate ?? toMonthlyDecimalRate(raw.interestRateMonthly);
-  const processingFeeType =
-    fixedPricing?.processingFeeType ?? (raw.processingFeeType === "flat" ? "flat" : "percent");
-  const processingFeeRate =
-    fixedPricing?.processingFeeRate ??
-    (processingFeeType === "percent" ? toMonthlyDecimalRate(raw.processingFeeValue) : 0);
-  const processingFeeFlat =
-    fixedPricing?.processingFeeFlat ??
-    (processingFeeType === "flat" ? Number(raw.processingFeeValue || 0) : 0);
-  const interestType = raw.interestType === "flat" ? "flat" : "reducing";
-  const rateType = baseMonthlyRate <= 0 && processingFeeRate > 0 ? "fee_only" : interestType;
+  const processingFeeType = raw.processingFeeType === "flat" ? "flat" : "percent";
+  const insuranceType = ["flat", "percent"].includes(raw.insuranceType) ? raw.insuranceType : "none";
 
   return {
     minAmount: Number(raw.minAmount || 0),
     maxAmount: Number(raw.maxAmount || 0),
-    usesFixedProductPricing: Boolean(fixedPricing),
-    allowedTerms:
-      fixedPricing?.allowedTerms || buildAllowedTerms(raw.minTenureMonths, raw.maxTenureMonths),
-    rateType,
-    baseMonthlyRate,
+    usesFixedProductPricing: false,
+    allowedTerms: buildAllowedTerms(raw.minTenureMonths, raw.maxTenureMonths),
+    rateType: raw.interestType === "flat" ? "flat" : "reducing",
+    baseMonthlyRate: toMonthlyDecimalRate(raw.interestRateMonthly),
     processingFeeType,
-    processingFeeRate,
-    processingFeeFlat,
-    adminFeeType: fixedPricing?.adminFeeType || "flat",
-    adminFeeRate: fixedPricing?.adminFeeRate || 0,
-    adminFeeFlat: fixedPricing?.adminFeeFlat || 0,
-    monthlyAdminFee: fixedPricing?.monthlyAdminFee ?? Number(raw.loanAdministrationFeeMonthly || 0),
+    processingFeeRate: processingFeeType === "percent" ? Number(raw.processingFeeValue || 0) / 100 : 0,
+    processingFeeFlat: processingFeeType === "flat" ? Number(raw.processingFeeValue || 0) : 0,
+    adminFeeType: raw.adminFeeType === "flat" ? "flat" : "percent",
+    adminFeeRate: raw.adminFeeType === "flat" ? 0 : Number(raw.adminFeeValue ?? 2.5) / 100,
+    adminFeeFlat: raw.adminFeeType === "flat" ? Number(raw.adminFeeValue || 0) : 0,
+    monthlyAdminFee: 0,
+    overduePenaltyRate: Number(raw.overduePenaltyRatePercent ?? 15) / 100,
+    insuranceType,
+    insuranceRate: insuranceType === "percent" ? Number(raw.insuranceValue || 0) / 100 : 0,
+    insuranceFlat: insuranceType === "flat" ? Number(raw.insuranceValue || 0) : 0,
+    taxRate: Number(raw.taxRatePercent || 0) / 100,
     repaymentStyle: `${raw.minTenureMonths || 1}-${raw.maxTenureMonths || 1} months`,
-    assumptions: "Estimate based on current product setup. Final offer may vary after review.",
+    assumptions: "Estimate uses the active loan product configured by Alinafe Capital. Processing and admin fees are charged once at the beginning of the loan and do not recur monthly.",
   };
 };
 
@@ -207,15 +108,10 @@ const RepaymentCalculator = () => {
     [dynamicLoanProducts]
   );
 
-  const pricingBySlug = useMemo(() => {
-    const merged = { ...productPricingConfig };
-    productOptions.forEach((product) => {
-      if (!merged[product.slug]) {
-        merged[product.slug] = buildDynamicPricingConfig(product);
-      }
-    });
-    return merged;
-  }, [productOptions]);
+  const pricingBySlug = useMemo(
+    () => Object.fromEntries(productOptions.map((product) => [product.slug, buildDynamicPricingConfig(product)])),
+    [productOptions]
+  );
 
   const activeProduct = useMemo(
     () => productOptions.find((p) => p.slug === selectedProductSlug) || null,
@@ -266,12 +162,8 @@ const RepaymentCalculator = () => {
 
   const effectiveRate = useMemo(() => {
     if (!activePricing) return 0;
-    if (activePricing.rateType === "fee_only") return 0;
-    if (activePricing.usesFixedProductPricing) {
-      return Math.max(0, activePricing.baseMonthlyRate);
-    }
-    return Math.max(0, activePricing.baseMonthlyRate + categorySettings.rateDelta);
-  }, [activePricing, categorySettings.rateDelta]);
+    return Math.max(0, activePricing.baseMonthlyRate);
+  }, [activePricing]);
 
   useEffect(() => {
     if (!activePricing) return;
@@ -308,6 +200,10 @@ const RepaymentCalculator = () => {
       adminFeeRate: activePricing.adminFeeRate,
       adminFeeFlat: activePricing.adminFeeFlat,
       monthlyAdminFee: activePricing.monthlyAdminFee,
+      insuranceType: activePricing.insuranceType,
+      insuranceRate: activePricing.insuranceRate,
+      insuranceFlat: activePricing.insuranceFlat,
+      taxRate: activePricing.taxRate,
     });
   }, [activePricing, safeAmount, amountError, term, effectiveRate, processingFeeEnabled]);
 
@@ -320,7 +216,9 @@ const RepaymentCalculator = () => {
       activePricing.rateType,
       quote.processingFee,
       activePricing.monthlyAdminFee,
-      quote.oneTimeAdminFee
+      quote.oneTimeAdminFee,
+      quote.insurance,
+      quote.tax
     );
   }, [activePricing, safeAmount, amountError, effectiveRate, term, quote.processingFee, quote.oneTimeAdminFee]);
 
@@ -625,21 +523,18 @@ const RepaymentCalculator = () => {
               </div>
             </fieldset>
 
-            <div className="mt-6 flex items-center gap-3">
-              <input
-                id="include-processing"
-                type="checkbox"
-                disabled={!activePricing}
-                checked={processingFeeEnabled}
-                onChange={() => {
-                  const next = !processingFeeEnabled;
-                  setProcessingFeeEnabled(next);
-                  trackEvent("calculator_processing_fee_toggled", { enabled: next });
-                }}
-              />
-              <label htmlFor="include-processing" className="text-sm">
-                Add Processing and Admin Fees
-              </label>
+            <div className="mt-6 rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3">
+              <div className="flex items-start gap-3">
+                <input id="include-processing" type="checkbox" checked readOnly className="mt-0.5" />
+                <div>
+                  <label htmlFor="include-processing" className="text-sm font-semibold text-slate-800">
+                    One-time loan charges included
+                  </label>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">
+                    Processing Fee: 2.5% and Admin Fee: 2.5%. Both apply once at the beginning of the loan and do not repeat in later monthly repayments.
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3">
@@ -715,9 +610,11 @@ const RepaymentCalculator = () => {
               <ul className="mt-2 space-y-1 text-xs text-slate-700">
                 <li>• Rate Type: {activePricing?.rateType || "-"}</li>
                 <li>• Base Rate: {activePricing ? `${(activePricing.baseMonthlyRate * 100).toFixed(2)}%` : "-"}</li>
-                <li>• Work Type Adjustment: {activePricing?.usesFixedProductPricing ? "Fixed by product table" : `${categorySettings.rateDelta >= 0 ? "+" : ""}${(categorySettings.rateDelta * 100).toFixed(2)}%`}</li>
+                <li>• Work Type: eligibility input only; it does not override the configured product rate.</li>
                 <li>• Processing Fee: {activePricing ? activePricing.processingFeeType === "flat" ? formatMWK(activePricing.processingFeeFlat) : `${(activePricing.processingFeeRate * 100).toFixed(2)}%` : "-"}</li>
                 <li>• Admin Fee: {activePricing ? activePricing.adminFeeType === "percent" ? `${(activePricing.adminFeeRate * 100).toFixed(2)}%` : formatMWK(activePricing.adminFeeFlat) : "-"}</li>
+                <li>• Overdue Penalty: {activePricing ? `${(activePricing.overduePenaltyRate * 100).toFixed(2)}%` : "-"} of an unpaid installment once it becomes overdue.</li>
+                <li>• Processing and Admin fees are one-time upfront charges only.</li>
                 <li>• Note: {activePricing?.assumptions || "-"}</li>
               </ul>
             </div>
@@ -811,7 +708,7 @@ const RepaymentCalculator = () => {
             <div>
               <h3 className="text-xl font-bold">Monthly Repayment Schedule</h3>
               <p className="mt-1 text-sm text-slate-600">
-                Full month-by-month view of principal, interest, processing fee, admin fee, and remaining balance.
+                Full month-by-month view of principal, interest and remaining balance. Processing and admin fees appear only in the first payment.
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -860,7 +757,7 @@ const RepaymentCalculator = () => {
             </tbody>
           </table>
           <p className="text-xs text-gray-500 mt-4">
-            The first month includes the one-time processing fee where applicable. Download the full schedule for customer sharing or branch records.
+            The first month includes the one-time 2.5% processing fee and 2.5% administration fee. These fees do not recur in later months. A 15% overdue penalty is only applied after a scheduled payment becomes overdue.
           </p>
         </div>
 

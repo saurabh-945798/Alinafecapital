@@ -3,13 +3,9 @@ import mongoose from "mongoose";
 
 const DEFAULT_DNS_SERVERS = ["1.1.1.1", "8.8.8.8"];
 
-// Standard seed-list hosts observed for the uploaded Alinafe Capital Atlas cluster.
-// Override with MONGO_FALLBACK_HOSTS in backend/.env if Atlas gives you different hosts.
-const DEFAULT_ATLAS_FALLBACK_HOSTS = [
-  "ac-er2jxq4-shard-00-00.b6nt2d9.mongodb.net:27017",
-  "ac-er2jxq4-shard-00-01.b6nt2d9.mongodb.net:27017",
-  "ac-er2jxq4-shard-00-02.b6nt2d9.mongodb.net:27017",
-];
+// Optional Atlas standard seed-list hosts must be supplied by the deployment environment.
+// Production infrastructure identifiers are intentionally not embedded in source.
+const DEFAULT_ATLAS_FALLBACK_HOSTS = [];
 
 const splitCsv = (value, fallback = []) => {
   const items = String(value || "")

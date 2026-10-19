@@ -1,6 +1,7 @@
 import slugify from "slugify";
 import { LoanProduct } from "../models/LoanProduct.model.js";
 import { ApiError } from "../utils/ApiError.js";
+import { applyCurrentLoanFeePolicyToPayload, withCurrentLoanFeePolicy } from "../utils/loanPricingPolicy.js";
 
 const makeSlug = (input) =>
   slugify(String(input), { lower: true, strict: true, trim: true });
@@ -20,7 +21,7 @@ export const loanProductService = {
     const exists = await LoanProduct.findOne({ slug }).lean();
     if (exists) throw new ApiError(409, "Loan product slug already exists", "DUPLICATE_SLUG");
 
-    const created = await LoanProduct.create({ ...payload, slug });
+    const created = await LoanProduct.create({ ...applyCurrentLoanFeePolicyToPayload(payload), slug });
     return created;
   },
 
@@ -48,13 +49,13 @@ export const loanProductService = {
       .sort({ featured: -1, createdAt: -1 })
       .lean();
 
-    return items;
+    return items.map(withCurrentLoanFeePolicy);
   },
 
   async getBySlugPublic(slug) {
     const item = await LoanProduct.findOne({ slug: String(slug).toLowerCase(), status: "active" }).lean();
     if (!item) throw new ApiError(404, "Loan product not found", "NOT_FOUND");
-    return item;
+    return withCurrentLoanFeePolicy(item);
   },
 
   async adminListAll(query = {}) {
@@ -65,16 +66,18 @@ export const loanProductService = {
       filter.status = String(query.status);
     }
 
-    return LoanProduct.find(filter).sort({ createdAt: -1 }).lean();
+    const items = await LoanProduct.find(filter).sort({ createdAt: -1 }).lean();
+    return items.map(withCurrentLoanFeePolicy);
   },
 
   async adminGetById(id) {
-    const item = await LoanProduct.findById(id);
+    const item = await LoanProduct.findById(id).lean();
     if (!item) throw new ApiError(404, "Loan product not found", "NOT_FOUND");
-    return item;
+    return withCurrentLoanFeePolicy(item);
   },
 
   async adminUpdate(id, payload) {
+    payload = applyCurrentLoanFeePolicyToPayload(payload);
     // If name/slug changes, regenerate slug safely
     if (payload.name && !payload.slug) {
       payload.slug = makeSlug(payload.name);
@@ -102,7 +105,7 @@ export const loanProductService = {
       returnDocument: "after",
     });
     if (!updated) throw new ApiError(404, "Loan product not found", "NOT_FOUND");
-    return updated;
+    return withCurrentLoanFeePolicy(updated);
   },
 
   async adminSoftDelete(id) {

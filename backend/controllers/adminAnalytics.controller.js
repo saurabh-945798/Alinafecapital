@@ -1,4 +1,5 @@
 import { LoanInquiry } from "../models/LoanInquiry.model.js";
+import { hasAnyRole } from "../utils/rbac.js";
 
 const STATUS_VALUES = [
   "NEW",
@@ -189,7 +190,10 @@ export const getAdminAnalyticsSummary = async (req, res) => {
       byStatus: result.byStatus || [],
       byProduct: result.byProduct || [],
       kycProgress: result.kycProgress || [],
-      recentApplications: result.recentApplications || [],
+      recentApplications:
+        hasAnyRole(req.user, ["REPORTING_MIS"]) && !hasAnyRole(req.user, ["SUPER_ADMIN", "AUDITOR"])
+          ? (result.recentApplications || []).map((item) => ({ ...item, customerName: "Restricted" }))
+          : result.recentApplications || [],
     },
   });
 };

@@ -6,7 +6,7 @@ import { inquiriesApi } from "../../services/api/inquiries.api";
 import { useToast } from "../../context/ToastContext.jsx";
 import { ADMIN_FILE_BASE_URL } from "../../config/api";
 import { getAdminUser } from "../../utils/adminAuth";
-import { normalizeAdminRole } from "../../utils/adminRbac";
+import { hasAnyRole, normalizeAdminRoles } from "../../utils/adminRbac";
 
 const STATUS_TONE = {
   NEW: "amber",
@@ -62,9 +62,13 @@ const HUMAN_KYC = {
 const ROLE_TABS = {
   SUPER_ADMIN: ["ALL", "PENDING_GROUP", "VERIFIED", "APPROVED", "AUTHORIZED", "DISBURSED", "KYC_REJECTED", "CLOSED"],
   VERIFIER: ["PENDING_GROUP", "KYC_REJECTED", "CLOSED"],
+  RISK_ANALYST: ["VERIFIED", "APPROVED", "AUTHORIZED", "DISBURSED"],
   APPROVAL: ["VERIFIED", "APPROVED", "KYC_REJECTED", "CLOSED"],
   AUTHORIZED: ["APPROVED", "AUTHORIZED", "CLOSED"],
   DISBURSED: ["AUTHORIZED", "DISBURSED", "CLOSED"],
+  LOAN_OPERATIONS: ["ALL", "PENDING_GROUP", "VERIFIED", "APPROVED", "AUTHORIZED", "DISBURSED", "KYC_REJECTED", "CLOSED"],
+  CUSTOMER_SERVICE: ["ALL", "PENDING_GROUP", "VERIFIED", "APPROVED", "AUTHORIZED", "DISBURSED", "KYC_REJECTED", "CLOSED"],
+  AUDITOR: ["ALL", "VERIFIED", "APPROVED", "AUTHORIZED", "DISBURSED", "KYC_REJECTED", "CLOSED"],
 };
 
 const filterItemsByTab = (items = [], tab = "ALL") => {
@@ -151,9 +155,10 @@ export default function LoanApplication() {
     KYC_REJECTED: 0,
     CLOSED: 0,
   });
-  const adminRole = normalizeAdminRole(getAdminUser()?.role);
-  const allowedTabs = ROLE_TABS[adminRole] || ROLE_TABS.SUPER_ADMIN;
-  const visibleTabs = SIMPLE_TABS.filter((tab) => allowedTabs.includes(tab.value));
+  const adminUser = getAdminUser() || {};
+  const adminRoles = normalizeAdminRoles(adminUser);
+  const allowedTabs = Array.from(new Set(adminRoles.flatMap((role) => ROLE_TABS[role] || [])));
+  const visibleTabs = SIMPLE_TABS.filter((tab) => (allowedTabs.length ? allowedTabs : ROLE_TABS.SUPER_ADMIN).includes(tab.value));
   const fetchIdRef = useRef(0);
   const countsErrorNotifiedRef = useRef(false);
   const [deletingId, setDeletingId] = useState("");
@@ -295,9 +300,9 @@ export default function LoanApplication() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold">Loan Inquiries</h1>
+        <h1 className="text-2xl font-bold">Applications</h1>
         <p className="text-sm text-slate-500">
-          Review customer requests in a simple card view and open full details when needed.
+          Review loan amount, KYC, risk, approval, disbursement and account position according to your access level.
         </p>
       </div>
 
@@ -418,11 +423,21 @@ export default function LoanApplication() {
                 </div>
               </div>
 
-              <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Address
-                </p>
-                <p className="mt-1 text-sm text-slate-700">{item.address || "-"}</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Loan Amount</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">MWK {Number(item.requestedAmount || 0).toLocaleString("en-US")}</p>
+                  <p className="mt-1 text-xs text-slate-500">{Number(item.preferredTenureMonths || item.tenureMonths || 0) || "-"} months</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Risk Review</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{item.riskAssessmentSummary?.status || "Not started"}</p>
+                  <p className="mt-1 text-xs text-slate-500">{item.riskAssessmentSummary?.scoreTotal != null ? `${item.riskAssessmentSummary.scoreTotal}/100 · ${String(item.riskAssessmentSummary.classification || "").replaceAll("_", " ")}` : "Awaiting assessment"}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 sm:col-span-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Loan Account Position</p>
+                  <p className="mt-1 text-sm text-slate-700">{item.loanAccountSummary?.accountNumber ? `${item.loanAccountSummary.accountNumber} · Outstanding MWK ${Number(item.loanAccountSummary.outstandingBalance || 0).toLocaleString("en-US")}` : "No disbursed loan account yet"}</p>
+                </div>
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
@@ -438,7 +453,7 @@ export default function LoanApplication() {
                 <Button size="sm" onClick={() => openDetails(item)}>
                   View Details
                 </Button>
-                {adminRole === "SUPER_ADMIN" ? (
+                {hasAnyRole(adminUser, ["SUPER_ADMIN"]) ? (
                   <Button
                     size="sm"
                     variant="danger"

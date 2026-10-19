@@ -2,6 +2,7 @@ import { LoanProduct } from "../models/LoanProduct.model.js";
 import { emiCalculatorService } from "../services/emiCalculator.service.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import { withCurrentLoanFeePolicy } from "../utils/loanPricingPolicy.js";
 
 export const emiCalculatorController = {
   calculate: async (req, res) => {
@@ -21,7 +22,7 @@ export const emiCalculatorController = {
     }
 
     const result = emiCalculatorService.calculate({
-      product,
+      product: withCurrentLoanFeePolicy(product),
       amount: Number(amount),
       tenureMonths: Number(tenureMonths),
     });

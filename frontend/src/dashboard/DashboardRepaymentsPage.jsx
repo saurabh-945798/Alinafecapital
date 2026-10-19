@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { CreditCard, RefreshCw, Smartphone, WalletCards } from "lucide-react";
+import { Copy, CreditCard, Landmark, RefreshCw, Smartphone, Upload, WalletCards } from "lucide-react";
 import { api } from "../services/api";
 import { formatMoneyInput, parseMoneyInput } from "../utils/moneyInput";
 import { RestockTechSignature } from "../components/Brand/RestockTechLogo.jsx";
 import visaMastercardImage from "../assets/visa-mastercard.png";
 import airtelMoneyImage from "../assets/airtel-money.jpg";
+import nationalBankImage from "../assets/national-bank-malawi.png";
 
 const formatMoney = (amount, currency = "MWK") =>
   `${currency} ${Number(amount || 0).toLocaleString("en-US", {
@@ -43,6 +44,9 @@ export default function DashboardRepaymentsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [airtelPayment, setAirtelPayment] = useState(null);
+  const [bankDetails, setBankDetails] = useState(null);
+  const [bankPayments, setBankPayments] = useState([]);
+  const [bankForm, setBankForm] = useState({ bankUsed: "", transactionReference: "", paymentDate: new Date().toISOString().slice(0, 10), pop: null });
 
   const selectedAccount = useMemo(
     () => accounts.find((item) => String(item._id) === String(selectedAccountId)) || accounts[0] || null,
@@ -68,6 +72,19 @@ export default function DashboardRepaymentsPage() {
     (customAmountEntered && !customAmountIsValid) ||
     (!customAmountEntered && !nextInstallment);
 
+  const refreshBankPayments = async () => {
+    try {
+      const [{ data: detailsResponse }, { data: paymentsResponse }] = await Promise.all([
+        api.get("/payments/bank/details"),
+        api.get("/payments/bank/mine"),
+      ]);
+      setBankDetails(detailsResponse?.data || detailsResponse || null);
+      setBankPayments(paymentsResponse?.data?.items || paymentsResponse?.items || []);
+    } catch {
+      // Card/Airtel repayment views should remain available if the bank-payment list cannot refresh.
+    }
+  };
+
   const refreshAccounts = async () => {
     setLoading(true);
     setError("");
@@ -80,8 +97,9 @@ export default function DashboardRepaymentsPage() {
       const fallbackAccountId = String(items[0]?._id || "");
       setSelectedAccountId((prev) => prev || requestedAccountId || fallbackAccountId);
       setCustomAmount((prev) => prev || "");
+      await refreshBankPayments();
       if (scheduleRequest?.source === "schedule") {
-        setNotice("Repayment schedule opened. Choose Card or Airtel Money, then continue with the selected installment.");
+        setNotice("Repayment schedule opened. Choose Card, Airtel Money or Bank Payment, then continue with the selected installment.");
       }
     } catch (err) {
       setError(err?.response?.data?.message || err?.message || "Unable to load your loan repayments.");
@@ -216,7 +234,54 @@ export default function DashboardRepaymentsPage() {
     }
   };
 
+  const copyText = async (value, label) => {
+    try { await navigator.clipboard.writeText(String(value || "")); setNotice(`${label} copied.`); }
+    catch { setNotice(`Please copy the ${label.toLowerCase()} manually.`); }
+  };
+
+  const submitBankPayment = async () => {
+    if (!selectedAccount) return;
+    setPaying(true); setError(""); setNotice("");
+    try {
+      const amount = validateSelectedAmount();
+      if (!bankForm.transactionReference.trim()) throw new Error("Enter the bank transaction/reference number from your transfer.");
+      if (!bankForm.paymentDate) throw new Error("Enter the payment date.");
+      if (!bankForm.pop) throw new Error("Upload your Proof of Payment (POP) before submitting.");
+      const formData = new FormData();
+      formData.append("loanAccountId", selectedAccount._id);
+      formData.append("amount", String(amount));
+      formData.append("bankTransactionReference", bankForm.transactionReference.trim());
+      formData.append("paymentDate", bankForm.paymentDate);
+      formData.append("bankUsed", bankForm.bankUsed.trim());
+      if (bankDetails?.paymentReference) formData.append("paymentReference", bankDetails.paymentReference);
+      formData.append("pop", bankForm.pop);
+      const { data } = await api.post("/payments/bank", formData);
+      const payment = data?.data || data;
+      setNotice(data?.message || "Payment submitted successfully. Your Proof of Payment is awaiting verification.");
+      setBankForm((prev) => ({ ...prev, transactionReference: "", pop: null }));
+      await Promise.all([refreshAccounts(), refreshBankPayments()]);
+      if (payment?.paymentReference) setNotice(`Payment ${payment.paymentReference} submitted. Your loan balance will only change after Finance verifies the POP.`);
+    } catch (err) {
+      setError(err?.response?.data?.message || err?.message || "Could not submit bank payment.");
+    } finally { setPaying(false); }
+  };
+
+  const respondToBankPayment = async (payment) => {
+    const response = window.prompt("Enter your clarification or response for Finance:");
+    if (!response) return;
+    try {
+      const formData = new FormData(); formData.append("response", response);
+      await api.post(`/payments/bank/${payment._id}/respond`, formData);
+      setNotice("Your clarification has been sent back to Finance.");
+      await refreshBankPayments();
+    } catch (err) { setError(err?.response?.data?.message || err?.message || "Could not send clarification."); }
+  };
+
   const startSelectedRepayment = (options) => {
+    if (paymentMethod === "bank") {
+      setNotice("Bank Payment selected. Complete the transfer details and upload the POP below.");
+      return;
+    }
     if (paymentMethod === "airtel") {
       startAirtelRepayment(options);
       return;
@@ -259,10 +324,13 @@ export default function DashboardRepaymentsPage() {
     );
   }
 
-  const overdueAmount =
+  const overdueAmount = Number(selectedAccount.overdueAmount || 0) ||
     selectedAccount.schedule
       ?.filter((row) => row.paymentStatus === "overdue" || row.paymentStatus === "partial")
       ?.reduce((sum, row) => sum + Number(row.remainingAmount || 0), 0) || 0;
+  const penaltyInterest = Number(selectedAccount.totalPenaltyInterest || 0) ||
+    selectedAccount.schedule?.reduce((sum, row) => sum + Number(row.penaltyAmount || 0), 0) || 0;
+  const pendingBank = (selectedAccount.pendingBankPayments || []).find((item) => ["PENDING_VERIFICATION", "REQUIRES_CLARIFICATION"].includes(item.status));
 
   return (
     <div className="space-y-6 pb-8">
@@ -311,16 +379,22 @@ export default function DashboardRepaymentsPage() {
         </section>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <SummaryCard label="Outstanding Balance" value={formatMoney(selectedAccount.outstandingBalance, currency)} />
         <SummaryCard label="Next Due Amount" value={formatMoney(nextInstallment?.remainingAmount || 0, currency)} />
         <SummaryCard label="Next Due Date" value={formatDate(nextInstallment?.dueDate || selectedAccount.nextDueDate)} />
         <SummaryCard label="Overdue Amount" value={formatMoney(overdueAmount, currency)} highlight={overdueAmount > 0} />
+        <SummaryCard label="Penalty Interest" value={formatMoney(penaltyInterest, currency)} highlight={penaltyInterest > 0} />
       </div>
+      <p className="-mt-3 text-xs text-slate-500">Outstanding balance includes principal, normal interest, applicable one-time fees and any overdue penalty interest already triggered.</p>
 
-      <section className={`rounded-2xl border p-4 ${overdueAmount > 0 ? "bg-red-50 border-red-200" : "bg-emerald-50 border-emerald-200"}`}>
+      <section className={`rounded-2xl border p-4 ${pendingBank ? "bg-blue-50 border-blue-200" : overdueAmount > 0 ? "bg-red-50 border-red-200" : "bg-emerald-50 border-emerald-200"}`}>
         <p className="text-sm font-medium">
-          {overdueAmount > 0 ? "You have overdue payments. Please make a repayment as soon as possible." : "You are on track with your repayments."}
+          {pendingBank
+            ? `Payment submitted – awaiting verification${pendingBank.paymentReference ? ` (${pendingBank.paymentReference})` : ""}. We will not treat this as a new reminder while Finance reviews it.`
+            : overdueAmount > 0
+              ? `You have overdue payments${selectedAccount.daysOverdue ? ` (${selectedAccount.daysOverdue} day${selectedAccount.daysOverdue === 1 ? "" : "s"} overdue)` : ""}. A 15% overdue penalty is applied to installments that were not cleared by their due date${penaltyInterest > 0 ? `; current penalty interest is ${formatMoney(penaltyInterest, currency)}` : ""}.`
+              : "You are on track with your repayments."}
         </p>
       </section>
 
@@ -333,7 +407,7 @@ export default function DashboardRepaymentsPage() {
           <WalletCards className="text-slate-500" />
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-2">
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
           <PaymentChoice
             active={paymentMethod === "card"}
             icon={CreditCard}
@@ -359,6 +433,20 @@ export default function DashboardRepaymentsPage() {
               setPaymentMethod("airtel");
               setError("");
               setNotice("Airtel Money selected. Enter the phone number to receive the payment prompt.");
+            }}
+          />
+          <PaymentChoice
+            active={paymentMethod === "bank"}
+            icon={Landmark}
+            imageSrc={nationalBankImage}
+            imageAlt="National Bank of Malawi"
+            title="Bank Payment"
+            description="Transfer to Alinafe Online Limited, upload your POP, then send the payment for Finance verification."
+            actionLabel="Choose Bank Payment"
+            onClick={async () => {
+              setPaymentMethod("bank"); setError("");
+              setNotice("Bank Payment selected. Use the details below and upload the POP after making the transfer.");
+              await refreshBankPayments();
             }}
           />
         </div>
@@ -423,7 +511,7 @@ export default function DashboardRepaymentsPage() {
               <img src={visaMastercardImage} alt="Visa and Mastercard" className="h-10 w-auto rounded-lg bg-white object-contain px-2 py-1 shadow-sm" />
             </div>
           </div>
-        ) : (
+        ) : paymentMethod === "airtel" ? (
           <div className="mt-6 rounded-2xl border border-red-100 bg-red-50/40 p-4">
             <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
               <label className="text-sm font-semibold text-slate-700">
@@ -498,6 +586,25 @@ export default function DashboardRepaymentsPage() {
               </div>
             ) : null}
           </div>
+        ) : (
+          <div className="mt-6 space-y-4 rounded-2xl border border-blue-100 bg-blue-50/30 p-4">
+            <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-4"><img src={nationalBankImage} alt="National Bank of Malawi" className="h-16 w-36 object-contain"/><div><p className="font-bold text-slate-900">National Bank</p><p className="text-sm text-slate-600">Alinafe Online Limited</p></div></div>
+              <div className="grid gap-2 text-sm sm:grid-cols-2">
+                <button type="button" onClick={()=>copyText(bankDetails?.accountNumber || "1006477832", "Account number")} className="rounded-xl border bg-slate-50 px-3 py-2 text-left"><span className="block text-[11px] uppercase text-slate-500">Account Number</span><span className="mt-1 flex items-center gap-2 font-bold">{bankDetails?.accountNumber || "1006477832"}<Copy size={13}/></span></button>
+                <button type="button" onClick={()=>copyText(bankDetails?.paymentReference || "", "Payment reference")} className="rounded-xl border bg-slate-50 px-3 py-2 text-left"><span className="block text-[11px] uppercase text-slate-500">Payment Reference</span><span className="mt-1 flex items-center gap-2 font-bold">{bankDetails?.paymentReference || "Preparing..."}<Copy size={13}/></span></button>
+              </div>
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900"><b>Important:</b> Use the payment reference above when making the transfer. Your loan balance will not change until Finance verifies your Proof of Payment.</div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="text-sm font-semibold">Amount paid<input value={customAmount} onChange={(e)=>setCustomAmount(formatMoneyInput(e.target.value))} placeholder={`Default: ${formatMoney(nextDueAmount, currency)}`} className="mt-2 h-11 w-full rounded-xl border bg-white px-3" inputMode="decimal"/></label>
+              <label className="text-sm font-semibold">Bank transaction/reference number<input value={bankForm.transactionReference} onChange={(e)=>setBankForm(p=>({...p,transactionReference:e.target.value}))} className="mt-2 h-11 w-full rounded-xl border bg-white px-3" placeholder="Reference from your bank transfer"/></label>
+              <label className="text-sm font-semibold">Payment date<input type="date" value={bankForm.paymentDate} onChange={(e)=>setBankForm(p=>({...p,paymentDate:e.target.value}))} className="mt-2 h-11 w-full rounded-xl border bg-white px-3"/></label>
+              <label className="text-sm font-semibold">Bank used to make the transfer<input value={bankForm.bankUsed} onChange={(e)=>setBankForm(p=>({...p,bankUsed:e.target.value}))} className="mt-2 h-11 w-full rounded-xl border bg-white px-3" placeholder="Example: National Bank"/></label>
+              <label className="md:col-span-2 block rounded-xl border border-dashed border-slate-300 bg-white p-4 text-sm font-semibold"><span className="flex items-center gap-2"><Upload size={16}/>Proof of Payment (required)</span><input type="file" accept="application/pdf,image/jpeg,image/png" onChange={(e)=>setBankForm(p=>({...p,pop:e.target.files?.[0]||null}))} className="mt-3 block w-full text-xs font-normal"/><span className="mt-2 block text-xs font-normal text-slate-500">PDF, JPG, JPEG or PNG. The POP is protected and visible only to you and authorised Finance/Audit staff.</span></label>
+            </div>
+            <button type="button" onClick={submitBankPayment} disabled={paying || !bankForm.pop || !bankForm.transactionReference.trim() || primaryRepaymentDisabled} className="w-full rounded-xl bg-[#002D5B] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">{paying?"Submitting...":"Upload POP and Send for Verification"}</button>
+          </div>
         )}
       </section>
 
@@ -564,6 +671,13 @@ export default function DashboardRepaymentsPage() {
           </div>
         ))}
       </div>
+
+      {bankPayments.filter((p)=>String(p.loanAccountId)===String(selectedAccount._id)).length ? (
+        <section className="rounded-2xl border bg-white p-6 shadow-sm space-y-3">
+          <h3 className="text-base font-semibold text-slate-800">Bank Payment Submissions</h3>
+          {bankPayments.filter((p)=>String(p.loanAccountId)===String(selectedAccount._id)).map((payment)=><div key={payment._id} className="rounded-xl border bg-slate-50 p-3 text-sm"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-semibold">{payment.paymentReference}</p><p className="text-xs text-slate-500">{formatDate(payment.paymentDate)} · {formatMoney(payment.amount,currency)}</p></div><span className="rounded-full border bg-white px-2 py-1 text-xs font-semibold">{String(payment.status||"").replaceAll("_"," ")}</span></div>{payment.clarificationMessage?<p className="mt-2 text-amber-700"><b>Additional information required:</b> {payment.clarificationMessage}</p>:null}{payment.rejectionReason?<p className="mt-2 text-red-700"><b>Reason:</b> {payment.rejectionReason}</p>:null}{["REQUIRES_CLARIFICATION","REJECTED"].includes(payment.status)?<button type="button" onClick={()=>respondToBankPayment(payment)} className="mt-2 rounded-lg border bg-white px-3 py-1.5 text-xs font-semibold">Respond to Finance</button>:null}</div>)}
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border bg-white p-6 shadow-sm space-y-3">
         <h3 className="text-base font-semibold text-slate-800">Recent Payments</h3>

@@ -36,9 +36,17 @@ const LoanProductSchema = new mongoose.Schema(
     interestType: { type: String, enum: ["flat", "reducing"], default: "reducing" },
     interestRateMonthly: { type: Number, required: true, min: 0 },
 
+    // One-time charges applied at the beginning of the loan. These do not recur monthly.
     processingFeeType: { type: String, enum: ["flat", "percent"], default: "percent" },
-    processingFeeValue: { type: Number, default: 0, min: 0 },
+    processingFeeValue: { type: Number, default: 2.5, min: 0 },
+    adminFeeType: { type: String, enum: ["flat", "percent"], default: "percent" },
+    adminFeeValue: { type: Number, default: 2.5, min: 0 },
+
+    // Retained only for backwards compatibility with historical product records.
     loanAdministrationFeeMonthly: { type: Number, default: 0, min: 0 },
+
+    // One-time penalty applied to an installment that was not cleared by its due date.
+    overduePenaltyRatePercent: { type: Number, default: 15, min: 0 },
 
     insuranceType: { type: String, enum: ["none", "flat", "percent"], default: "none" },
     insuranceValue: { type: Number, default: 0, min: 0 },
@@ -53,7 +61,6 @@ const LoanProductSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// helpful indexes
 LoanProductSchema.index({ status: 1, featured: 1 });
 LoanProductSchema.index({ minAmount: 1, maxAmount: 1 });
 

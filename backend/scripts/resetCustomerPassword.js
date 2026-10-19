@@ -18,7 +18,7 @@ const phoneArg = readArg("phone");
 const newPassword = readArg("password");
 
 if ((!emailArg && !phoneArg) || !newPassword) {
-  console.error(`\nUsage:\n  npm run customer:reset-password -- --email=customer@example.com --password=NewPass123\n\nOr:\n  npm run customer:reset-password -- --phone=+265881234567 --password=NewPass123\n`);
+  console.error(`\nUsage:\n  npm run customer:reset-password -- --email=customer@example.com --password=ExampleOnly!42#Long\n\nOr:\n  npm run customer:reset-password -- --phone=+265881234567 --password=ExampleOnly!42#Long\n`);
   process.exit(1);
 }
 

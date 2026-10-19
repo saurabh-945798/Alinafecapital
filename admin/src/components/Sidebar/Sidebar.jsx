@@ -3,8 +3,9 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { ChevronsLeft, ChevronsRight, LogOut, Menu, ShieldCheck, X } from "lucide-react";
 import { sidebarNav } from "./sidebarNav";
 import { clearAdminSession, getAdminUser } from "../../utils/adminAuth";
+import { adminAuthApi } from "../../services/api/auth.api";
 import { inquiriesApi } from "../../services/api/inquiries.api";
-import { hasAnyRole, normalizeAdminRole } from "../../utils/adminRbac";
+import { hasAnyRole } from "../../utils/adminRbac";
 import { useToast } from "../../context/ToastContext.jsx";
 import alinafeLogo from "../../assets/alinafe-logo.png";
 import restockLogo from "../../assets/restock-tech-logo.png";
@@ -37,7 +38,7 @@ function NavItems({ collapsed, onNavigate, badges = {}, role = "" }) {
                   className={({ isActive }) =>
                     cx(
                       "group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
-                      isActive ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
+                      isActive ? "bg-[#002D5B] text-white shadow-sm" : "text-slate-700 hover:bg-blue-50/70 hover:text-[#002D5B]"
                     )
                   }
                 >
@@ -82,7 +83,6 @@ export default function Sidebar() {
   const [badges, setBadges] = useState({ applications: 0 });
   const badgeErrorNotifiedRef = useRef(false);
   const adminUser = useMemo(() => getAdminUser(), []);
-  const adminRole = normalizeAdminRole(adminUser?.role);
 
   const width = collapsed ? "w-20" : "w-72";
 
@@ -111,8 +111,10 @@ export default function Sidebar() {
     setSignOutConfirmOpen(false);
     setTransitionMessage("Signing out securely...");
     window.setTimeout(() => {
-      clearAdminSession();
-      navigate("/admin/login", { replace: true });
+      adminAuthApi.logout().catch(() => {}).finally(() => {
+        clearAdminSession();
+        navigate("/admin/login", { replace: true });
+      });
     }, 750);
   };
 
@@ -185,7 +187,7 @@ export default function Sidebar() {
         </button>
       </div>
 
-      <NavItems collapsed={collapsed} onNavigate={handleNavigate} badges={badges} role={adminRole} />
+      <NavItems collapsed={collapsed} onNavigate={handleNavigate} badges={badges} role={adminUser} />
 
       <div className="border-t border-slate-200 p-3">
         {!collapsed ? (

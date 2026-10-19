@@ -5,7 +5,7 @@ const months = z.number().int().min(1);
 
 export const createLoanProductSchema = z.object({
   name: z.string().min(2),
-  slug: z.string().min(2).optional(), // auto from name if not provided
+  slug: z.string().min(2).optional(),
   category: z
     .enum([
       "Personal",
@@ -32,10 +32,15 @@ export const createLoanProductSchema = z.object({
   maxTenureMonths: months,
 
   interestType: z.enum(["flat", "reducing"]).default("reducing"),
-  interestRateMonthly: z.number().nonnegative(), // e.g. 5.5
+  interestRateMonthly: z.number().nonnegative(),
 
   processingFeeType: z.enum(["flat", "percent"]).default("percent"),
-  processingFeeValue: z.number().nonnegative().default(0),
+  processingFeeValue: z.number().nonnegative().default(2.5),
+  adminFeeType: z.enum(["flat", "percent"]).default("percent"),
+  adminFeeValue: z.number().nonnegative().default(2.5),
+  overduePenaltyRatePercent: z.number().nonnegative().default(15),
+
+  // Historical field accepted for backwards compatibility but no longer used for new recurring fees.
   loanAdministrationFeeMonthly: z.number().nonnegative().default(0),
 
   insuranceType: z.enum(["none", "flat", "percent"]).default("none"),

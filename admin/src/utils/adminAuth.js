@@ -1,24 +1,14 @@
-const TOKEN_KEY = "adminToken";
 const USER_KEY = "adminUser";
+let adminToken = "";
 
-export const getAdminToken = () => {
-  if (typeof window === "undefined") return "";
-  return (window.localStorage.getItem(TOKEN_KEY) || "").trim();
-};
+export const getAdminToken = () => adminToken;
 
 export const setAdminToken = (token) => {
-  if (typeof window === "undefined") return;
-  const value = String(token || "").trim();
-  if (!value) {
-    window.localStorage.removeItem(TOKEN_KEY);
-    return;
-  }
-  window.localStorage.setItem(TOKEN_KEY, value);
+  adminToken = String(token || "").trim();
 };
 
 export const clearAdminToken = () => {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(TOKEN_KEY);
+  adminToken = "";
 };
 
 export const getAdminUser = () => {
@@ -52,4 +42,3 @@ export const clearAdminSession = () => {
 };
 
 export const isAdminLoggedIn = () => Boolean(getAdminToken());
-

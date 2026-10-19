@@ -22,3 +22,8 @@ uploads/
 # OS
 .DS_Store
 Thumbs.db
+# Keep sanitized environment templates in source control.
+!.env.example
+!backend/.env.example
+!frontend/.env.example
+!admin/.env.example

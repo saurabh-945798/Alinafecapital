@@ -75,8 +75,9 @@ const normalizeProducts = (backendItems = []) => {
       interestRate: formatInterest(item),
       keyBenefits: [
         "Fast review and transparent terms",
-        "Simple eligibility checks",
-        "Repayment schedule agreed before acceptance",
+        `One-time processing fee: ${Number(item.processingFeeValue ?? 2.5).toFixed(1)}%`,
+        `One-time admin fee: ${Number(item.adminFeeValue ?? 2.5).toFixed(1)}%`,
+        `Overdue installment penalty: ${Number(item.overduePenaltyRatePercent ?? 15).toFixed(0)}%`,
       ],
       minAmount: item.minAmount,
       maxAmount: item.maxAmount,

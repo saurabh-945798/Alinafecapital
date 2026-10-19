@@ -4,7 +4,7 @@
  *   node createAdmin.js
  *
  * Optional .env values:
- *   ADMIN_PHONE=+26598765432
+ *   ADMIN_PHONE=+265XXXXXXXXX
  *   ADMIN_PASSWORD=change-this-password
  */
 
@@ -15,12 +15,15 @@ import { connectDB } from "./config/config.js";
 
 dotenv.config();
 
-const PHONE = process.env.ADMIN_PHONE || "+26598765432";
+const PHONE = String(process.env.ADMIN_PHONE || "").trim();
 const PASSWORD = process.env.ADMIN_PASSWORD;
 const SALT_ROUNDS = 10;
 
-if (!PASSWORD) {
-  throw new Error("ADMIN_PASSWORD is required in backend/.env before running createAdmin.js");
+if (!PHONE || !PASSWORD) {
+  throw new Error("ADMIN_PHONE and ADMIN_PASSWORD are required before running createAdmin.js");
+}
+if (PASSWORD.length < 12) {
+  throw new Error("ADMIN_PASSWORD must contain at least 12 characters");
 }
 
 const userSchema = new mongoose.Schema(

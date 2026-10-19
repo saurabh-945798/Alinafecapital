@@ -1,4 +1,4 @@
-import { normalizeRole } from "./rbac.js";
+import { getUserRoles, normalizeRole } from "./rbac.js";
 
 export const WORKFLOW_STAGES = [
   "NEW",
@@ -26,7 +26,8 @@ export const STATUS_TRANSITIONS = {
 
 export const ROLE_ALLOWED_ACTIONS = {
   SUPER_ADMIN: ["VERIFIED", "KYC_REJECTED", "APPROVED", "AUTHORIZED", "DISBURSED", "CLOSED"],
-  VERIFIER: ["VERIFIED", "KYC_REJECTED", "CLOSED"],
+  VERIFIER: ["VERIFIED", "KYC_REJECTED"],
+  LOAN_OPERATIONS: ["CLOSED"],
   APPROVAL: ["APPROVED", "CLOSED"],
   AUTHORIZED: ["AUTHORIZED", "CLOSED"],
   DISBURSED: ["DISBURSED", "CLOSED"],
@@ -45,13 +46,14 @@ export const getInquiryStage = (doc = {}) => {
   return "NEW";
 };
 
-export const canRolePerformAction = (role = "", action = "") => {
-  const normalizedRole = normalizeRole(role);
+export const canRolePerformAction = (userOrRoles = "", action = "") => {
+  const roles = getUserRoles(userOrRoles);
   const normalizedAction = String(action || "").toUpperCase();
-  return (ROLE_ALLOWED_ACTIONS[normalizedRole] || []).includes(normalizedAction);
+  if (roles.includes("SUPER_ADMIN")) return true;
+  return roles.some((role) => (ROLE_ALLOWED_ACTIONS[normalizeRole(role)] || []).includes(normalizedAction));
 };
 
-export const canTransitionInquiry = ({ fromStage = "", toStage = "", role = "" }) => {
+export const canTransitionInquiry = ({ fromStage = "", toStage = "", role = "", roles = [] }) => {
   const from = String(fromStage || "").toUpperCase();
   const to = String(toStage || "").toUpperCase();
   if (!WORKFLOW_STAGES.includes(from) || !WORKFLOW_STAGES.includes(to)) {
@@ -64,7 +66,7 @@ export const canTransitionInquiry = ({ fromStage = "", toStage = "", role = "" }
   if (!allowedTo.includes(to)) {
     return { ok: false, code: "INVALID_STATUS_TRANSITION", message: `Invalid status transition: ${from} -> ${to}` };
   }
-  if (!canRolePerformAction(role, to)) {
+  if (!canRolePerformAction(roles.length ? roles : role, to)) {
     return { ok: false, code: "ROLE_ACTION_FORBIDDEN", message: "Forbidden: this role cannot perform this action" };
   }
   return { ok: true };
@@ -83,22 +85,25 @@ const APPLICATION_TRANSITIONS = {
 
 const APPLICATION_ROLE_ACTIONS = {
   SUPER_ADMIN: ["SUBMITTED", "UNDER_REVIEW", "APPROVED", "DISBURSED", "REJECTED", "CANCELLED"],
-  VERIFIER: ["UNDER_REVIEW", "REJECTED", "CANCELLED"],
+  LOAN_OPERATIONS: ["SUBMITTED", "UNDER_REVIEW", "CANCELLED"],
+  VERIFIER: ["UNDER_REVIEW"],
   APPROVAL: ["APPROVED", "REJECTED", "CANCELLED"],
   AUTHORIZED: ["CANCELLED"],
   DISBURSED: ["DISBURSED", "CANCELLED"],
 };
 
-export const canTransitionLoanApplication = ({ fromStage = "", toStage = "", role = "" }) => {
+export const canTransitionLoanApplication = ({ fromStage = "", toStage = "", role = "", roles = [] }) => {
   const from = String(fromStage || "").toUpperCase();
   const to = String(toStage || "").toUpperCase();
   const allowedTo = APPLICATION_TRANSITIONS[from] || [];
   if (!allowedTo.includes(to)) {
     return { ok: false, code: "INVALID_STATUS_TRANSITION", message: `Invalid status transition: ${from} -> ${to}` };
   }
-  const roleKey = normalizeRole(role);
-  const allowedActions = APPLICATION_ROLE_ACTIONS[roleKey] || [];
-  if (!allowedActions.includes(to)) {
+  const currentRoles = getUserRoles(roles.length ? roles : role);
+  const allowed = currentRoles.some((currentRole) =>
+    (APPLICATION_ROLE_ACTIONS[normalizeRole(currentRole)] || []).includes(to)
+  );
+  if (!allowed) {
     return { ok: false, code: "ROLE_ACTION_FORBIDDEN", message: "Forbidden: this role cannot perform this action" };
   }
   return { ok: true };
