@@ -4,7 +4,7 @@ import { UPLOAD_ROOT } from "../config/upload.js";
 const normalizePath = (value = "") => String(value || "").replace(/\\/g, "/");
 const isProd = String(process.env.NODE_ENV || "").trim().toLowerCase() === "production";
 const traceUploads = String(process.env.UPLOAD_TRACE || "").trim() === "1";
-const suspiciousLocalPattern = /(\\|\/)(users|onedrive|desktop|alinafecapital|backend|uploads)(\\|\/)/i;
+const suspiciousLocalPattern = /(?:^|\/)(?:users|onedrive|desktop)(?:\/|$)/i;
 const windowsDrivePattern = /^[a-zA-Z]:[\\/]/;
 
 const throwIfUnsafeInProduction = (normalizedAbsolutePath) => {
