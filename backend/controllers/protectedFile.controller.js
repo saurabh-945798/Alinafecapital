@@ -5,10 +5,10 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { LoanInquiry } from "../models/LoanInquiry.model.js";
 import { BankPayment } from "../models/BankPayment.model.js";
-import UserProfile from "../models/UserProfile.js";
 import { UPLOAD_ROOT } from "../config/upload.js";
-import { getUserRoles, hasAnyRole, isAdminRole, selectPrimaryRole } from "../utils/rbac.js";
+import { isAdminRole, normalizeRole } from "../utils/rbac.js";
 import { normalizeEmail, normalizePhone } from "../utils/normalize.js";
+import { writeAdminAudit } from "../utils/adminAudit.js";
 
 const parseCookie = (cookieHeader = "", key) => {
   for (const part of String(cookieHeader || "").split(";")) {
@@ -20,7 +20,32 @@ const parseCookie = (cookieHeader = "", key) => {
 
 const hashToken = (token) => crypto.createHash("sha256").update(token).digest("hex");
 
+const roleSet = (user) => {
+  const source = [user?.role, ...(Array.isArray(user?.roles) ? user.roles : [])];
+  return new Set(source.map(normalizeRole).filter(Boolean));
+};
+
+const normalizeLoadedUser = (user) => {
+  if (!user) return null;
+  user.role = normalizeRole(user.role);
+  if (Array.isArray(user.roles)) user.roles = [...roleSet(user)];
+  return user;
+};
+
 const getSessionUser = async (req) => {
+  // Preferred path for SPA/API calls: the current short-lived Bearer access token.
+  const authHeader = String(req.headers.authorization || "");
+  if (authHeader.startsWith("Bearer ")) {
+    try {
+      const accessToken = authHeader.slice(7).trim();
+      const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
+      const user = await User.findById(decoded.id).select("+refreshTokenHash -password");
+      if (user?.isActive) return normalizeLoadedUser(user);
+    } catch {
+      // Fall through to the browser refresh-cookie path for legacy/direct file opens.
+    }
+  }
+
   const token = parseCookie(req.headers.cookie, "refreshToken");
   if (!token) return null;
   let decoded;
@@ -31,9 +56,7 @@ const getSessionUser = async (req) => {
   }
   const user = await User.findById(decoded.id).select("+refreshTokenHash -password");
   if (!user?.isActive || !user.refreshTokenHash || hashToken(token) !== user.refreshTokenHash) return null;
-  user.roles = getUserRoles(user).filter((role) => role !== "user");
-  user.role = selectPrimaryRole(user.roles);
-  return user;
+  return normalizeLoadedUser(user);
 };
 
 const customerOwnsInquiryFolder = async (user, ownerId) => {
@@ -45,42 +68,9 @@ const customerOwnsInquiryFolder = async (user, ownerId) => {
   return Boolean(sameEmail || samePhone);
 };
 
-
-const fileNameFromStoredPath = (value = "") => {
-  const normalized = String(value || "").replace(/\\/g, "/");
-  return normalized.split("/").filter(Boolean).pop() || "";
-};
-
-const getKycDocumentType = async (ownerId, filename) => {
-  if (!/^[a-fA-F0-9]{24}$/.test(ownerId)) return "";
-
-  const inquiry = await LoanInquiry.findById(ownerId).select("documents").lean();
-  const inquiryDoc = (inquiry?.documents || []).find((doc) =>
-    [doc?.filePath, doc?.fileUrl].some((value) => fileNameFromStoredPath(value) === filename)
-  );
-  if (inquiryDoc?.type) return String(inquiryDoc.type);
-
-  const profile = await UserProfile.findOne({ userId: ownerId }).select("documents").lean();
-  const profileDoc = (profile?.documents || []).find((doc) =>
-    [doc?.filePath, doc?.fileUrl].some((value) => fileNameFromStoredPath(value) === filename)
-  );
-  return String(profileDoc?.type || "");
-};
-
-const canStaffReadKycDocument = async (user, ownerId, filename) => {
-  if (!isAdminRole(user)) return false;
-  if (hasAnyRole(user, ["SUPER_ADMIN", "APPROVAL", "AUTHORIZED", "AUDITOR"])) return true;
-
-  const documentType = await getKycDocumentType(ownerId, filename);
-  if (!documentType) return false;
-  if (hasAnyRole(user, ["VERIFIER"]) && documentType === "national_id") return true;
-  if (
-    hasAnyRole(user, ["RISK_ANALYST"]) &&
-    ["bank_statement_3_months", "security_offer", "guarantor_national_id", "payslip_or_business_proof"].includes(documentType)
-  ) {
-    return true;
-  }
-  return false;
+const hasAnyStaffRole = (user, allowedRoles) => {
+  const roles = roleSet(user);
+  return [...roles].some((role) => allowedRoles.has(role) && isAdminRole(role));
 };
 
 export const serveProtectedKycFile = async (req, res, next) => {
@@ -93,9 +83,11 @@ export const serveProtectedKycFile = async (req, res, next) => {
 
     const user = await getSessionUser(req);
     if (!user) return res.status(401).json({ success: false, message: "Unauthorized", code: "UNAUTHORIZED" });
+    req.user = user;
 
     const ownsFolder = String(user._id) === owner || (await customerOwnsInquiryFolder(user, owner));
-    const staffAllowed = await canStaffReadKycDocument(user, owner, filename);
+    const staffKycRoles = new Set(["SUPER_ADMIN", "VERIFIER", "RISK_ANALYST", "APPROVAL", "AUTHORIZED", "AUDITOR"]);
+    const staffAllowed = hasAnyStaffRole(user, staffKycRoles);
     if (!staffAllowed && !ownsFolder) {
       return res.status(403).json({ success: false, message: "Forbidden", code: "FORBIDDEN" });
     }
@@ -106,14 +98,23 @@ export const serveProtectedKycFile = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "File not found", code: "NOT_FOUND" });
     }
 
+    if (staffAllowed) {
+      await writeAdminAudit(req, {
+        action: "KYC_DOCUMENT_VIEWED",
+        targetType: "KycDocument",
+        targetId: owner,
+        newValue: { filename },
+      });
+    }
+
     res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Pragma", "no-cache");
     res.setHeader("Cross-Origin-Resource-Policy", "same-site");
     return res.sendFile(absolute, { dotfiles: "deny" });
   } catch (error) {
     return next(error);
   }
 };
-
 
 export const serveProtectedPaymentPop = async (req, res, next) => {
   try {
@@ -124,13 +125,15 @@ export const serveProtectedPaymentPop = async (req, res, next) => {
 
     const user = await getSessionUser(req);
     if (!user) return res.status(401).json({ success: false, message: "Unauthorized", code: "UNAUTHORIZED" });
+    req.user = user;
 
     const payment = await BankPayment.findById(paymentId).select("userId pop").lean();
     if (!payment?.pop?.filePath) {
       return res.status(404).json({ success: false, message: "Proof of Payment not found", code: "NOT_FOUND" });
     }
 
-    const staffAllowed = hasAnyRole(user, ["SUPER_ADMIN", "PAYMENT_VERIFIER", "FINANCE_RECON", "AUDITOR"]);
+    const staffPaymentRoles = new Set(["SUPER_ADMIN", "PAYMENT_VERIFIER", "AUDITOR"]);
+    const staffAllowed = hasAnyStaffRole(user, staffPaymentRoles);
     const customerAllowed = String(payment.userId || "") === String(user._id || "");
     if (!staffAllowed && !customerAllowed) {
       return res.status(403).json({ success: false, message: "Forbidden", code: "FORBIDDEN" });
@@ -142,7 +145,17 @@ export const serveProtectedPaymentPop = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "Proof of Payment file not found", code: "NOT_FOUND" });
     }
 
+    if (staffAllowed) {
+      await writeAdminAudit(req, {
+        action: "PAYMENT_POP_VIEWED",
+        targetType: "BankPayment",
+        targetId: paymentId,
+        newValue: { viewed: true },
+      });
+    }
+
     res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("Pragma", "no-cache");
     res.setHeader("Cross-Origin-Resource-Policy", "same-site");
     const safeName = String(payment.pop.originalName || "proof-of-payment")
       .replace(/[\r\n"]/g, "_")

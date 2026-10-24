@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { ShieldCheck, Save, Send, RefreshCw } from "lucide-react";
+import { FileText, Printer, RefreshCw, Save, Send, ShieldCheck, X } from "lucide-react";
 import { riskApi } from "../../services/api/risk.api";
 import { getAdminUser } from "../../utils/adminAuth";
-import { hasAnyRole } from "../../utils/adminRbac";
+import { normalizeAdminRole } from "../../utils/adminRbac";
 
 const SCORE_FIELDS = [
   ["repaymentCapacity", "Repayment capacity"],
@@ -33,10 +33,12 @@ const emptyForm = {
 
 const asLines = (value) => Array.isArray(value) ? value.join("\n") : String(value || "");
 const money = (v) => `MWK ${Number(v || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+const escapeHtml = (value = "") => String(value || "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
+const lineText = (value) => Array.isArray(value) ? value.join("; ") : String(value || "");
 
 export default function RiskAssessmentPage() {
-  const adminUser = getAdminUser() || {};
-  const canEdit = hasAnyRole(adminUser, ["SUPER_ADMIN", "RISK_ANALYST"]);
+  const role = normalizeAdminRole(getAdminUser()?.role);
+  const canEdit = ["SUPER_ADMIN", "RISK_ANALYST"].includes(role);
   const [queue, setQueue] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [context, setContext] = useState(null);
@@ -45,6 +47,7 @@ export default function RiskAssessmentPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [showReport, setShowReport] = useState(false);
 
   const selected = useMemo(() => queue.find((item) => String(item.applicationId) === String(selectedId)) || null, [queue, selectedId]);
 
@@ -112,11 +115,30 @@ export default function RiskAssessmentPage() {
     catch (err) { setError(err?.response?.data?.message || err?.message || "Could not reopen assessment."); }
   };
 
+  const printReport = () => {
+    if (!assessment) return;
+    const app = context?.application || {};
+    const customer = app.customer || {};
+    const loan = app.loan || {};
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
+    if (!reportWindow) {
+      setError("Your browser blocked the printable Risk Report. Allow pop-ups for the Admin Portal and try again.");
+      return;
+    }
+    const rows = SCORE_FIELDS.map(([key, label]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(assessment?.scores?.[key] ?? 0)}</td></tr>`).join("");
+    reportWindow.document.write(`<!doctype html><html><head><title>Alinafe Capital Risk Report</title><style>body{font-family:Arial,sans-serif;color:#0f172a;margin:32px}h1{margin:0}h2{margin-top:24px;font-size:16px}table{width:100%;border-collapse:collapse;margin-top:10px}td,th{border:1px solid #cbd5e1;padding:8px;text-align:left}.muted{color:#64748b}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.card{border:1px solid #cbd5e1;border-radius:8px;padding:12px}@media print{button{display:none}}</style></head><body><h1>ALINAFE CAPITAL - RISK ASSESSMENT REPORT</h1><p class="muted">Application ${escapeHtml(app.applicationCode || selected?.applicationCode || selectedId)} · ${escapeHtml(assessment.status || "DRAFT")}</p><div class="grid"><div class="card"><b>Customer</b><br/>${escapeHtml(customer.fullName || selected?.customer?.fullName || "-")}<br/>${escapeHtml(customer.email || "")}<br/>${escapeHtml(customer.phone || "")}</div><div class="card"><b>Loan</b><br/>${escapeHtml(loan.productName || "-")}<br/>${escapeHtml(money(loan.requestedAmount || 0))}<br/>${escapeHtml(loan.tenureMonths || 0)} month(s)</div></div><h2>Scoring</h2><table><thead><tr><th>Area</th><th>Score</th></tr></thead><tbody>${rows}</tbody></table><p><b>Total:</b> ${escapeHtml(assessment.scoreTotal ?? 0)}/100 &nbsp; <b>Classification:</b> ${escapeHtml(String(assessment.classification || "").replaceAll("_", " "))}</p><h2>Security / Collateral</h2><p>${escapeHtml(assessment.security?.securityType || "-")} — ${escapeHtml(assessment.security?.description || "")}</p><h2>Surety / Guarantor</h2><p>${escapeHtml(assessment.surety?.name || "-")} — ${escapeHtml(assessment.surety?.relationship || "")}</p><h2>Assessment</h2><p><b>Strengths:</b> ${escapeHtml(lineText(assessment.strengths) || "-")}</p><p><b>Weaknesses:</b> ${escapeHtml(lineText(assessment.weaknesses) || "-")}</p><p><b>Identified risks:</b> ${escapeHtml(lineText(assessment.identifiedRisks) || "-")}</p><p><b>Conditions:</b> ${escapeHtml(lineText(assessment.conditions) || "-")}</p><p><b>Analyst comments:</b> ${escapeHtml(assessment.analystComments || "-")}</p><p><b>Recommendation:</b> ${escapeHtml(String(assessment.recommendation || "-").replaceAll("_", " "))}</p><p class="muted">Analyst: ${escapeHtml(assessment.analystName || assessment.analystEmail || "-")} · Submitted: ${escapeHtml(assessment.submittedAt ? new Date(assessment.submittedAt).toLocaleString() : "Not submitted")}</p><button onclick="window.print()">Print / Save as PDF</button></body></html>`);
+    reportWindow.document.close();
+    reportWindow.focus();
+  };
+
   return (
     <div className="space-y-5">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div><p className="text-xs font-semibold uppercase tracking-[.18em] text-slate-500">Credit Risk</p><h1 className="mt-1 text-2xl font-bold text-slate-950">Risk Assessment</h1><p className="mt-1 text-sm text-slate-500">Assess security, surety and repayment strength before approval.</p></div>
-        <button onClick={loadQueue} className="inline-flex items-center gap-2 rounded-xl border bg-white px-4 py-2 text-sm font-semibold"><RefreshCw size={15}/>Refresh</button>
+        <div className="flex flex-wrap gap-2">
+          {assessment ? <button onClick={()=>setShowReport(true)} className="inline-flex items-center gap-2 rounded-xl border bg-white px-4 py-2 text-sm font-semibold"><FileText size={15}/>View Risk Report</button> : null}
+          <button onClick={loadQueue} className="inline-flex items-center gap-2 rounded-xl border bg-white px-4 py-2 text-sm font-semibold"><RefreshCw size={15}/>Refresh</button>
+        </div>
       </header>
       {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div> : null}
       {notice ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div> : null}
@@ -176,12 +198,33 @@ export default function RiskAssessmentPage() {
             <label className="text-sm font-semibold">Final recommendation<select disabled={!canEdit||isSubmitted} value={form.recommendation} onChange={(e)=>setForm(p=>({...p,recommendation:e.target.value}))} className="mt-2 h-11 w-full rounded-xl border px-3"><option value="">Use score-based recommendation</option><option value="RECOMMEND">Recommend</option><option value="RECOMMEND_WITH_CONDITIONS">Recommend with Conditions</option><option value="REFER_FOR_FURTHER_REVIEW">Refer for Further Review</option><option value="DO_NOT_RECOMMEND">Do Not Recommend</option></select></label>
             <div className="flex flex-wrap gap-2 pt-2">
               {canEdit && !isSubmitted ? <><button onClick={()=>save(false)} disabled={saving} className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold"><Save size={15}/>Save Draft</button><button onClick={()=>save(true)} disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"><Send size={15}/>Submit & Lock Report</button></> : null}
-              {hasAnyRole(adminUser, ["SUPER_ADMIN"]) && isSubmitted ? <button onClick={reopen} className="rounded-xl border px-4 py-2 text-sm font-semibold">Reopen with reason</button> : null}
+              {role === "SUPER_ADMIN" && isSubmitted ? <button onClick={reopen} className="rounded-xl border px-4 py-2 text-sm font-semibold">Reopen with reason</button> : null}
               {isSubmitted ? <span className="rounded-full bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">Submitted report · {assessment?.classification?.replaceAll("_"," ")} · {assessment?.scoreTotal}/100</span> : null}
             </div>
           </section>
         </main> : <div className="rounded-2xl border border-dashed bg-white p-10 text-sm text-slate-500">Select an application to begin.</div>}
       </div>
+      {showReport && assessment ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-4" role="dialog" aria-modal="true" aria-label="Risk Assessment Report">
+          <div className="max-h-[92vh] w-full max-w-4xl overflow-auto rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b pb-4">
+              <div><p className="text-xs font-semibold uppercase tracking-[.18em] text-slate-500">Alinafe Capital</p><h2 className="text-xl font-bold">Risk Assessment Report</h2><p className="text-sm text-slate-500">{context?.application?.applicationCode || selected?.applicationCode}</p></div>
+              <button type="button" onClick={()=>setShowReport(false)} className="rounded-lg border p-2 text-slate-600" aria-label="Close Risk Report"><X size={18}/></button>
+            </div>
+            <div className="mt-5 grid gap-4 sm:grid-cols-3">
+              <Info label="Customer" value={context?.application?.customer?.fullName || selected?.customer?.fullName || "-"}/>
+              <Info label="Score" value={`${assessment.scoreTotal ?? total}/100`}/>
+              <Info label="Classification" value={String(assessment.classification || "-").replaceAll("_"," ")}/>
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <Panel title="Recommendation"><p className="text-sm">{String(assessment.recommendation || "-").replaceAll("_"," ")}</p><p className="mt-2 text-sm text-slate-600">{assessment.analystComments || "No analyst comments recorded."}</p></Panel>
+              <Panel title="Security & Surety"><p className="text-sm"><b>Security:</b> {assessment.security?.securityType || "-"}</p><p className="mt-2 text-sm"><b>Surety:</b> {assessment.surety?.name || "-"}</p></Panel>
+            </div>
+            <div className="mt-4"><Panel title="Identified Risks"><p className="whitespace-pre-wrap text-sm">{lineText(assessment.identifiedRisks) || "No identified risks recorded."}</p></Panel></div>
+            <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={printReport} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"><Printer size={16}/>Print / Save as PDF</button></div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

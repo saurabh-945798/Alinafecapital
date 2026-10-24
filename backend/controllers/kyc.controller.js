@@ -11,6 +11,7 @@ const safeRegex = (value = "") => {
 const toPublicDocuments = (documents = []) =>
   (documents || []).map((d) => ({
     type: d.type,
+    displayName: d.displayName || "",
     fileUrl: d.fileUrl,
     mime: d.mime,
     uploadedAt: d.uploadedAt,

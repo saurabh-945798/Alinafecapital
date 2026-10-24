@@ -3,7 +3,8 @@ import { isAdminRole } from "../utils/rbac.js";
 
 export const requireAdmin = (req, res, next) => {
   requireAuth(req, res, () => {
-    if (!req.user || !isAdminRole(req.user)) {
+    const role = String(req.user?.role || "");
+    if (!req.user || !isAdminRole(role)) {
       return res.status(403).json({
         success: false,
         message: "Forbidden: admin access required",

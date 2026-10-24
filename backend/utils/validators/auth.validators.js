@@ -51,3 +51,23 @@ export const loginSchema = z
       });
     }
   });
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().email("Enter a valid email address"),
+});
+
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().trim().min(32, "Invalid or expired reset link"),
+    password: z.string().min(1, "Password is required"),
+    confirmPassword: z.string().min(1, "Please confirm your password").optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.confirmPassword !== undefined && data.password !== data.confirmPassword) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["confirmPassword"],
+        message: "Passwords do not match",
+      });
+    }
+  });

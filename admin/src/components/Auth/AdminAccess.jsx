@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { ShieldCheck, LockKeyhole, Mail, ArrowRight, BarChart3, Users, WalletCards } from "lucide-react";
+import { ShieldCheck, LockKeyhole, Mail, ArrowRight, BarChart3, Eye, EyeOff, WalletCards } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Button from "../ui/Button";
 import { adminAuthApi } from "../../services/api/auth.api";
 import { setAdminToken, setAdminUser } from "../../utils/adminAuth";
-import { ADMIN_ROLES, hasAnyRole, normalizeAdminRole, normalizeAdminRoles } from "../../utils/adminRbac";
+import { ADMIN_ROLES, normalizeAdminRole } from "../../utils/adminRbac";
 import { useToast } from "../../context/ToastContext.jsx";
 import alinafeLogo from "../../assets/alinafe-logo.png";
 import restockLogo from "../../assets/restock-tech-logo.png";
@@ -22,23 +22,21 @@ export default function AdminAccessPage() {
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [transitionMessage, setTransitionMessage] = useState("");
   const [error, setError] = useState("");
 
   const nextPath = searchParams.get("next") || "/admin";
 
-  const roleHome = (user) => {
-    if (hasAnyRole(user, ["SUPER_ADMIN"])) return "/admin";
-    if (hasAnyRole(user, ["TECH_SUPPORT"])) return "/admin/settings";
-    if (hasAnyRole(user, ["PAYMENT_VERIFIER"])) return "/admin/payment-verification";
-    if (hasAnyRole(user, ["FINANCE_RECON"])) return "/admin/financial-journal";
-    if (hasAnyRole(user, ["COLLECTIONS", "DISBURSED"])) return "/admin/payments";
-    if (hasAnyRole(user, ["RISK_ANALYST"])) return "/admin/risk-assessment";
-    if (hasAnyRole(user, ["REPORTING_MIS"])) return "/admin/reports";
-    if (hasAnyRole(user, ["CUSTOMER_SERVICE"])) return "/admin/complaints";
-    if (hasAnyRole(user, ["VERIFIER"])) return "/admin/compliance";
-    if (hasAnyRole(user, ["AUDITOR"])) return "/admin/audit-trail";
+  const roleHome = (role) => {
+    const r = normalizeAdminRole(role);
+    if (r === "SUPER_ADMIN") return "/admin";
+    if (r === "VERIFIER") return "/admin/compliance";
+    if (r === "RISK_ANALYST") return "/admin/risk-assessment";
+    if (r === "DISBURSED") return "/admin/disbursement";
+    if (r === "PAYMENT_VERIFIER") return "/admin/payment-verification";
+    if (r === "AUDITOR") return "/admin/audit-trail";
     return "/admin/applications";
   };
 
@@ -54,17 +52,16 @@ export default function AdminAccessPage() {
       const user = payload.user || null;
 
       if (!token) throw new Error("Login response did not include access token.");
-      const userRoles = normalizeAdminRoles(user);
-      const userRole = normalizeAdminRole(userRoles);
-      if (!user || !userRoles.length || !userRoles.some((role) => ADMIN_ROLES.includes(role))) {
+      const userRole = normalizeAdminRole(user?.role);
+      if (!user || !ADMIN_ROLES.includes(userRole)) {
         throw new Error("You are not authorized to access the admin panel.");
       }
-      user.roles = userRoles;
       user.role = userRole;
 
       setAdminToken(token);
       setAdminUser(user);
-      const defaultPath = roleHome(user);
+      window.localStorage.setItem("alinafe:admin:last-activity", String(Date.now()));
+      const defaultPath = roleHome(user.role);
       const safeNext =
         nextPath && nextPath.startsWith("/admin") && !nextPath.startsWith("/admin/user-access")
           ? nextPath
@@ -171,7 +168,7 @@ export default function AdminAccessPage() {
               <div className="mt-2 flex items-center rounded-2xl border border-slate-300 bg-white px-4 focus-within:border-slate-950">
                 <LockKeyhole size={18} className="text-slate-400" />
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"
@@ -179,6 +176,14 @@ export default function AdminAccessPage() {
                   autoComplete="current-password"
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  className="p-2 text-slate-500"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </label>
 

@@ -4,6 +4,13 @@ import Sidebar from "../components/Sidebar/Sidebar.jsx";
 import AdminLoadingScreen from "../components/Loading/AdminLoadingScreen.jsx";
 import alinafeLogo from "../assets/alinafe-logo.png";
 import restockLogo from "../assets/restock-tech-logo.png";
+import { api } from "../services/api/axios.js";
+import { clearAdminSession, isAdminLoggedIn } from "../utils/adminAuth.js";
+
+const ADMIN_ACTIVITY_KEY = "alinafe:admin:last-activity";
+const ADMIN_LOGOUT_KEY = "alinafe:admin:logout-at";
+const ADMIN_IDLE_MINUTES = Math.max(1, Number(import.meta.env.VITE_SESSION_IDLE_MINUTES || 10));
+const ADMIN_IDLE_MS = ADMIN_IDLE_MINUTES * 60 * 1000;
 
 export default function AdminLayout() {
   const location = useLocation();
@@ -20,6 +27,54 @@ export default function AdminLayout() {
     const timer = window.setTimeout(() => setPageTransition(false), 360);
     return () => window.clearTimeout(timer);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!isAdminLoggedIn()) return undefined;
+    let lastWrite = 0;
+    let loggingOut = false;
+    const readLastActivity = () => Number(window.localStorage.getItem(ADMIN_ACTIVITY_KEY) || 0);
+    const touch = () => {
+      const now = Date.now();
+      if (now - lastWrite < 2000) return;
+      lastWrite = now;
+      window.localStorage.setItem(ADMIN_ACTIVITY_KEY, String(now));
+    };
+    const idleLogout = () => {
+      if (loggingOut) return;
+      loggingOut = true;
+      window.localStorage.setItem(ADMIN_LOGOUT_KEY, String(Date.now()));
+      api.post("/auth/logout", null, { skipRefresh: true }).catch(() => {}).finally(() => {
+        clearAdminSession();
+        window.location.replace("/admin/login?reason=idle");
+      });
+    };
+    const checkIdle = () => {
+      const last = readLastActivity();
+      if (last && Date.now() - last >= ADMIN_IDLE_MS) idleLogout();
+    };
+    const onStorage = (event) => {
+      if (event.key === ADMIN_LOGOUT_KEY && event.newValue) {
+        clearAdminSession();
+        window.location.replace("/admin/login?reason=idle");
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") checkIdle();
+    };
+    const events = ["pointerdown", "keydown", "touchstart", "scroll"];
+    events.forEach((eventName) => window.addEventListener(eventName, touch, { passive: true }));
+    window.addEventListener("storage", onStorage);
+    document.addEventListener("visibilitychange", onVisibility);
+    if (!readLastActivity()) touch();
+    checkIdle();
+    const timer = window.setInterval(checkIdle, 15_000);
+    return () => {
+      window.clearInterval(timer);
+      events.forEach((eventName) => window.removeEventListener(eventName, touch));
+      window.removeEventListener("storage", onStorage);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[linear-gradient(135deg,#f8fafc_0%,#eef4fb_50%,#fbf7ee_100%)]">

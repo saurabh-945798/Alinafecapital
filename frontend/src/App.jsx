@@ -21,6 +21,8 @@ import Terms from "./components/Terms/Terms.jsx";
 import Privacy from "./components/Privacy/Privacy.jsx";
 import CustomerLoginPage from "./auth/CustomerLoginPage.jsx";
 import CustomerRegisterPage from "./auth/CustomerRegisterPage.jsx";
+import ForgotPasswordPage from "./auth/ForgotPasswordPage.jsx";
+import ResetPasswordPage from "./auth/ResetPasswordPage.jsx";
 import LoanInquiryPage from "./publicPages/LoanInquiryPage.jsx";
 import EligibilityCheckPage from "./publicPages/EligibilityCheckPage.jsx";
 import FAQPage from "./publicPages/FAQPage.jsx";
@@ -122,6 +124,8 @@ function App() {
           }
         />
         <Route path="/customer/login" element={<Navigate to="/login" replace />} />
+        <Route path="/forgot-password" element={<Layout noNavbar><ForgotPasswordPage /></Layout>} />
+        <Route path="/reset-password" element={<Layout noNavbar><ResetPasswordPage /></Layout>} />
         <Route
           path="/register"
           element={

@@ -5,7 +5,7 @@ import { sidebarNav } from "./sidebarNav";
 import { clearAdminSession, getAdminUser } from "../../utils/adminAuth";
 import { adminAuthApi } from "../../services/api/auth.api";
 import { inquiriesApi } from "../../services/api/inquiries.api";
-import { hasAnyRole } from "../../utils/adminRbac";
+import { hasAnyRole, normalizeAdminRole } from "../../utils/adminRbac";
 import { useToast } from "../../context/ToastContext.jsx";
 import alinafeLogo from "../../assets/alinafe-logo.png";
 import restockLogo from "../../assets/restock-tech-logo.png";
@@ -83,6 +83,7 @@ export default function Sidebar() {
   const [badges, setBadges] = useState({ applications: 0 });
   const badgeErrorNotifiedRef = useRef(false);
   const adminUser = useMemo(() => getAdminUser(), []);
+  const adminRole = normalizeAdminRole(adminUser?.role);
 
   const width = collapsed ? "w-20" : "w-72";
 
@@ -187,7 +188,7 @@ export default function Sidebar() {
         </button>
       </div>
 
-      <NavItems collapsed={collapsed} onNavigate={handleNavigate} badges={badges} role={adminUser} />
+      <NavItems collapsed={collapsed} onNavigate={handleNavigate} badges={badges} role={adminRole} />
 
       <div className="border-t border-slate-200 p-3">
         {!collapsed ? (

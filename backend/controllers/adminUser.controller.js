@@ -1,39 +1,22 @@
 import { z } from "zod";
 import User from "../models/User.js";
-import {
-  ADMIN_ROLES,
-  ADMIN_DB_ROLE_VALUES,
-  formatRole,
-  formatRoles,
-  getUserRoles,
-  normalizeRoles,
-  selectPrimaryRole,
-  validateAdminRoleCombination,
-} from "../utils/rbac.js";
+import { ADMIN_ROLES, ADMIN_DB_ROLE_VALUES, formatRole, normalizeRole } from "../utils/rbac.js";
 import { normalizeEmail, normalizePhone } from "../utils/normalize.js";
 import { writeAdminAudit } from "../utils/adminAudit.js";
 import { getPasswordPolicyErrors } from "../utils/passwordPolicy.js";
 
-const roleArraySchema = z.array(z.string().trim().min(2)).min(1).max(8);
-
-const createSchema = z
-  .object({
-    fullName: z.string().trim().min(2),
-    email: z.string().trim().email(),
-    phone: z.string().trim().min(6),
-    password: z.string().min(1),
-    role: z.string().trim().min(2).optional(),
-    roles: roleArraySchema.optional(),
-    isActive: z.boolean().optional(),
-  })
-  .refine((value) => Boolean(value.role || value.roles?.length), {
-    message: "At least one role is required",
-  });
+const createSchema = z.object({
+  fullName: z.string().trim().min(2),
+  email: z.string().trim().email(),
+  phone: z.string().trim().min(6),
+  password: z.string().min(1),
+  role: z.string().trim().min(2),
+  isActive: z.boolean().optional(),
+});
 
 const updateSchema = z.object({
   fullName: z.string().trim().min(2).optional(),
   role: z.string().trim().min(2).optional(),
-  roles: roleArraySchema.optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -41,56 +24,21 @@ const resetPasswordSchema = z.object({
   password: z.string().min(1),
 });
 
-const normalizeAdminRoles = (payload = {}) => {
-  const raw = Array.isArray(payload.roles) && payload.roles.length ? payload.roles : [payload.role];
-  const roles = normalizeRoles(raw).filter((role) => role !== "user");
-  if (!roles.length || roles.some((role) => !ADMIN_ROLES.includes(role))) {
-    return { ok: false, roles, message: "Invalid admin role" };
-  }
-  const combination = validateAdminRoleCombination(roles);
-  if (!combination.ok) return { ok: false, roles, message: combination.message, code: combination.code };
-  return { ok: true, roles };
-};
-
-const publicAdminUser = (user) => {
-  const source = typeof user?.toObject === "function" ? user.toObject() : user || {};
-  const roles = getUserRoles(source).filter((role) => role !== "user");
-  const role = selectPrimaryRole(roles);
-  return {
-    ...source,
-    role,
-    roles,
-    roleLabel: formatRole(role),
-    roleLabels: formatRoles(roles),
-  };
-};
-
-const activeSuperAdminFilter = {
-  isActive: true,
-  $or: [
-    { role: { $in: ["SUPER_ADMIN", "admin"] } },
-    { roles: "SUPER_ADMIN" },
-  ],
-};
+const validAdminRole = (role) => ADMIN_ROLES.includes(normalizeRole(role));
 
 export const adminUserController = {
   list: async (req, res) => {
-    const users = await User.find({
-      $or: [
-        { role: { $in: ADMIN_DB_ROLE_VALUES } },
-        { roles: { $in: ADMIN_ROLES } },
-      ],
-    })
-      .select("fullName email phone role roles isActive createdAt updatedAt")
+    const users = await User.find({ role: { $in: ADMIN_DB_ROLE_VALUES } })
+      .select("fullName email phone role isActive createdAt updatedAt")
       .sort({ createdAt: -1 })
       .lean();
-    return res.json({ success: true, data: users.map(publicAdminUser) });
+    return res.json({ success: true, data: users.map((u) => ({ ...u, role: normalizeRole(u.role), roleLabel: formatRole(u.role) })) });
   },
 
   create: async (req, res) => {
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, message: "Validation failed", code: "VALIDATION_ERROR", details: parsed.error.issues });
+      return res.status(400).json({ success: false, message: "Validation failed", code: "VALIDATION_ERROR" });
     }
     const payload = parsed.data;
     const passwordErrors = getPasswordPolicyErrors(payload.password, {
@@ -105,103 +53,97 @@ export const adminUserController = {
         details: passwordErrors,
       });
     }
-
-    const resolved = normalizeAdminRoles(payload);
-    if (!resolved.ok) {
-      return res.status(400).json({ success: false, message: resolved.message, code: resolved.code || "INVALID_ROLE" });
+    const role = normalizeRole(payload.role);
+    if (!validAdminRole(role)) {
+      return res.status(400).json({ success: false, message: "Invalid admin role", code: "INVALID_ROLE" });
     }
-
     const email = normalizeEmail(payload.email);
     const phone = normalizePhone(payload.phone);
     const existing = await User.findOne({ $or: [{ email }, { phone }] }).lean();
     if (existing) {
       return res.status(409).json({ success: false, message: "Email or phone already exists", code: "DUPLICATE_USER" });
     }
-
     const user = await User.create({
       fullName: payload.fullName.trim(),
       email,
       phone,
       password: payload.password,
-      role: selectPrimaryRole(resolved.roles),
-      roles: resolved.roles,
+      role,
       isActive: payload.isActive ?? true,
     });
-
     await writeAdminAudit(req, {
       action: "ADMIN_USER_CREATED",
       targetType: "User",
       targetId: user._id,
-      newValue: { roles: resolved.roles, isActive: user.isActive, email: user.email, phone: user.phone },
+      newValue: { role: normalizeRole(user.role), isActive: user.isActive, email: user.email, phone: user.phone },
     });
-
-    return res.status(201).json({ success: true, data: publicAdminUser(user) });
+    return res.status(201).json({
+      success: true,
+      data: { id: user._id, fullName: user.fullName, email: user.email, phone: user.phone, role: normalizeRole(user.role), roleLabel: formatRole(user.role), isActive: user.isActive },
+    });
   },
 
   update: async (req, res) => {
     const parsed = updateSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ success: false, message: "Validation failed", code: "VALIDATION_ERROR", details: parsed.error.issues });
+      return res.status(400).json({ success: false, message: "Validation failed", code: "VALIDATION_ERROR" });
     }
-
+    const updates = {};
+    if (parsed.data.fullName !== undefined) updates.fullName = parsed.data.fullName.trim();
+    if (parsed.data.isActive !== undefined) updates.isActive = parsed.data.isActive;
+    if (parsed.data.role !== undefined) {
+      const role = normalizeRole(parsed.data.role);
+      if (!validAdminRole(role)) {
+        return res.status(400).json({ success: false, message: "Invalid admin role", code: "INVALID_ROLE" });
+      }
+      updates.role = role;
+    }
     const currentUserId = String(req.user?._id || "");
-    const targetUser = await User.findById(req.params.id).select("role roles isActive refreshTokenHash");
+    const targetUser = await User.findById(req.params.id).select("role isActive");
     if (!targetUser) {
       return res.status(404).json({ success: false, message: "User not found", code: "NOT_FOUND" });
     }
-
     const targetId = String(targetUser._id);
-    const oldRoles = getUserRoles(targetUser).filter((role) => role !== "user");
-    const updates = {};
-
-    if (parsed.data.fullName !== undefined) updates.fullName = parsed.data.fullName.trim();
-    if (parsed.data.isActive !== undefined) updates.isActive = parsed.data.isActive;
-
-    let nextRoles = oldRoles;
-    if (parsed.data.roles !== undefined || parsed.data.role !== undefined) {
-      const resolved = normalizeAdminRoles(parsed.data);
-      if (!resolved.ok) {
-        return res.status(400).json({ success: false, message: resolved.message, code: resolved.code || "INVALID_ROLE" });
-      }
-      nextRoles = resolved.roles;
-      updates.roles = nextRoles;
-      updates.role = selectPrimaryRole(nextRoles);
-      updates.refreshTokenHash = null; // force a fresh login so new permissions take effect.
-    }
-
-    if (parsed.data.isActive === false) {
-      updates.refreshTokenHash = null;
-    }
+    const oldRole = normalizeRole(targetUser.role);
 
     if (currentUserId && targetId === currentUserId) {
       if (updates.isActive === false) {
         return res.status(400).json({ success: false, message: "You cannot disable your own account", code: "SELF_DISABLE_BLOCKED" });
       }
-      if (parsed.data.roles !== undefined || parsed.data.role !== undefined) {
-        return res.status(400).json({ success: false, message: "You cannot change your own roles", code: "SELF_ROLE_CHANGE_BLOCKED" });
+      if (updates.role && normalizeRole(updates.role) !== oldRole) {
+        return res.status(400).json({ success: false, message: "You cannot change your own role", code: "SELF_ROLE_CHANGE_BLOCKED" });
       }
     }
 
-    const losesSuperAdmin = oldRoles.includes("SUPER_ADMIN") && !nextRoles.includes("SUPER_ADMIN");
-    if (oldRoles.includes("SUPER_ADMIN") && (updates.isActive === false || losesSuperAdmin)) {
-      const activeSuperAdminCount = await User.countDocuments(activeSuperAdminFilter);
+    if (oldRole === "SUPER_ADMIN" && (updates.isActive === false || (updates.role && normalizeRole(updates.role) !== "SUPER_ADMIN"))) {
+      const activeSuperAdminCount = await User.countDocuments({
+        role: { $in: ["SUPER_ADMIN", "admin"] },
+        isActive: true,
+      });
       if (activeSuperAdminCount <= 1) {
         return res.status(400).json({ success: false, message: "Cannot remove or disable the last SUPER_ADMIN", code: "LAST_SUPER_ADMIN_PROTECTED" });
       }
     }
 
-    const user = await User.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true, runValidators: true })
-      .select("fullName email phone role roles isActive createdAt updatedAt");
+    const roleChanged = Boolean(updates.role && normalizeRole(updates.role) !== oldRole);
+    if (roleChanged || updates.isActive === false) {
+      // Permissions must take effect on the next request/login, not after a stale
+      // refresh session expires days later.
+      updates.refreshTokenHash = null;
+    }
+
+    const user = await User.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true })
+      .select("fullName email phone role isActive createdAt updatedAt");
 
     await writeAdminAudit(req, {
       action: "ADMIN_USER_UPDATED",
       targetType: "User",
       targetId: user._id,
-      oldValue: { roles: oldRoles, isActive: targetUser.isActive },
-      newValue: { roles: getUserRoles(user).filter((role) => role !== "user"), isActive: user.isActive },
+      oldValue: { role: oldRole, isActive: targetUser.isActive },
+      newValue: { role: normalizeRole(user.role), roleLabel: formatRole(user.role), isActive: user.isActive, sessionRevoked: roleChanged || updates.isActive === false },
     });
 
-    return res.json({ success: true, data: publicAdminUser(user) });
+    return res.json({ success: true, data: { ...user.toObject(), role: normalizeRole(user.role), roleLabel: formatRole(user.role) } });
   },
 
   resetPassword: async (req, res) => {
@@ -239,20 +181,23 @@ export const adminUserController = {
 
   remove: async (req, res) => {
     const currentUserId = String(req.user?._id || "");
-    const targetUser = await User.findById(req.params.id).select("role roles isActive");
+    const targetUser = await User.findById(req.params.id).select("role isActive");
     if (!targetUser) {
       return res.status(404).json({ success: false, message: "User not found", code: "NOT_FOUND" });
     }
 
     const targetId = String(targetUser._id);
-    const targetRoles = getUserRoles(targetUser).filter((role) => role !== "user");
+    const targetRole = normalizeRole(targetUser.role);
 
     if (currentUserId && targetId === currentUserId) {
       return res.status(400).json({ success: false, message: "You cannot delete your own account", code: "SELF_DELETE_BLOCKED" });
     }
 
-    if (targetRoles.includes("SUPER_ADMIN")) {
-      const activeSuperAdminCount = await User.countDocuments(activeSuperAdminFilter);
+    if (targetRole === "SUPER_ADMIN") {
+      const activeSuperAdminCount = await User.countDocuments({
+        role: { $in: ["SUPER_ADMIN", "admin"] },
+        isActive: true,
+      });
       if (activeSuperAdminCount <= 1) {
         return res.status(400).json({ success: false, message: "Cannot delete the last SUPER_ADMIN", code: "LAST_SUPER_ADMIN_PROTECTED" });
       }
@@ -263,7 +208,7 @@ export const adminUserController = {
       action: "ADMIN_USER_DELETED",
       targetType: "User",
       targetId: targetUser._id,
-      oldValue: { roles: targetRoles, isActive: targetUser.isActive },
+      oldValue: { role: targetRole, isActive: targetUser.isActive },
       newValue: { deleted: true },
     });
 

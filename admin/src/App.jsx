@@ -31,23 +31,24 @@ export default function AppRoutes() {
       <Route element={<AdminProtectedRoute />}>
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Dashboard />} />
-          <Route path="applications" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "LOAN_OPERATIONS", "VERIFIER", "RISK_ANALYST", "APPROVAL", "AUTHORIZED", "DISBURSED", "CUSTOMER_SERVICE", "AUDITOR"]}><LoanApplicationsPage /></AdminProtectedRoute>} />
-          <Route path="applications/:id" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "LOAN_OPERATIONS", "VERIFIER", "RISK_ANALYST", "APPROVAL", "AUTHORIZED", "DISBURSED", "CUSTOMER_SERVICE", "AUDITOR"]}><LoanApplicationDetailPage /></AdminProtectedRoute>} />
+          <Route path="applications" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "VERIFIER", "RISK_ANALYST", "APPROVAL", "AUTHORIZED", "DISBURSED", "AUDITOR"]}><LoanApplicationsPage /></AdminProtectedRoute>} />
+          <Route path="applications/:id" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "VERIFIER", "RISK_ANALYST", "APPROVAL", "AUTHORIZED", "DISBURSED", "AUDITOR"]}><LoanApplicationDetailPage /></AdminProtectedRoute>} />
+          <Route path="disbursement" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "DISBURSED"]}><LoanApplicationsPage initialStatus="AUTHORIZED" /></AdminProtectedRoute>} />
           <Route path="risk-assessment" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "RISK_ANALYST", "APPROVAL", "AUTHORIZED", "AUDITOR"]}><RiskAssessmentPage /></AdminProtectedRoute>} />
-          <Route path="payment-verification" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "PAYMENT_VERIFIER", "FINANCE_RECON", "AUDITOR"]}><PaymentVerificationPage /></AdminProtectedRoute>} />
-          <Route path="financial-journal" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "FINANCE_RECON", "AUDITOR"]}><FinancialJournalPage /></AdminProtectedRoute>} />
+          <Route path="payment-verification" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "PAYMENT_VERIFIER", "AUDITOR"]}><PaymentVerificationPage /></AdminProtectedRoute>} />
+          <Route path="financial-journal" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "PAYMENT_VERIFIER", "AUDITOR"]}><FinancialJournalPage /></AdminProtectedRoute>} />
           <Route path="audit-trail" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "AUDITOR"]}><AuditTrailPage /></AdminProtectedRoute>} />
-          <Route path="payments" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "DISBURSED", "PAYMENT_VERIFIER", "FINANCE_RECON", "COLLECTIONS", "REPORTING_MIS", "AUDITOR"]}><AccountsPage /></AdminProtectedRoute>} />
-          <Route path="payments/:id" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "DISBURSED", "PAYMENT_VERIFIER", "FINANCE_RECON", "COLLECTIONS", "REPORTING_MIS", "AUDITOR"]}><AccountDetailPage /></AdminProtectedRoute>} />
-          <Route path="reports" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "REPORTING_MIS", "AUDITOR"]}><ReportsPage /></AdminProtectedRoute>} />
-          <Route path="analytics" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "REPORTING_MIS", "AUDITOR"]}><AnalyticsPage /></AdminProtectedRoute>} />
-          <Route path="inquiries" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "LOAN_OPERATIONS", "VERIFIER", "RISK_ANALYST", "APPROVAL", "AUTHORIZED", "DISBURSED", "CUSTOMER_SERVICE", "AUDITOR"]}><InquiriesPage /></AdminProtectedRoute>} />
+          <Route path="payments" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "DISBURSED", "PAYMENT_VERIFIER", "AUDITOR"]}><AccountsPage /></AdminProtectedRoute>} />
+          <Route path="payments/:id" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "DISBURSED", "PAYMENT_VERIFIER", "AUDITOR"]}><AccountDetailPage /></AdminProtectedRoute>} />
+          <Route path="reports" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN"]}><ReportsPage /></AdminProtectedRoute>} />
+          <Route path="analytics" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN"]}><AnalyticsPage /></AdminProtectedRoute>} />
+          <Route path="inquiries" element={<InquiriesPage />} />
           <Route path="loan-products" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN"]}><LoanProductsPage /></AdminProtectedRoute>} />
-          <Route path="complaints" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "CUSTOMER_SERVICE", "AUDITOR"]}><ComplaintsPage /></AdminProtectedRoute>} />
-          <Route path="customers" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "LOAN_OPERATIONS", "VERIFIER", "RISK_ANALYST", "APPROVAL", "AUTHORIZED", "DISBURSED", "COLLECTIONS", "CUSTOMER_SERVICE", "AUDITOR"]}><CustomersPage /></AdminProtectedRoute>} />
+          <Route path="complaints" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "VERIFIER"]}><ComplaintsPage /></AdminProtectedRoute>} />
+          <Route path="customers" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "VERIFIER", "RISK_ANALYST", "APPROVAL", "AUTHORIZED", "DISBURSED", "AUDITOR"]}><CustomersPage /></AdminProtectedRoute>} />
           <Route path="compliance" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "VERIFIER"]}><CompliancePage /></AdminProtectedRoute>} />
           <Route path="user-access" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN"]}><UserAccessPage /></AdminProtectedRoute>} />
-          <Route path="settings" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN", "TECH_SUPPORT"]}><SettingsPage /></AdminProtectedRoute>} />
+          <Route path="settings" element={<AdminProtectedRoute allowedRoles={["SUPER_ADMIN"]}><SettingsPage /></AdminProtectedRoute>} />
         </Route>
       </Route>
 

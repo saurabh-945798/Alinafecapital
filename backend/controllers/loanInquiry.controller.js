@@ -6,6 +6,8 @@ import { LoanInquiry } from "../models/LoanInquiry.model.js";
 import { LoanProduct } from "../models/LoanProduct.model.js";
 import { LoanAccount } from "../models/LoanAccount.model.js";
 import { RiskAssessment } from "../models/RiskAssessment.model.js";
+import { MastercardPayment } from "../models/MastercardPayment.model.js";
+import { AirtelPayment } from "../models/AirtelPayment.model.js";
 import UserProfile from "../models/UserProfile.js";
 import User from "../models/User.js";
 import { SystemCounter } from "../models/SystemCounter.model.js";
@@ -19,7 +21,6 @@ import { normalizeMoneyForValidation, parseMoneyInput } from "../utils/numberInp
 import { ApiError } from "../utils/ApiError.js";
 import { emiCalculatorService } from "../services/emiCalculator.service.js";
 import { withCurrentLoanFeePolicy } from "../utils/loanPricingPolicy.js";
-import { getUserRoles, hasAnyRole } from "../utils/rbac.js";
 
 const PUBLIC_LOAN_TYPES = [
   { slug: "civil-servant-loan", name: "Civil Servant Loan" },
@@ -398,189 +399,6 @@ const toPublicInquiryProfile = (inquiry) => {
       uploadedAt: d.uploadedAt,
     })),
   };
-};
-
-
-const RISK_DOCUMENT_TYPES = new Set([
-  "bank_statement_3_months",
-  "security_offer",
-  "guarantor_national_id",
-  "payslip_or_business_proof",
-]);
-
-const adminDocumentTypesForUser = (user) => {
-  if (hasAnyRole(user, ["SUPER_ADMIN", "APPROVAL", "AUTHORIZED", "AUDITOR"])) return null;
-  const allowed = new Set();
-  if (hasAnyRole(user, ["VERIFIER"])) allowed.add("national_id");
-  if (hasAnyRole(user, ["RISK_ANALYST"])) {
-    for (const type of RISK_DOCUMENT_TYPES) allowed.add(type);
-  }
-  return allowed;
-};
-
-const sanitizeAdminDocuments = (documents = [], user) => {
-  const allowedTypes = adminDocumentTypesForUser(user);
-  if (allowedTypes instanceof Set && allowedTypes.size === 0) return [];
-  return (documents || [])
-    .filter((doc) => !allowedTypes || allowedTypes.has(String(doc?.type || "")))
-    .map((doc) => ({
-      type: doc?.type || "",
-      displayName: doc?.displayName || "",
-      fileUrl: doc?.fileUrl || "",
-      mime: doc?.mime || "",
-      uploadedAt: doc?.uploadedAt || null,
-    }));
-};
-
-const pickInquiryFields = (obj, fields = []) => {
-  const result = {};
-  for (const field of fields) {
-    if (obj?.[field] !== undefined) result[field] = obj[field];
-  }
-  return result;
-};
-
-const ADMIN_INQUIRY_BASE_FIELDS = [
-  "_id", "applicationCode", "fullName", "phone", "email",
-  "loanProductSlug", "loanProductName", "requestedAmount", "preferredTenureMonths",
-  "status", "kycStatus", "profileCompletion", "borrowerType",
-  "createdAt", "updatedAt", "submittedAt", "verifiedAt", "rejectedAt",
-  "contactedAt", "kycSentAt", "approvedAt", "authorizedAt", "disbursedAt", "closedAt",
-];
-
-const shapeInquiryForAdminRole = (inquiry, user) => {
-  if (!inquiry) return inquiry;
-  const obj = inquiry.toObject ? inquiry.toObject() : { ...inquiry };
-  delete obj.publicAccessToken;
-  delete obj.avatarPath;
-  delete obj.__v;
-
-  const documents = sanitizeAdminDocuments(obj.documents || [], user);
-  const fullRead = hasAnyRole(user, ["SUPER_ADMIN", "APPROVAL", "AUTHORIZED", "AUDITOR"]);
-  if (fullRead) {
-    return { ...obj, documents };
-  }
-
-  const base = pickInquiryFields(obj, ADMIN_INQUIRY_BASE_FIELDS);
-
-  if (hasAnyRole(user, ["RISK_ANALYST"])) {
-    return {
-      ...base,
-      ...pickInquiryFields(obj, [
-        "address", "addressLine1", "city", "district", "country",
-        "employmentStatus", "employmentType", "businessName", "employerNameOrBusinessAddress",
-        "businessActivityNature", "jobTitle", "employmentNumber", "contractDurationYears",
-        "contractDurationMonths", "durationWorkedYears", "durationWorkedMonths", "hrContactPhone",
-        "monthlyIncome", "salaryDate", "totalDeductionPerMonth", "collateral",
-        "reference1Name", "reference1Phone", "reference2Name", "reference2Phone",
-        "guarantorRelationship", "guarantorOccupation", "guarantorHomeVillage",
-        "guarantorTraditionalAuthority", "guarantorDistrict", "guarantorResidenceArea",
-        "guarantorResidenceDistrict", "declarationAccepted", "guarantorDeclarationAccepted",
-        "riskAssessmentSummary", "adminNote", "actionHistory",
-      ]),
-      documents,
-    };
-  }
-
-  if (hasAnyRole(user, ["VERIFIER"])) {
-    return {
-      ...base,
-      ...pickInquiryFields(obj, [
-        "avatarUrl", "address", "addressLine1", "city", "district", "country",
-        "dateOfBirth", "gender", "maritalStatus", "dependants", "housingStatus",
-        "applicantNationalIdNumber", "governmentId", "homeVillage", "traditionalAuthority",
-        "residenceArea", "residenceDistrict", "kycRemarks", "verifiedBy",
-      ]),
-      documents,
-    };
-  }
-
-  if (hasAnyRole(user, ["DISBURSED"])) {
-    return {
-      ...base,
-      ...pickInquiryFields(obj, [
-        "disbursementAmount", "disbursementMethod", "disbursementBankName",
-        "disbursementAccountName", "disbursementAccountNumber", "disbursementMobileProvider",
-        "disbursementMobileNumber", "transactionReference", "disbursementNote",
-        "approvedDisbursedLoanAmount", "approvedTotalDeductionPerMonth", "authorizedBy",
-        "disbursedBy", "loanAccountId", "loanAccountSummary",
-      ]),
-      documents: [],
-    };
-  }
-
-  if (hasAnyRole(user, ["LOAN_OPERATIONS"])) {
-    return {
-      ...base,
-      ...pickInquiryFields(obj, [
-        "address", "addressLine1", "city", "district", "country",
-        "employmentStatus", "employmentType", "businessName", "employerNameOrBusinessAddress",
-        "jobTitle", "employmentNumber", "notes", "adminNote", "closeReason",
-      ]),
-      documents: [],
-    };
-  }
-
-  if (hasAnyRole(user, ["CUSTOMER_SERVICE"])) {
-    return {
-      ...base,
-      ...pickInquiryFields(obj, ["address", "city", "district"]),
-      documents: [],
-    };
-  }
-
-  return { ...base, documents: [] };
-};
-
-const ADMIN_UPDATE_ROLE_FIELDS = {
-  LOAN_OPERATIONS: new Set([
-    "status", "expectedCurrentStatus", "adminNote", "closeReason",
-    "fullName", "phone", "email", "address", "addressLine1", "city", "district", "country",
-    "loanProductSlug", "loanProductName", "requestedAmount", "preferredTenureMonths", "notes",
-    "employmentStatus", "employmentType", "businessName", "employerNameOrBusinessAddress",
-    "businessActivityNature", "jobTitle", "employmentNumber", "contractDurationYears",
-    "contractDurationMonths", "durationWorkedYears", "durationWorkedMonths", "hrContactPhone",
-  ]),
-  VERIFIER: new Set(["status", "expectedCurrentStatus", "adminNote", "closeReason"]),
-  APPROVAL: new Set([
-    "status", "expectedCurrentStatus", "adminNote", "closeReason", "approvedBy",
-    "approvedDisbursedLoanAmount", "approvedTotalDeductionPerMonth",
-  ]),
-  AUTHORIZED: new Set(["status", "expectedCurrentStatus", "adminNote", "closeReason", "authorizedBy"]),
-  DISBURSED: new Set([
-    "status", "expectedCurrentStatus", "adminNote", "closeReason", "disbursedBy",
-    "disbursementAmount", "disbursementMethod", "disbursementBankName",
-    "disbursementAccountName", "disbursementAccountNumber", "disbursementMobileProvider",
-    "disbursementMobileNumber", "transactionReference", "disbursementNote",
-  ]),
-};
-
-const getAllowedAdminUpdateFields = (user) => {
-  if (hasAnyRole(user, ["SUPER_ADMIN"])) return null;
-  const allowed = new Set();
-  for (const role of getUserRoles(user)) {
-    const fields = ADMIN_UPDATE_ROLE_FIELDS[role];
-    if (!fields) continue;
-    for (const field of fields) allowed.add(field);
-  }
-  return allowed;
-};
-
-const validateAdminUpdateFieldAccess = (payload = {}, user) => {
-  const allowed = getAllowedAdminUpdateFields(user);
-  if (!allowed) return { ok: true };
-  const supplied = Object.entries(payload)
-    .filter(([, value]) => value !== undefined)
-    .map(([key]) => key);
-  const denied = supplied.filter((key) => !allowed.has(key));
-  if (denied.length) {
-    return {
-      ok: false,
-      denied,
-      message: `Your assigned role does not allow changes to: ${denied.join(", ")}.`,
-    };
-  }
-  return { ok: true };
 };
 
 const syncInquiryCompletion = (inquiry) => {
@@ -1373,12 +1191,10 @@ export const loanInquiryController = {
       loanAccountSummary: item.loanAccountId ? accountMap.get(String(item.loanAccountId)) || null : null,
     }));
 
-    const visibleItems = enrichedItems.map((item) => shapeInquiryForAdminRole(item, req.user));
-
     return res.json({
       success: true,
       data: {
-        items: visibleItems,
+        items: enrichedItems,
         pagination: {
           page,
           limit,
@@ -1418,18 +1234,13 @@ export const loanInquiryController = {
       doc.loanAccountId ? LoanAccount.findById(doc.loanAccountId).lean() : null,
     ]);
 
-    const visibleInquiry = shapeInquiryForAdminRole(
-      {
+    return res.json({
+      success: true,
+      data: {
         ...doc.toObject(),
         riskAssessmentSummary: riskAssessment || null,
         loanAccountSummary: loanAccount || null,
       },
-      req.user
-    );
-
-    return res.json({
-      success: true,
-      data: visibleInquiry,
     });
   },
 
@@ -1494,7 +1305,7 @@ export const loanInquiryController = {
       }
     }
 
-    return res.json({ success: true, data: shapeInquiryForAdminRole(doc, req.user) });
+    return res.json({ success: true, data: doc.toObject() });
   },
 
   adminRemoveDoc: async (req, res) => {
@@ -1538,7 +1349,7 @@ export const loanInquiryController = {
       }
     }
 
-    return res.json({ success: true, data: shapeInquiryForAdminRole(doc, req.user) });
+    return res.json({ success: true, data: doc.toObject() });
   },
 
   adminDelete: async (req, res) => {
@@ -1567,6 +1378,30 @@ export const loanInquiryController = {
       kycStatus: doc.kycStatus || "",
     };
 
+    const [loanAccount, mastercardPayment, airtelPayment] = await Promise.all([
+      LoanAccount.findOne({ inquiryId: doc._id }).select("_id accountNumber status").lean(),
+      MastercardPayment.findOne({ inquiryId: doc._id }).select("_id status merchantOrderId").lean(),
+      AirtelPayment.findOne({ inquiryId: doc._id }).select("_id status reference").lean(),
+    ]);
+
+    if (loanAccount || mastercardPayment || airtelPayment || String(doc.status || "").toUpperCase() === "DISBURSED") {
+      return res.status(409).json({
+        success: false,
+        message: "This application is linked to a loan or payment record and cannot be hard-deleted. Use a controlled close/archive process instead.",
+        code: "APPLICATION_HAS_FINANCIAL_DEPENDENCIES",
+        details: {
+          loanAccountId: loanAccount?._id || null,
+          mastercardPaymentId: mastercardPayment?._id || null,
+          airtelPaymentId: airtelPayment?._id || null,
+          status: doc.status || "",
+        },
+      });
+    }
+
+    // Risk reports are application working records rather than settled financial
+    // transactions. Remove them together with an approved test/unnecessary inquiry
+    // so the cleanup cannot leave an orphaned assessment behind.
+    await RiskAssessment.deleteMany({ applicationType: "INQUIRY", applicationId: doc._id });
     await LoanInquiry.deleteOne({ _id: doc._id });
     await writeAdminAudit(req, {
       action: "INQUIRY_DELETED",
@@ -1597,16 +1432,6 @@ export const loanInquiryController = {
         success: false,
         message: "Validation failed",
         code: "VALIDATION_ERROR",
-      });
-    }
-
-    const fieldAccess = validateAdminUpdateFieldAccess(parsed.data, req.user);
-    if (!fieldAccess.ok) {
-      return res.status(403).json({
-        success: false,
-        message: fieldAccess.message,
-        code: "FIELD_ACCESS_DENIED",
-        details: { deniedFields: fieldAccess.denied },
       });
     }
 
@@ -1667,7 +1492,6 @@ export const loanInquiryController = {
         fromStage: currentStage,
         toStage: parsed.data.status,
         role: req.user?.role,
-        roles: req.user?.roles || [],
       });
       if (!transition.ok) {
         return res.status(403).json({
@@ -2027,6 +1851,6 @@ export const loanInquiryController = {
       },
     });
 
-    return res.json({ success: true, data: shapeInquiryForAdminRole(doc, req.user) });
+    return res.json({ success: true, data: doc.toObject() });
   },
 };

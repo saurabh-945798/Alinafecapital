@@ -1,10 +1,12 @@
 import { Router } from "express";
-import { requireRole } from "../middlewares/requireRole.js";
+import { requireAdmin } from "../middlewares/requireAdmin.js";
 import { asyncHandler } from "../middlewares/asyncHandler.js";
 import { adminCustomerController } from "../controllers/adminCustomer.controller.js";
-import { ROLE_GROUPS } from "../utils/rbac.js";
 
 const router = Router();
-router.get("/customers", requireRole(...ROLE_GROUPS.CUSTOMER_READ), asyncHandler(adminCustomerController.list));
-router.get("/customers/:id", requireRole(...ROLE_GROUPS.CUSTOMER_READ), asyncHandler(adminCustomerController.getById));
+
+router.use(requireAdmin);
+router.get("/customers", asyncHandler(adminCustomerController.list));
+router.get("/customers/:id", asyncHandler(adminCustomerController.getById));
+
 export default router;

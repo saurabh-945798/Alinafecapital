@@ -6,8 +6,8 @@ import Button from "../ui/Button";
 import { accountsApi } from "../../services/api/accounts.api";
 import { useToast } from "../../context/ToastContext.jsx";
 import { formatMWK, truncateAmount } from "../../utils/money.js";
-import { getAdminUser } from "../../utils/adminAuth";
-import { hasAnyRole } from "../../utils/adminRbac";
+import { getAdminUser } from "../../utils/adminAuth.js";
+import { normalizeAdminRole } from "../../utils/adminRbac.js";
 
 const ACCOUNT_STATUS_TONE = {
   ACTIVE: "green",
@@ -112,8 +112,7 @@ export default function AccountDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
-  const adminUser = getAdminUser() || {};
-  const canManagePayments = hasAnyRole(adminUser, ["SUPER_ADMIN", "FINANCE_RECON"]);
+  const isSuperAdmin = normalizeAdminRole(getAdminUser()?.role) === "SUPER_ADMIN";
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -485,6 +484,7 @@ export default function AccountDetailPage() {
                     <th className="px-3 py-3">Method</th>
                     <th className="px-3 py-3">Reference</th>
                     <th className="px-3 py-3">Note</th>
+                    {isSuperAdmin ? <th className="px-3 py-3">Actions</th> : null}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white">
@@ -498,7 +498,7 @@ export default function AccountDetailPage() {
                         <td className="px-3 py-3 text-slate-700">{humanizeValue(entry.method)}</td>
                         <td className="px-3 py-3 text-slate-700">{entry.reference || "-"}</td>
                         <td className="px-3 py-3 text-slate-700">{entry.note || "-"}</td>
-                        <td className="px-3 py-3">
+                        {isSuperAdmin ? <td className="px-3 py-3">
                           <div className="flex gap-2">
                             <Button size="sm" variant="outline" onClick={() => openPaymentEdit(entry)}>
                               Edit
@@ -512,9 +512,9 @@ export default function AccountDetailPage() {
                               {deletingPaymentId === entry._id ? "Deleting..." : "Delete"}
                             </Button>
                           </div>
-                        </td>
+                        </td> : null}
                       </tr>
-                      {editingPaymentId === entry._id ? (
+                      {isSuperAdmin && editingPaymentId === entry._id ? (
                         <tr className="bg-slate-50/70">
                           <td className="px-3 py-4" colSpan={6}>
                             <form
@@ -799,7 +799,7 @@ export default function AccountDetailPage() {
         </div>
       ) : null}
 
-      {canManagePayments && confirmDeletePaymentId ? (
+      {confirmDeletePaymentId ? (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/50 px-4">
           <div className="w-full max-w-md rounded-2xl border border-rose-200 bg-white p-6 shadow-2xl">
             <h3 className="text-lg font-semibold text-slate-900">Delete Payment Entry</h3>

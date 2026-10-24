@@ -42,7 +42,7 @@ export default function AdminProtectedRoute({ allowedRoles = [], children = null
     return <Navigate to={`/admin/login?next=${next}`} replace />;
   }
 
-  if (allowedRoles.length > 0 && !hasAnyRole(adminUser, allowedRoles)) {
+  if (allowedRoles.length > 0 && !hasAnyRole(adminUser?.role, allowedRoles)) {
     return <Navigate to="/admin" replace />;
   }
 

@@ -9,97 +9,8 @@ import {
 } from "../validators/adminApplication.validator.js";
 import { canTransitionLoanApplication } from "../utils/workflowPolicy.js";
 import { writeAdminAudit } from "../utils/adminAudit.js";
-import { hasAnyRole } from "../utils/rbac.js";
 
 const SLA_HOURS = 24;
-
-const shapeApplicationForRole = (item, user, { detail = false } = {}) => {
-  if (hasAnyRole(user, ["SUPER_ADMIN", "RISK_ANALYST", "APPROVAL", "AUTHORIZED", "AUDITOR"])) {
-    return item;
-  }
-
-  if (hasAnyRole(user, ["DISBURSED"])) {
-    const result = { ...item };
-    if (result.applicantProfile) {
-      result.applicantProfile = {
-        ...result.applicantProfile,
-        documents: [],
-        kycRemarks: "",
-      };
-    }
-    return result;
-  }
-
-  if (hasAnyRole(user, ["CUSTOMER_SERVICE"])) {
-    return {
-      _id: item._id,
-      fullName: item.fullName,
-      phone: item.phone,
-      email: item.email,
-      productSlug: item.productSlug,
-      requestedAmount: item.requestedAmount,
-      tenureMonths: item.tenureMonths,
-      status: item.status,
-      precheckReason: item.precheckReason,
-      disbursement: item.disbursement
-        ? { amount: item.disbursement.amount || 0, disbursedAt: item.disbursement.disbursedAt || null }
-        : null,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-      profileSummary: item.profileSummary || null,
-      applicantProfile: item.applicantProfile
-        ? {
-            userId: item.applicantProfile.userId,
-            fullName: item.applicantProfile.fullName,
-            email: item.applicantProfile.email,
-            phone: item.applicantProfile.phone,
-            addressLine1: item.applicantProfile.addressLine1,
-            city: item.applicantProfile.city,
-            district: item.applicantProfile.district,
-            country: item.applicantProfile.country,
-            profileCompletion: item.applicantProfile.profileCompletion,
-            kycStatus: item.applicantProfile.kycStatus,
-          }
-        : null,
-      sla: item.sla,
-    };
-  }
-
-  if (hasAnyRole(user, ["VERIFIER"])) {
-    const result = { ...item };
-    delete result.calculationSnapshot;
-    if (result.applicantProfile) {
-      result.applicantProfile = {
-        ...result.applicantProfile,
-        monthlyIncome: 0,
-        bankName: "",
-        accountNumber: "",
-        branchCode: "",
-      };
-    }
-    return result;
-  }
-
-  // Loan Operations receives the application workflow and basic customer details,
-  // but not KYC files, bank details or hidden calculation internals.
-  if (hasAnyRole(user, ["LOAN_OPERATIONS"])) {
-    const result = { ...item };
-    delete result.calculationSnapshot;
-    if (result.applicantProfile) {
-      result.applicantProfile = {
-        ...result.applicantProfile,
-        documents: [],
-        bankName: "",
-        accountNumber: "",
-        branchCode: "",
-        kycRemarks: "",
-      };
-    }
-    return result;
-  }
-
-  return detail ? item : item;
-};
 
 const toUtcDateStart = (raw) => {
   const d = new Date(raw);
@@ -213,7 +124,7 @@ export const adminApplicationController = {
 
     const items = docs.map((doc) => {
       const profile = doc.userId ? profileMap.get(String(doc.userId)) : null;
-      const item = {
+      return {
         ...doc,
         profileSummary: profile
           ? {
@@ -224,7 +135,6 @@ export const adminApplicationController = {
           : null,
         sla: computeSla(doc.createdAt, doc.status),
       };
-      return shapeApplicationForRole(item, req.user);
     });
 
     res.json(
@@ -281,15 +191,11 @@ export const adminApplicationController = {
     res.json(
       new ApiResponse({
         message: "Application fetched",
-        data: shapeApplicationForRole(
-          {
-            ...doc,
-            applicantProfile,
-            sla: computeSla(doc.createdAt, doc.status),
-          },
-          req.user,
-          { detail: true }
-        ),
+        data: {
+          ...doc,
+          applicantProfile,
+          sla: computeSla(doc.createdAt, doc.status),
+        },
       })
     );
   },
@@ -328,7 +234,6 @@ export const adminApplicationController = {
       fromStage: doc.status,
       toStage: status,
       role: req.user?.role,
-        roles: req.user?.roles || [],
     });
     if (!transition.ok) {
       throw new ApiError(

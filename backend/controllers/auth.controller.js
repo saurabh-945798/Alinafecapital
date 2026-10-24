@@ -1,36 +1,46 @@
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
-import { registerSchema, loginSchema } from "../utils/validators/auth.validators.js";
+import {
+  registerSchema,
+  loginSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+} from "../utils/validators/auth.validators.js";
 import { isValidE164Phone, normalizeEmail, normalizePhone } from "../utils/normalize.js";
-import { formatRoles, getUserRoles, isAdminRole, normalizeRole, selectPrimaryRole } from "../utils/rbac.js";
+import { isAdminRole, normalizeRole } from "../utils/rbac.js";
 import { syncLatestInquiryToCustomerProfile } from "../services/customerAccountLink.service.js";
+import { getPasswordPolicyErrors } from "../utils/passwordPolicy.js";
+import {
+  assertPasswordResetEmailReady,
+  sendPasswordResetEmail,
+} from "../services/email.service.js";
 
 const MAX_LOGIN_ATTEMPTS = Number(process.env.MAX_LOGIN_ATTEMPTS || 5);
-const LOCK_MINUTES = Number(process.env.LOCK_MINUTES || 30);
+const LOCK_MINUTES = Number(process.env.LOCK_MINUTES || 15);
+const PASSWORD_RESET_MINUTES = Number(process.env.PASSWORD_RESET_MINUTES || 15);
+const RESET_RESPONSE = "If the email is registered, reset instructions have been sent.";
 
 const issueAccessToken = (user) =>
   jwt.sign(
     {
       id: user._id,
-      role: selectPrimaryRole(getUserRoles(user)),
-      roles: getUserRoles(user).filter((role) => role !== "user"),
+      role: normalizeRole(user.role),
       isActive: Boolean(user.isActive),
     },
     process.env.JWT_SECRET,
     { expiresIn: "15m" }
   );
 
-const issueRefreshToken = (user) => {
-  const roles = getUserRoles(user).filter((role) => role !== "user");
-  return jwt.sign(
-    { id: user._id, role: selectPrimaryRole(roles), roles },
-    process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d" }
-  );
-};
+const issueRefreshToken = (user) =>
+  jwt.sign({ id: user._id, role: normalizeRole(user.role) }, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
+  });
 
 const hashRefreshToken = (token) =>
+  crypto.createHash("sha256").update(token).digest("hex");
+
+const hashResetToken = (token) =>
   crypto.createHash("sha256").update(token).digest("hex");
 
 const getCookieOptions = () => ({
@@ -122,9 +132,7 @@ export const registerUser = async (req, res, next) => {
           fullName: user.fullName,
           email: user.email,
           phone: user.phone,
-          role: selectPrimaryRole(getUserRoles(user)),
-          roles: getUserRoles(user).filter((role) => role !== "user"),
-          roleLabels: formatRoles(user),
+          role: normalizeRole(user.role),
         },
       },
       201
@@ -197,7 +205,7 @@ const loginCore = async (req, res, next, { adminOnly = false } = {}) => {
       return authError(res, "Account disabled", "ACCOUNT_DISABLED", 403);
     }
 
-    if (adminOnly && !isAdminRole(user)) {
+    if (adminOnly && !isAdminRole(user.role)) {
       return authError(
         res,
         "Forbidden: admin access required",
@@ -228,9 +236,7 @@ const loginCore = async (req, res, next, { adminOnly = false } = {}) => {
         fullName: user.fullName,
         email: user.email,
         phone: user.phone,
-        role: selectPrimaryRole(getUserRoles(user)),
-        roles: getUserRoles(user).filter((role) => role !== "user"),
-        roleLabels: formatRoles(user),
+        role: normalizeRole(user.role),
       },
     });
   } catch (error) {
@@ -242,6 +248,131 @@ export const loginUser = async (req, res, next) => loginCore(req, res, next, { a
 
 export const adminLoginUser = async (req, res, next) =>
   loginCore(req, res, next, { adminOnly: true });
+
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const parsed = forgotPasswordSchema.safeParse(req.body || {});
+    if (!parsed.success) throw parsed.error;
+
+    // Check infrastructure before account lookup so service availability never leaks
+    // whether a supplied email exists in the database.
+    try {
+      assertPasswordResetEmailReady();
+    } catch (error) {
+      console.error(`[password-reset] Email service unavailable: ${error.code || error.message}`);
+      return authError(
+        res,
+        "Password reset service is temporarily unavailable. Please try again later.",
+        "PASSWORD_RESET_UNAVAILABLE",
+        503
+      );
+    }
+
+    const email = normalizeEmail(parsed.data.email);
+    const user = await User.findOne({ email }).select(
+      "+passwordResetTokenHash +passwordResetExpiresAt +passwordResetRequestedAt"
+    );
+
+    // Customer-only flow. Admin accounts deliberately receive the same neutral response.
+    if (!user || normalizeRole(user.role) !== "user" || !user.isActive) {
+      return sendAuthSuccess(res, { message: RESET_RESPONSE });
+    }
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    user.passwordResetTokenHash = hashResetToken(rawToken);
+    user.passwordResetExpiresAt = new Date(Date.now() + PASSWORD_RESET_MINUTES * 60 * 1000);
+    user.passwordResetRequestedAt = new Date();
+    await user.save({ validateBeforeSave: false });
+
+    const base = String(process.env.PASSWORD_RESET_BASE_URL || "").trim();
+    if (!base) {
+      user.passwordResetTokenHash = null;
+      user.passwordResetExpiresAt = null;
+      await user.save({ validateBeforeSave: false });
+      console.error("[password-reset] PASSWORD_RESET_BASE_URL is not configured");
+      return authError(
+        res,
+        "Password reset service is temporarily unavailable. Please try again later.",
+        "PASSWORD_RESET_UNAVAILABLE",
+        503
+      );
+    }
+
+    const separator = base.includes("?") ? "&" : "?";
+    const resetUrl = `${base}${separator}token=${encodeURIComponent(rawToken)}`;
+    try {
+      await sendPasswordResetEmail({
+        to: user.email,
+        fullName: user.fullName,
+        resetUrl,
+        expiresMinutes: PASSWORD_RESET_MINUTES,
+      });
+    } catch (error) {
+      user.passwordResetTokenHash = null;
+      user.passwordResetExpiresAt = null;
+      await user.save({ validateBeforeSave: false });
+      console.error(`[password-reset] Email delivery failed: ${error.code || error.message}`);
+      return authError(
+        res,
+        "Password reset service is temporarily unavailable. Please try again later.",
+        "PASSWORD_RESET_UNAVAILABLE",
+        503
+      );
+    }
+
+    return sendAuthSuccess(res, { message: RESET_RESPONSE });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const resetPassword = async (req, res, next) => {
+  try {
+    const parsed = resetPasswordSchema.safeParse(req.body || {});
+    if (!parsed.success) throw parsed.error;
+
+    const tokenHash = hashResetToken(parsed.data.token);
+    const user = await User.findOne({
+      passwordResetTokenHash: tokenHash,
+      passwordResetExpiresAt: { $gt: new Date() },
+    }).select(
+      "+passwordResetTokenHash +passwordResetExpiresAt +passwordResetRequestedAt +refreshTokenHash"
+    );
+
+    if (!user || normalizeRole(user.role) !== "user" || !user.isActive) {
+      return authError(res, "This reset link is invalid or has expired.", "RESET_TOKEN_INVALID", 400);
+    }
+
+    const passwordErrors = getPasswordPolicyErrors(parsed.data.password, {
+      fullName: user.fullName,
+      email: user.email,
+    });
+    if (passwordErrors.length) {
+      return res.status(400).json({
+        success: false,
+        message: passwordErrors[0],
+        code: "WEAK_PASSWORD",
+        details: passwordErrors,
+      });
+    }
+
+    user.password = parsed.data.password;
+    user.passwordResetTokenHash = null;
+    user.passwordResetExpiresAt = null;
+    user.passwordResetRequestedAt = null;
+    user.refreshTokenHash = null;
+    user.loginAttempts = 0;
+    user.lockUntil = null;
+    await user.save();
+
+    res.clearCookie("refreshToken", { ...getCookieOptions(), maxAge: undefined });
+    return sendAuthSuccess(res, {
+      message: "Password reset successfully. You can now sign in with your new password.",
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
 
 export const refreshAccessToken = async (req, res, next) => {
   try {
@@ -269,6 +400,13 @@ export const refreshAccessToken = async (req, res, next) => {
     if (!user.isActive) {
       return authError(res, "Account disabled", "ACCOUNT_DISABLED", 403);
     }
+    // Any role recognized by the central RBAC registry is a valid admin role.
+    // Do not maintain a second, stale whitelist here: it previously blocked
+    // Risk, Payment Verification and Auditor sessions during token refresh.
+    const refreshedRole = normalizeRole(user.role);
+    if (refreshedRole !== "user" && !isAdminRole(refreshedRole)) {
+      return authError(res, "Unauthorized role", "ROLE_INVALID", 403);
+    }
 
     const incomingHash = hashRefreshToken(refreshToken);
     if (incomingHash !== user.refreshTokenHash) {
@@ -285,15 +423,6 @@ export const refreshAccessToken = async (req, res, next) => {
     return sendAuthSuccess(res, {
       message: "Token refreshed",
       accessToken: newAccessToken,
-      user: {
-        id: user._id,
-        fullName: user.fullName,
-        email: user.email,
-        phone: user.phone,
-        role: selectPrimaryRole(getUserRoles(user)),
-        roles: getUserRoles(user).filter((role) => role !== "user"),
-        roleLabels: formatRoles(user),
-      },
     });
   } catch (error) {
     return next(error);

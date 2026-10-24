@@ -4,7 +4,6 @@ import { LoanAccount } from "../models/LoanAccount.model.js";
 import { writeAdminAudit } from "../utils/adminAudit.js";
 import { normalizeMoneyForValidation, parseMoneyInput } from "../utils/numberInput.js";
 import { applyPaymentSummaryToDoc, enrichLoanAccount } from "../services/loanAccountSummary.service.js";
-import { hasAnyRole } from "../utils/rbac.js";
 
 const moneyNumberField = (schema) => z.preprocess(normalizeMoneyForValidation, schema);
 
@@ -24,25 +23,6 @@ const paymentEntrySchema = z.object({
 });
 
 const enrichAccount = enrichLoanAccount;
-
-const shapeAccountForRole = (account, user) => {
-  if (!account) return account;
-  if (hasAnyRole(user, ["REPORTING_MIS"]) && !hasAnyRole(user, ["SUPER_ADMIN", "AUDITOR"])) {
-    const result = { ...account };
-    result.phone = "";
-    result.email = "";
-    // Management reporting does not require payment notes or free-text references.
-    if (Array.isArray(result.repaymentEntries)) {
-      result.repaymentEntries = result.repaymentEntries.map((entry) => ({
-        paymentDate: entry?.paymentDate || null,
-        amount: Number(entry?.amount || 0),
-        method: entry?.method || "",
-      }));
-    }
-    return result;
-  }
-  return account;
-};
 
 export const loanAccountController = {
   adminList: async (req, res) => {
@@ -83,7 +63,7 @@ export const loanAccountController = {
     return res.json({
       success: true,
       data: {
-        items: items.map((item) => shapeAccountForRole(enrichAccount(item), req.user)),
+        items: items.map(enrichAccount),
         pagination: {
           page,
           limit,
@@ -114,7 +94,7 @@ export const loanAccountController = {
 
     return res.json({
       success: true,
-      data: shapeAccountForRole(enrichAccount(doc), req.user),
+      data: enrichAccount(doc),
     });
   },
 

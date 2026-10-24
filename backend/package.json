@@ -19,11 +19,7 @@
     "legacy:link-customers": "node scripts/linkLegacyCustomersToPortal.js",
     "legacy:link-customers:apply": "node scripts/linkLegacyCustomersToPortal.js --apply",
     "repayments:audit-schedules": "node scripts/auditRepaymentSchedules.js",
-    "test:financial": "node --test tests/financialRegression.test.js",
-    "test:rbac": "node --test tests/rbacRegression.test.js",
-    "staff:roles": "node scripts/assignAlinafeStaffRoles.js",
-    "staff:roles:apply": "node scripts/assignAlinafeStaffRoles.js --apply",
-    "legacy:migrate-admin-roles": "node scripts/migrateLegacyAdminRoles.js"
+    "test:financial": "node --test tests/financialRegression.test.js"
   },
   "keywords": [],
   "author": "AlinafeCapital",
@@ -39,7 +35,8 @@
     "mongoose": "^9.2.3",
     "slugify": "^1.6.6",
     "zod": "^4.3.6",
-    "busboy": "^1.6.0"
+    "busboy": "^1.6.0",
+    "nodemailer": "^7.0.10"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

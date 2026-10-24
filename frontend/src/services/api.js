@@ -105,7 +105,7 @@ const request = async (config) => {
   } catch (error) {
     const status = error?.response?.status;
     const requestUrl = String(config?.url || "");
-    const isAuthRequest = ["/auth/login", "/auth/register", "/auth/refresh", "/auth/logout"].some((p) =>
+    const isAuthRequest = ["/auth/login", "/auth/register", "/auth/refresh", "/auth/logout", "/auth/forgot-password", "/auth/reset-password"].some((p) =>
       requestUrl.includes(p)
     );
 

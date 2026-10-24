@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, LockKeyhole, Phone, ShieldCheck, UserPlus, WalletCards } from "lucide-react";
+import { ArrowLeft, ArrowRight, Eye, EyeOff, LockKeyhole, Phone, ShieldCheck, UserPlus, WalletCards } from "lucide-react";
 import logoImage from "../../images/logo.png";
 import { RestockTechSignature } from "../components/Brand/RestockTechLogo.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -25,6 +25,7 @@ export default function CustomerLoginPage() {
   const [form, setForm] = useState({ loginId: "", password: "" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const nextPath = useMemo(() => {
     const params = new URLSearchParams(location.search || "");
@@ -140,13 +141,27 @@ export default function CustomerLoginPage() {
                   name="password"
                   value={form.password}
                   onChange={handleChange}
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="Enter your password"
                   className="h-12 w-full border-0 bg-transparent px-3 text-sm outline-none"
                   autoComplete="current-password"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  className="p-2 text-slate-500"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </label>
+
+            <div className="flex justify-end">
+              <Link to="/forgot-password" className="text-sm font-bold text-slate-700 hover:underline">
+                Forgot password?
+              </Link>
+            </div>
 
             <button
               type="submit"

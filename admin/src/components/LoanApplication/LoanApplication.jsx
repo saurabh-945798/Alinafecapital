@@ -6,7 +6,7 @@ import { inquiriesApi } from "../../services/api/inquiries.api";
 import { useToast } from "../../context/ToastContext.jsx";
 import { ADMIN_FILE_BASE_URL } from "../../config/api";
 import { getAdminUser } from "../../utils/adminAuth";
-import { hasAnyRole, normalizeAdminRoles } from "../../utils/adminRbac";
+import { normalizeAdminRole } from "../../utils/adminRbac";
 
 const STATUS_TONE = {
   NEW: "amber",
@@ -66,8 +66,6 @@ const ROLE_TABS = {
   APPROVAL: ["VERIFIED", "APPROVED", "KYC_REJECTED", "CLOSED"],
   AUTHORIZED: ["APPROVED", "AUTHORIZED", "CLOSED"],
   DISBURSED: ["AUTHORIZED", "DISBURSED", "CLOSED"],
-  LOAN_OPERATIONS: ["ALL", "PENDING_GROUP", "VERIFIED", "APPROVED", "AUTHORIZED", "DISBURSED", "KYC_REJECTED", "CLOSED"],
-  CUSTOMER_SERVICE: ["ALL", "PENDING_GROUP", "VERIFIED", "APPROVED", "AUTHORIZED", "DISBURSED", "KYC_REJECTED", "CLOSED"],
   AUDITOR: ["ALL", "VERIFIED", "APPROVED", "AUTHORIZED", "DISBURSED", "KYC_REJECTED", "CLOSED"],
 };
 
@@ -132,7 +130,7 @@ const formatDate = (value) => {
   return Number.isNaN(d.getTime()) ? "-" : d.toLocaleString();
 };
 
-export default function LoanApplication() {
+export default function LoanApplication({ initialStatus = "" }) {
   const navigate = useNavigate();
   const toast = useToast();
   const [items, setItems] = useState([]);
@@ -141,7 +139,7 @@ export default function LoanApplication() {
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [status, setStatus] = useState("ALL");
+  const [status, setStatus] = useState(initialStatus || "ALL");
   const [brokenAvatars, setBrokenAvatars] = useState({});
   const [counts, setCounts] = useState({
     ALL: 0,
@@ -155,10 +153,9 @@ export default function LoanApplication() {
     KYC_REJECTED: 0,
     CLOSED: 0,
   });
-  const adminUser = getAdminUser() || {};
-  const adminRoles = normalizeAdminRoles(adminUser);
-  const allowedTabs = Array.from(new Set(adminRoles.flatMap((role) => ROLE_TABS[role] || [])));
-  const visibleTabs = SIMPLE_TABS.filter((tab) => (allowedTabs.length ? allowedTabs : ROLE_TABS.SUPER_ADMIN).includes(tab.value));
+  const adminRole = normalizeAdminRole(getAdminUser()?.role);
+  const allowedTabs = ROLE_TABS[adminRole] || ROLE_TABS.SUPER_ADMIN;
+  const visibleTabs = SIMPLE_TABS.filter((tab) => allowedTabs.includes(tab.value));
   const fetchIdRef = useRef(0);
   const countsErrorNotifiedRef = useRef(false);
   const [deletingId, setDeletingId] = useState("");
@@ -279,8 +276,9 @@ export default function LoanApplication() {
   };
 
   const removeInquiry = async (item) => {
-    const label = item?.applicationCode || item?.fullName || "this application";
-    const ok = window.confirm(`Delete ${label}? This action cannot be undone.`);
+    const applicant = item?.fullName || "Unknown applicant";
+    const applicationCode = item?.applicationCode || item?._id || "No application code";
+    const ok = window.confirm(`Delete application ${applicationCode} for ${applicant}?\n\nThis is only allowed for unnecessary/test records with no linked financial transactions. This action cannot be undone.`);
     if (!ok) return;
 
     try {
@@ -453,7 +451,7 @@ export default function LoanApplication() {
                 <Button size="sm" onClick={() => openDetails(item)}>
                   View Details
                 </Button>
-                {hasAnyRole(adminUser, ["SUPER_ADMIN"]) ? (
+                {adminRole === "SUPER_ADMIN" ? (
                   <Button
                     size="sm"
                     variant="danger"

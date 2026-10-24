@@ -6,11 +6,12 @@ import Badge from "../ui/Badge";
 import { inquiriesApi } from "../../services/api/inquiries.api";
 import { loanProductsApi } from "../../services/api/loanProducts.api";
 import { complianceApi } from "../../services/api/compliance.api";
+import { protectedFilesApi } from "../../services/api/files.api.js";
 import { useToast } from "../../context/ToastContext.jsx";
 import { ADMIN_API_BASE_URL, ADMIN_FILE_BASE_URL } from "../../config/api";
 import { formatMWK } from "../../utils/money.js";
 import { getAdminUser } from "../../utils/adminAuth";
-import { canTakeStatusAction, hasAnyRole } from "../../utils/adminRbac";
+import { canTakeStatusAction, normalizeAdminRole } from "../../utils/adminRbac";
 
 const STATUS_TONE = {
   NEW: "amber",
@@ -77,7 +78,8 @@ const DISBURSEMENT_METHODS = [
 const DOC_LABEL = {
   national_id: "National ID",
   bank_statement_3_months: "Bank Statement",
-  security_offer: "Security Offer",
+  security_offer: "Security / Collateral Offer",
+  guarantor_national_id: "Guarantor National ID",
   payslip_or_business_proof: "Payslip / Business Proof",
   address_proof: "Address Proof",
 };
@@ -351,8 +353,7 @@ export default function LoanApplicationDetail() {
   const [addDocName, setAddDocName] = useState("");
   const [approvalWhatsAppMessage, setApprovalWhatsAppMessage] = useState("");
   const adminUser = getAdminUser() || {};
-  const canEditApplicationDetails = hasAnyRole(adminUser, ["SUPER_ADMIN"]);
-  const canManageKycDocuments = hasAnyRole(adminUser, ["SUPER_ADMIN", "VERIFIER"]);
+  const adminRole = normalizeAdminRole(adminUser?.role);
   const adminDisplayName =
     adminUser.name || adminUser.fullName || adminUser.email || "Admin";
   const hasSubmittedKyc =
@@ -506,7 +507,7 @@ export default function LoanApplicationDetail() {
   };
 
   const saveDetails = async () => {
-    if (!item?._id || !detailsForm || !canEditApplicationDetails) return;
+    if (!item?._id || !detailsForm) return;
     setActionLoading(true);
     setError("");
     try {
@@ -583,7 +584,7 @@ export default function LoanApplicationDetail() {
   };
 
   const uploadAdminDoc = async (type, file, displayName) => {
-    if (!item?._id || !file || !canManageKycDocuments) return;
+    if (!item?._id || !file) return;
     const trimmedName = String(displayName || "").trim();
     if (!trimmedName) {
       const msg = "Document name is required.";
@@ -608,7 +609,7 @@ export default function LoanApplicationDetail() {
   };
 
   const removeAdminDoc = async (type) => {
-    if (!item?._id || !canManageKycDocuments) return;
+    if (!item?._id) return;
     setDocActionLoading(`remove:${type}`);
     setError("");
     try {
@@ -630,7 +631,7 @@ export default function LoanApplicationDetail() {
     setError("");
     const actionStatus = nextStatus;
     try {
-      if (!canTakeStatusAction(adminUser, actionStatus)) {
+      if (!canTakeStatusAction(adminRole, actionStatus)) {
         throw new Error("You are not allowed to perform this action.");
       }
       if ((actionStatus === "APPROVED" || actionStatus === "KYC_REJECTED" || actionStatus === "VERIFIED") && !hasSubmittedKyc) {
@@ -1527,7 +1528,7 @@ export default function LoanApplicationDetail() {
     if (item?.status === "CLOSED") return [];
     if (hasSubmittedKyc) return ["VERIFIED", "CLOSED"];
     return ["CLOSED"];
-  })().filter((status) => canTakeStatusAction(adminUser, status));
+  })().filter((status) => canTakeStatusAction(adminRole, status));
   const repaymentPlan =
     item?.kycStatus === "verified" || item?.status === "APPROVED" || item?.status === "DISBURSED"
       ? buildRepaymentPlan(item, loanProducts)
@@ -1688,7 +1689,7 @@ export default function LoanApplicationDetail() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!isDisbursed && canEditApplicationDetails ? (
+          {!isDisbursed ? (
             <Button onClick={() => setEditMode((prev) => !prev)}>
               {editMode ? (
                 <>
@@ -1701,7 +1702,7 @@ export default function LoanApplicationDetail() {
               )}
             </Button>
           ) : null}
-          {editMode && !isDisbursed && canEditApplicationDetails ? (
+          {editMode && !isDisbursed ? (
             <Button variant="outline" onClick={saveDetails} disabled={actionLoading}>
               <Save size={16} />
               {actionLoading ? "Saving..." : "Save Details"}
@@ -1766,7 +1767,7 @@ export default function LoanApplicationDetail() {
             <div className="flex flex-wrap gap-2">
               {item.status === "APPROVED" ? (
                 <Button
-                  disabled={!canTakeStatusAction(adminUser, "AUTHORIZED")}
+                  disabled={!canTakeStatusAction(adminRole, "AUTHORIZED")}
                   onClick={() => prepareWorkflowStatus("AUTHORIZED")}
                 >
                   Prepare Authorization
@@ -1774,7 +1775,7 @@ export default function LoanApplicationDetail() {
               ) : null}
               {item.status === "AUTHORIZED" ? (
                 <Button
-                  disabled={!canTakeStatusAction(adminUser, "DISBURSED")}
+                  disabled={!canTakeStatusAction(adminRole, "DISBURSED")}
                   onClick={() => prepareWorkflowStatus("DISBURSED")}
                 >
                   Prepare Disbursement
@@ -1788,12 +1789,12 @@ export default function LoanApplicationDetail() {
             </div>
           </div>
 
-          {item.status === "APPROVED" && !canTakeStatusAction(adminUser, "AUTHORIZED") ? (
+          {item.status === "APPROVED" && !canTakeStatusAction(adminRole, "AUTHORIZED") ? (
             <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
               Your current admin role cannot authorize loans. Sign in as Super Admin or an Authorized officer.
             </p>
           ) : null}
-          {item.status === "AUTHORIZED" && !canTakeStatusAction(adminUser, "DISBURSED") ? (
+          {item.status === "AUTHORIZED" && !canTakeStatusAction(adminRole, "DISBURSED") ? (
             <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
               Your current admin role cannot disburse loans. Sign in as Super Admin or a Disbursement officer.
             </p>
@@ -2303,16 +2304,21 @@ export default function LoanApplicationDetail() {
                           Actions
                         </p>
                         {doc.fileUrl ? (
-                          canManageKycDocuments ? (
+                          editMode ? (
                             <div className="flex flex-wrap items-center gap-2">
-                              <a
-                                href={resolveAssetUrl(doc.fileUrl)}
-                                target="_blank"
-                                rel="noreferrer"
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    await protectedFilesApi.open(doc.fileUrl);
+                                  } catch (err) {
+                                    toast.error(err?.response?.data?.message || err?.message || "Could not open document.");
+                                  }
+                                }}
                                 className="inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
                               >
                                 Preview
-                              </a>
+                              </button>
                               <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50">
                                 Replace
                                 <input
@@ -2336,14 +2342,19 @@ export default function LoanApplicationDetail() {
                               </button>
                             </div>
                           ) : (
-                            <a
-                              href={resolveAssetUrl(doc.fileUrl)}
-                              target="_blank"
-                              rel="noreferrer"
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  await protectedFilesApi.open(doc.fileUrl);
+                                } catch (err) {
+                                  toast.error(err?.response?.data?.message || err?.message || "Could not open document.");
+                                }
+                              }}
                               className="inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
                             >
                               Preview
-                            </a>
+                            </button>
                           )
                         ) : null}
                       </div>
@@ -2352,7 +2363,6 @@ export default function LoanApplicationDetail() {
                 </div>
               </div>
             )}
-            {canManageKycDocuments ? (
             <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-4">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
                 Add Document
@@ -2390,7 +2400,6 @@ export default function LoanApplicationDetail() {
                 </p>
               </div>
             </div>
-            ) : null}
           </div>
 
           {repaymentPlan ? (

@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import Badge from "../ui/Badge";
 import Button from "../ui/Button";
 import { complianceApi } from "../../services/api/compliance.api";
+import { protectedFilesApi } from "../../services/api/files.api";
 import { useToast } from "../../context/ToastContext.jsx";
 import { ADMIN_FILE_BASE_URL } from "../../config/api";
 import { formatMWK } from "../../utils/money.js";
@@ -25,6 +26,8 @@ const statusTone = (status) => {
 const DOC_LABEL = {
   national_id: "National ID (Malawi)",
   bank_statement_3_months: "Bank Statement (3 months)",
+  security_offer: "Security / Collateral Offer",
+  guarantor_national_id: "Guarantor National ID",
   payslip_or_business_proof: "Payslip / Business Proof",
   address_proof: "Address Proof",
 };
@@ -510,23 +513,31 @@ export default function CompliancePage() {
             ) : (
               <div className="space-y-2">
                 {(selected.documents || []).map((doc, idx) => {
-                  const href = doc.fileUrl
-                    ? doc.fileUrl.startsWith("http")
-                      ? doc.fileUrl
-                      : `${fileBase}${doc.fileUrl}`
-                    : "";
+                  const label = DOC_LABEL[doc.type] || doc.displayName || String(doc.type || "Document").replaceAll("_", " ");
                   return (
                     <div key={`${doc.type}-${idx}`} className="flex flex-wrap items-center gap-2 text-sm">
                                 <Badge tone="blue">{doc.type}</Badge>
                                 <span className="text-slate-700">
-                                  {DOC_LABEL[doc.type] || doc.type}
+                                  {label}
                                 </span>
                                 <span className="text-slate-600">{doc.mime || "-"}</span>
                       <span className="text-xs text-slate-500">{formatDate(doc.uploadedAt)}</span>
-                      {href ? (
-                        <a href={href} target="_blank" rel="noreferrer" className="text-slate-800 underline">
-                          Preview
-                        </a>
+                      {doc.fileUrl ? (
+                        <button
+                          type="button"
+                          className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          onClick={async () => {
+                            try {
+                              await protectedFilesApi.open(doc.fileUrl);
+                            } catch (err) {
+                              const msg = err?.response?.data?.message || err?.message || "Could not open this document.";
+                              setError(msg);
+                              toast.error(msg);
+                            }
+                          }}
+                        >
+                          View / Open
+                        </button>
                       ) : null}
                     </div>
                   );

@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, RefreshCw, CheckCircle2, XCircle, MessageSquareWarning } from "lucide-react";
 import { bankPaymentsApi } from "../../services/api/bankPayments.api";
-import { ADMIN_FILE_BASE_URL } from "../../config/api";
+import { protectedFilesApi } from "../../services/api/files.api.js";
 import { getAdminUser } from "../../utils/adminAuth";
-import { hasAnyRole } from "../../utils/adminRbac";
+import { normalizeAdminRole } from "../../utils/adminRbac";
 
 const money = (v) => `MWK ${Number(v || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const date = (v) => v ? new Date(v).toLocaleString("en-GB") : "-";
 const statusLabel = (v) => String(v || "").replaceAll("_", " ");
 
 export default function PaymentVerificationPage() {
-  const adminUser = getAdminUser() || {};
-  const canDecide = hasAnyRole(adminUser, ["SUPER_ADMIN", "PAYMENT_VERIFIER"]);
+  const role = normalizeAdminRole(getAdminUser()?.role);
+  const canDecide = ["SUPER_ADMIN", "PAYMENT_VERIFIER"].includes(role);
   const [status, setStatus] = useState("ALL");
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState("");
@@ -58,7 +58,7 @@ export default function PaymentVerificationPage() {
     finally { setSaving(false); }
   };
 
-  const popUrl = current?.pop?.viewUrl ? `${ADMIN_FILE_BASE_URL}${current.pop.viewUrl}` : "";
+  const popUrl = current?.pop?.viewUrl || "";
   const loan = current?.loanAccountId && typeof current.loanAccountId === "object" ? current.loanAccountId : null;
   const customer = current?.userId && typeof current.userId === "object" ? current.userId : null;
 
@@ -71,7 +71,7 @@ export default function PaymentVerificationPage() {
       <aside className="rounded-2xl border bg-white p-4 shadow-sm"><h2 className="font-semibold">Submitted bank payments</h2><div className="mt-3 max-h-[70vh] space-y-2 overflow-auto">{loading?<p className="text-sm text-slate-500">Loading...</p>:items.length?items.map((item)=><button key={item._id} onClick={()=>setSelectedId(String(item._id))} className={`w-full rounded-xl border p-3 text-left ${String(item._id)===String(selectedId)?"border-slate-900 bg-slate-50":"border-slate-200"}`}><div className="flex justify-between gap-2"><p className="font-semibold">{item.userId?.fullName || item.loanAccountId?.customerName || "Customer"}</p><span className="text-xs font-semibold">{statusLabel(item.status)}</span></div><p className="mt-1 text-xs text-slate-500">{item.paymentReference}</p><p className="mt-2 text-sm font-semibold">{money(item.amount)}</p></button>):<p className="text-sm text-slate-500">No payments in this view.</p>}</div></aside>
       {current?<main className="space-y-4">
         <section className="rounded-2xl border bg-white p-5 shadow-sm"><div className="flex flex-wrap justify-between gap-3"><div><h2 className="text-lg font-bold">{customer?.fullName || loan?.customerName || "Customer"}</h2><p className="text-sm text-slate-500">{loan?.accountNumber || "Loan account"} · {current.paymentReference}</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold">{statusLabel(current.status)}</span></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Info label="Declared amount" value={money(current.amount)}/><Info label="Bank reference" value={current.bankTransactionReference}/><Info label="Payment date" value={date(current.paymentDate)}/><Info label="Submitted" value={date(current.createdAt || current.submittedAt)}/><Info label="Outstanding balance" value={money(loan?.outstandingBalance)}/><Info label="Next due date" value={date(loan?.nextDueDate)}/><Info label="Customer phone" value={customer?.phone || loan?.phone || "-"}/><Info label="Bank used" value={current.bankUsed || "-"}/></div></section>
-        <section className="rounded-2xl border bg-white p-5 shadow-sm"><h3 className="font-bold">Proof of Payment</h3>{popUrl?<a href={popUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold"><ExternalLink size={15}/>View POP</a>:<p className="mt-2 text-sm text-slate-500">No POP found.</p>}<p className="mt-3 text-xs text-slate-500">Compare the POP to the bank transaction reference, amount and the bank/reconciliation records.</p></section>
+        <section className="rounded-2xl border bg-white p-5 shadow-sm"><h3 className="font-bold">Proof of Payment</h3>{popUrl?<button type="button" onClick={async()=>{try{await protectedFilesApi.open(popUrl)}catch(err){setError(err?.response?.data?.message||err?.message||"Could not open Proof of Payment.")}}} className="mt-3 inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold"><ExternalLink size={15}/>View POP</button>:<p className="mt-2 text-sm text-slate-500">No POP found.</p>}<p className="mt-3 text-xs text-slate-500">Compare the POP to the bank transaction reference, amount and the bank/reconciliation records.</p></section>
         {current.clarificationMessage?<div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm"><b>Clarification requested:</b> {current.clarificationMessage}{current.customerResponse?<p className="mt-2"><b>Customer response:</b> {current.customerResponse}</p>:null}</div>:null}
         {current.rejectionReason?<div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm"><b>Rejection reason:</b> {current.rejectionReason}</div>:null}
         {canDecide && !["POSTED"].includes(current.status)?<section className="rounded-2xl border bg-white p-5 shadow-sm"><h3 className="font-bold">Verification decision</h3><label className="mt-3 flex items-start gap-2 text-sm"><input type="checkbox" checked={confirmed} onChange={(e)=>setConfirmed(e.target.checked)} className="mt-1"/><span>I have confirmed this payment in the relevant bank/reconciliation records.</span></label><label className="mt-3 block text-sm font-semibold">Verification notes<textarea rows={3} value={notes} onChange={(e)=>setNotes(e.target.value)} className="mt-1 w-full rounded-xl border p-3 font-normal" placeholder="What was checked and confirmed?"/></label><div className="mt-4 flex flex-wrap gap-2"><button disabled={saving} onClick={()=>decide("VERIFY")} className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white"><CheckCircle2 size={15}/>Verify Payment</button><button disabled={saving} onClick={()=>decide("REQUEST_CLARIFICATION")} className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold"><MessageSquareWarning size={15}/>Request Clarification</button><button disabled={saving} onClick={()=>decide("REJECT")} className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-700"><XCircle size={15}/>Reject</button></div></section>:null}

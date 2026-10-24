@@ -6,54 +6,9 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import { normalizeEmail, normalizePhone } from "../utils/normalize.js";
 import { syncLatestInquiryToCustomerProfile } from "../services/customerAccountLink.service.js";
-import { hasAnyRole } from "../utils/rbac.js";
 
 const safeRegex = (input) =>
   String(input || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-
-const shapeCustomerProfileForRole = (profile, user) => {
-  if (!profile) return profile;
-  if (hasAnyRole(user, ["SUPER_ADMIN", "VERIFIER", "RISK_ANALYST", "APPROVAL", "AUTHORIZED", "AUDITOR"])) {
-    return profile;
-  }
-
-  const base = {
-    profileCompletion: profile.profileCompletion ?? 0,
-    kycStatus: profile.kycStatus || "not_started",
-    updatedAt: profile.updatedAt || null,
-    avatarUrl: profile.avatarUrl || "",
-    fullName: profile.fullName || "",
-    email: profile.email || "",
-    phone: profile.phone || "",
-    addressLine1: profile.addressLine1 || "",
-    city: profile.city || "",
-    district: profile.district || "",
-    country: profile.country || "Malawi",
-    source: profile.source || "",
-    linkedInquiry: profile.linkedInquiry || null,
-  };
-
-  if (hasAnyRole(user, ["DISBURSED"])) {
-    return {
-      ...base,
-      bankName: profile.bankName || "",
-      accountNumber: profile.accountNumber || "",
-      branchCode: profile.branchCode || "",
-    };
-  }
-
-  if (hasAnyRole(user, ["LOAN_OPERATIONS"])) {
-    return {
-      ...base,
-      employmentType: profile.employmentType || "",
-      monthlyIncome: Number(profile.monthlyIncome || 0),
-    };
-  }
-
-  // Collections and Customer Service receive contact, KYC state and case progress only.
-  return base;
-};
 
 const toBool = (value) => {
   if (value === "true") return true;
@@ -259,7 +214,7 @@ export const adminCustomerController = {
           isActive: !!u.isActive,
           createdAt: u.createdAt,
           updatedAt: u.updatedAt,
-          profile: shapeCustomerProfileForRole(summary, req.user),
+          profile: summary,
           latestInquiry: latestInquiry
             ? {
                 id: String(latestInquiry._id),
@@ -344,7 +299,7 @@ export const adminCustomerController = {
           isActive: !!user.isActive,
           createdAt: user.createdAt,
           updatedAt: user.updatedAt,
-          profile: shapeCustomerProfileForRole(toFullProfile(profile, latestInquiry), req.user),
+          profile: toFullProfile(profile, latestInquiry),
           recentApplications: applications,
           recentInquiries: inquiries.map((inquiry) => ({
             id: String(inquiry._id),

@@ -1,5 +1,5 @@
 import { ADMIN_API_BASE_URL } from "../../config/api";
-import { clearAdminSession, getAdminToken, setAdminToken, setAdminUser } from "../../utils/adminAuth";
+import { clearAdminSession, getAdminToken, setAdminToken } from "../../utils/adminAuth";
 
 let refreshPromise = null;
 
@@ -16,8 +16,9 @@ const buildUrl = (path, params) => {
   return raw.startsWith("http") ? url.toString() : `${url.pathname}${url.search}`;
 };
 
-const parseBody = async (response) => {
+const parseBody = async (response, responseType = "") => {
   if (response.status === 204) return null;
+  if (responseType === "blob") return response.blob();
   const type = response.headers.get("content-type") || "";
   if (type.includes("application/json")) return response.json();
   const text = await response.text();
@@ -56,7 +57,7 @@ const rawRequest = async (config) => {
       credentials: "include",
       signal: controller.signal,
     });
-    const data = await parseBody(response);
+    const data = await parseBody(response, config.responseType);
     if (!response.ok) {
       throw makeError(data?.message || `Request failed with status ${response.status}`, { response, data, config });
     }
@@ -87,7 +88,6 @@ export const refreshAdminSession = async () => {
         const token = response?.data?.accessToken || response?.data?.token || "";
         if (!token) throw new Error("Missing refreshed access token");
         setAdminToken(token);
-        if (response?.data?.user) setAdminUser(response.data.user);
         return token;
       })
       .finally(() => {

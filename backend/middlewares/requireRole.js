@@ -1,19 +1,18 @@
 import { requireAdmin } from "./requireAdmin.js";
-import { getUserRoles, normalizeRole } from "../utils/rbac.js";
+import { normalizeRole } from "../utils/rbac.js";
 
 export const requireRole = (...roles) => {
-  const allowed = new Set(roles.map((role) => normalizeRole(role)).filter(Boolean));
+  const allowed = new Set(roles.map((role) => normalizeRole(role)));
   return (req, res, next) => {
     requireAdmin(req, res, () => {
-      const currentRoles = getUserRoles(req.user).filter((role) => role !== "user");
-      const permitted = currentRoles.some((role) => allowed.has(role));
-      if (!permitted) {
+      const currentRole = normalizeRole(req.user?.role);
+      if (!allowed.has(currentRole)) {
         return res.status(403).json({
           success: false,
           message: "Forbidden: insufficient role",
           code: "ROLE_FORBIDDEN",
           details: {
-            currentRoles,
+            currentRole,
             allowedRoles: Array.from(allowed),
           },
         });

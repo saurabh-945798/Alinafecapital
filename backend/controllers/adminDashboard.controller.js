@@ -2,7 +2,7 @@ import { LoanInquiry } from "../models/LoanInquiry.model.js";
 import { LoanAccount } from "../models/LoanAccount.model.js";
 import { BankPayment } from "../models/BankPayment.model.js";
 import { enrichLoanAccount } from "../services/loanAccountSummary.service.js";
-import { formatRoles, getUserRoles, hasAnyRole, selectPrimaryRole } from "../utils/rbac.js";
+import { normalizeRole } from "../utils/rbac.js";
 
 const unresolvedStatuses = ["NEW", "CONTACTED", "KYC_SENT", "KYC_REJECTED"];
 
@@ -91,22 +91,8 @@ export const getAdminDashboardSummary = async (req, res) => {
     items: overdueItems.slice(0, 50),
   };
 
-  const applicationDetailAllowed = hasAnyRole(req.user, [
-    "SUPER_ADMIN", "LOAN_OPERATIONS", "VERIFIER", "RISK_ANALYST", "APPROVAL",
-    "AUTHORIZED", "DISBURSED", "CUSTOMER_SERVICE", "AUDITOR"
-  ]);
-  const overdueDetailAllowed = hasAnyRole(req.user, [
-    "SUPER_ADMIN", "COLLECTIONS", "FINANCE_RECON", "PAYMENT_VERIFIER", "AUDITOR"
-  ]);
-  const technicalOnly = hasAnyRole(req.user, ["TECH_SUPPORT"]) &&
-    !hasAnyRole(req.user, [
-      "SUPER_ADMIN", "LOAN_OPERATIONS", "VERIFIER", "RISK_ANALYST", "APPROVAL", "AUTHORIZED",
-      "DISBURSED", "PAYMENT_VERIFIER", "FINANCE_RECON", "COLLECTIONS", "CUSTOMER_SERVICE",
-      "REPORTING_MIS", "AUDITOR"
-    ]);
-
   const data = {
-    metrics: technicalOnly ? {} : {
+    metrics: {
       newRequests: counts.NEW || 0,
       pendingFollowUp: counts.CONTACTED || 0,
       needsKyc: counts.KYC_SENT || 0,
@@ -121,12 +107,9 @@ export const getAdminDashboardSummary = async (req, res) => {
         (counts.KYC_SENT || 0) +
         (counts.KYC_REJECTED || 0),
     },
-    needsAction: applicationDetailAllowed ? needsAction : [],
-    recentApproved: applicationDetailAllowed ? recentApproved : [],
-    overdue: technicalOnly
-      ? { customersOverdue: 0, totalOverdueAmount: 0, buckets: {}, pendingVerificationCount: 0, items: [] }
-      : { ...overdue, items: overdueDetailAllowed ? overdue.items : [] },
-    accessScope: technicalOnly ? "TECHNICAL_ONLY" : "ROLE_SCOPED",
+    needsAction,
+    recentApproved,
+    overdue,
   };
 
   return res.json({
@@ -143,9 +126,8 @@ export const getAdminWhoAmI = async (req, res) => {
       fullName: req.user?.fullName || "",
       email: req.user?.email || "",
       phone: req.user?.phone || "",
-      role: selectPrimaryRole(getUserRoles(req.user)),
-      roles: getUserRoles(req.user).filter((role) => role !== "user"),
-      roleLabels: formatRoles(req.user),
+      role: req.user?.role || "",
+      normalizedRole: normalizeRole(req.user?.role),
       isActive: Boolean(req.user?.isActive),
     },
   });
